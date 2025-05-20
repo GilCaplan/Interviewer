@@ -1,3 +1,4 @@
+import os
 from flask import Flask
 from flask_cors import CORS
 from .config import Config
@@ -26,4 +27,6 @@ def create_app(config_class=Config):
 app = create_app()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', debug=True)
+    # Use environment variable SERVER_PORT if available, else default to 5000
+    port = int(os.environ.get('SERVER_PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
