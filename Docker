@@ -1,0 +1,7 @@
+# This is a placeholder Docker file that can be extended with additional build instructions
+# or multi-stage builds for production deployment.
+
+# For the server, refer to server/Dockerfile
+# For the client, refer to Client/Dockerfile
+
+# This file can be used as a reference for more complex Docker setups in the future.
