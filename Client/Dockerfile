@@ -2,8 +2,8 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Set npm configurations to make installation more reliable
-RUN npm config set timeout 120000 && \
+# Corrected npm configurations
+RUN npm config set fetch-timeout 120000 && \
     npm config set fetch-retry-mintimeout 20000 && \
     npm config set fetch-retry-maxtimeout 120000
 

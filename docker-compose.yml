@@ -2,7 +2,7 @@ services:
   server:
     build: ./server
     ports:
-      - "5001:5001"  # Changed from "5000:5000"
+      - "5000:5000"  # Changed from "5000:5000"
     volumes:
       - ./server:/app
     environment:
@@ -35,12 +35,12 @@ services:
   db:
     image: mongo:latest
     ports:
-      - "27017:27017"
+      - "27018:27017"  # Change 27017 to 27018 on the host
     volumes:
       - mongodb_data:/data/db
     networks:
       - app-network
-    restart: unless-stopped  # Added restart policy
+    restart: unless-stopped
 
 networks:
   app-network:
