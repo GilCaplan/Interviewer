@@ -2,6 +2,9 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Install curl for healthchecks
+RUN apk --no-cache add curl
+
 # Corrected npm configurations
 RUN npm config set fetch-timeout 120000 && \
     npm config set fetch-retry-mintimeout 20000 && \
@@ -16,6 +19,11 @@ RUN npm install --no-audit --no-fund --loglevel verbose || \
     npm install --no-audit --no-fund --legacy-peer-deps
 
 COPY . ./
+
+# Add proxy configuration
+RUN if ! grep -q '"proxy":' package.json; then \
+    sed -i 's/"private": true,/"private": true,\n  "proxy": "http:\/\/server:5000",/g' package.json; \
+    fi
 
 EXPOSE 3000
 

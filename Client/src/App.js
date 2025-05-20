@@ -8,11 +8,15 @@ function App() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Fetch information from the server
-    fetch('/api/info')
+    // Use the API URL from environment variables, or fallback to a default
+    // In development with Docker, this should be the server service name
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://server:5010';
+
+    // Fetch information from the server with explicit URL
+    fetch(`${apiUrl}/api/info`)
       .then(response => {
         if (!response.ok) {
-          throw new Error('Network response was not ok');
+          throw new Error(`Network response was not ok: ${response.status}`);
         }
         return response.json();
       })

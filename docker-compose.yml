@@ -2,18 +2,24 @@ services:
   server:
     build: ./server
     ports:
-      - "5000:5000"  # Changed from "5000:5000"
+      - "5010:5010"
     volumes:
       - ./server:/app
     environment:
       - FLASK_APP=app/__init__.py
       - FLASK_ENV=development
-      - MONGO_URI=${MONGO_URI}
+      - MONGO_URI=mongodb://db:27017/interview-assistant
     depends_on:
       - db
     networks:
       - app-network
-    restart: unless-stopped  # Added restart policy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5010/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   client:
     build: ./Client
@@ -22,25 +28,33 @@ services:
     volumes:
       - ./Client:/app
       - /app/node_modules
-    depends_on:
-      - server
-    networks:
-      - app-network
-    restart: unless-stopped  # Added restart policy
     environment:
       - NODE_ENV=development
-      - CHOKIDAR_USEPOLLING=true  # Better hot-reloading in Docker
-      - WDS_SOCKET_PORT=0  # Needed for create-react-app in Docker
+      - CHOKIDAR_USEPOLLING=true
+      - WDS_SOCKET_PORT=0
+      - REACT_APP_API_URL=http://localhost:5000
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
 
   db:
     image: mongo:latest
     ports:
-      - "27018:27017"  # Change 27017 to 27018 on the host
+      - "27018:27017"  # Maps 27017 inside container to 27018 on host
     volumes:
       - mongodb_data:/data/db
     networks:
       - app-network
     restart: unless-stopped
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
 
 networks:
   app-network:

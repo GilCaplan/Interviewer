@@ -8,11 +8,17 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Enable CORS
-    CORS(app)
+    # Enable CORS with more specific configuration
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
 
     # Register blueprints
     app.register_blueprint(main)
+
+    @app.after_request
+    def after_request(response):
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        return response
 
     return app
 
