@@ -1,10 +1,8 @@
-version: '3'
-
 services:
   server:
     build: ./server
     ports:
-      - "5000:5000"
+      - "5001:5001"  # Changed from "5000:5000"
     volumes:
       - ./server:/app
     environment:
@@ -15,6 +13,7 @@ services:
       - db
     networks:
       - app-network
+    restart: unless-stopped  # Added restart policy
 
   client:
     build: ./Client
@@ -27,6 +26,11 @@ services:
       - server
     networks:
       - app-network
+    restart: unless-stopped  # Added restart policy
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true  # Better hot-reloading in Docker
+      - WDS_SOCKET_PORT=0  # Needed for create-react-app in Docker
 
   db:
     image: mongo:latest
@@ -36,6 +40,7 @@ services:
       - mongodb_data:/data/db
     networks:
       - app-network
+    restart: unless-stopped  # Added restart policy
 
 networks:
   app-network:

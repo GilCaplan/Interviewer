@@ -3,12 +3,19 @@
 
 import unittest
 import json
+import os
+import sys
+
+# Add the parent directory to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from server.app import create_app
 from server.app.config import Config
 
 class TestConfig(Config):
     TESTING = True
-    MONGO_URI = 'mongodb://localhost:27017/test_db'
+    # Use environment variable for MongoDB URI if available
+    MONGO_URI = os.environ.get('MONGO_URI') or 'mongodb://localhost:27017/test_db'
 
 class ServerTestCase(unittest.TestCase):
     def setUp(self):
