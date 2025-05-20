@@ -1,6 +1,3 @@
-# Server Test Example
-# tests/test_server.py
-
 import unittest
 import json
 import os
@@ -41,5 +38,5 @@ class ServerTestCase(unittest.TestCase):
         self.assertIn('version', data)
         self.assertIn('features', data)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
