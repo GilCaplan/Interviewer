@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import Editor from '@monaco-editor/react';
 import { processSafeMarkdown } from '../utils/markdownUtils';
 import './CodingChallenge.css';
 import { useAuth } from '../context/AuthContext';
@@ -17,12 +16,6 @@ function CodingChallenge() {
   const [testResults, setTestResults] = useState([]);
   const [successMessage, setSuccessMessage] = useState('');
   const [language, setLanguage] = useState('python');
-  const [editorOptions] = useState({
-    minimap: { enabled: false },
-    scrollBeyondLastLine: false,
-    fontSize: 14,
-    automaticLayout: true,
-  });
 
   useEffect(() => {
     // Fetch challenge details
@@ -177,8 +170,8 @@ function CodingChallenge() {
     }
   };
 
-  const handleEditorChange = (value) => {
-    setCode(value);
+  const handleEditorChange = (e) => {
+    setCode(e.target.value);
   };
 
   const resetCode = () => {
@@ -260,14 +253,12 @@ function CodingChallenge() {
             </select>
           </div>
 
-          <div className="editor-container">
-            <Editor
-              height="400px"
-              language={language}
-              theme="vs-dark"
+          <div className="simple-editor-container">
+            <textarea
+              className="simple-code-editor"
               value={code}
-              options={editorOptions}
               onChange={handleEditorChange}
+              spellCheck="false"
             />
           </div>
 

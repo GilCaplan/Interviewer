@@ -9,11 +9,10 @@ COPY package*.json ./
 
 # Install dependencies
 RUN npm install --no-audit --no-fund
+# Explicitly install Monaco Editor
+RUN npm install @monaco-editor/react --save
 
 COPY . ./
-
-# Remove the automatic proxy modification as we're using environment variables
-# We'll set the API URL via REACT_APP_API_URL environment variable in docker-compose
 
 EXPOSE 3000
 
