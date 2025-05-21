@@ -1,21 +1,41 @@
-// First, let's install React Router (you'll need to run this command)
-// npm install react-router-dom
-
-// Updates to App.js
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Header from './components/Header';
 import FeatureList from './components/FeatureList';
 import FeaturePage from './components/FeaturePage';
+import Login from './components/Login';
+import UserQuestions from './components/UserQuestions';
+import LlmQuestions from './components/LlmQuestions';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import './index.css';
+import './components/Login.css';
+import './components/Questions.css';
 
-function App() {
+// Protected route component
+const ProtectedRoute = ({ children }) => {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return <div className="loading">Loading...</div>;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+
+  return children;
+};
+
+// Main App content component
+function AppContent() {
+  const { user, isAuthenticated, logout, login } = useAuth();
   const [apiInfo, setApiInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     // Use the API URL from environment variables, or fallback to a default
-    const apiUrl = process.env.REACT_APP_API_URL || 'http://server:5010';
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
     // Fetch information from the server with explicit URL
     fetch(`${apiUrl}/api/info`)
@@ -84,33 +104,89 @@ function App() {
   const features = apiInfo ? formatApiFeatures(apiInfo.features) : fallbackFeatures;
 
   return (
-    <Router>
-      <div className="app-container">
-        <Header
-          title="Interview Process Assistant"
-          subtitle="Your journey to interview success starts here"
+    <div className="app-container">
+      <Header
+        title="Interview Process Assistant"
+        subtitle="Your journey to interview success starts here"
+        username={user?.username}
+        onLogout={logout}
+        isAuthenticated={isAuthenticated}
+      />
+
+      <Routes>
+        <Route
+          path="/login"
+          element={isAuthenticated ? <Navigate to="/" /> : <Login />}
         />
 
-        <Routes>
-          <Route path="/" element={
-            loading ? (
-              <p>Loading application information...</p>
-            ) : error ? (
-              <div>
-                <p>{error}</p>
-                <p>Using fallback data for demo purposes.</p>
-                <FeatureList features={fallbackFeatures} />
-              </div>
-            ) : (
-              <div>
-                <p>Version: {apiInfo.version}</p>
-                <FeatureList features={features} />
-              </div>
-            )
-          } />
-          <Route path="/feature/:featureId" element={<FeaturePage features={features} />} />
-        </Routes>
-      </div>
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              {loading ? (
+                <p>Loading application information...</p>
+              ) : error ? (
+                <div>
+                  <p>{error}</p>
+                  <p>Using fallback data for demo purposes.</p>
+                  <FeatureList features={fallbackFeatures} />
+                </div>
+              ) : (
+                <div>
+                  <p className="welcome-message">
+                    Welcome, {user?.username || 'User'}! Ready to practice for your next interview?
+                  </p>
+                  <p>Version: {apiInfo?.version || '0.1.0'}</p>
+                  <FeatureList features={features} />
+                </div>
+              )}
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/feature/:featureId"
+          element={
+            <ProtectedRoute>
+              <FeaturePage features={features} />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* New routes for questions features */}
+        <Route
+          path="/user-questions"
+          element={
+            <ProtectedRoute>
+              <UserQuestions />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/llm-questions"
+          element={
+            <ProtectedRoute>
+              <LlmQuestions />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="*"
+          element={<Navigate to="/" />}
+        />
+      </Routes>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </Router>
   );
 }

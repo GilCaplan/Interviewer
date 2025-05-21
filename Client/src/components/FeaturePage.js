@@ -17,6 +17,7 @@ function FeaturePage({ features }) {
   }
 
   const feature = features[featureIndex];
+  const isInterviewQuestions = feature.name.toLowerCase().includes('interview question');
 
   // Detailed descriptions for each feature type
   const getDetailedDescription = (featureName) => {
@@ -58,6 +59,14 @@ function FeaturePage({ features }) {
             <li>Database and SQL queries</li>
             <li>Web development concepts</li>
           </ul>
+          <div className="feature-actions">
+            <Link to="/user-questions" className="feature-action-btn">
+              My Questions
+            </Link>
+            <Link to="/llm-questions" className="feature-action-btn ai-btn">
+              Generate AI Questions
+            </Link>
+          </div>
           <p>Coming soon: AI-powered feedback on your answers.</p>
         </>
       );
@@ -113,7 +122,15 @@ function FeaturePage({ features }) {
       <div className="feature-description">
         {getDetailedDescription(feature.name)}
       </div>
-      <Link to="/" className="back-button">Back to Features</Link>
+      <div className="navigation-buttons">
+        <Link to="/" className="back-button">Back to Features</Link>
+        {isInterviewQuestions && (
+          <>
+            <Link to="/user-questions" className="llm-button">My Questions</Link>
+            <Link to="/llm-questions" className="llm-button">AI Questions</Link>
+          </>
+        )}
+      </div>
     </div>
   );
 }

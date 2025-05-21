@@ -3,17 +3,24 @@ from flask import Flask
 from flask_cors import CORS
 from .config import Config
 from .routes import main
+from .auth import auth
+from .questions import questions
 
 
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    # Initialize the app with the config
+    config_class.init_app(app)
+
     # Enable CORS with more specific configuration
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
     # Register blueprints
     app.register_blueprint(main)
+    app.register_blueprint(auth)
+    app.register_blueprint(questions)
 
     @app.after_request
     def after_request(response):
