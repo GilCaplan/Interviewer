@@ -6,6 +6,8 @@ import FeaturePage from './components/FeaturePage';
 import Login from './components/Login';
 import UserQuestions from './components/UserQuestions';
 import LlmQuestions from './components/LlmQuestions';
+import CodingChallengeList from './components/CodingChallengeList';
+import CodingChallenge from './components/CodingChallenge';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import './index.css';
 import './components/Login.css';
@@ -28,7 +30,7 @@ const ProtectedRoute = ({ children }) => {
 
 // Main App content component
 function AppContent() {
-  const { user, isAuthenticated, logout, login } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const [apiInfo, setApiInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -153,7 +155,7 @@ function AppContent() {
           }
         />
 
-        {/* New routes for questions features */}
+        {/* Routes for questions features */}
         <Route
           path="/user-questions"
           element={
@@ -168,6 +170,25 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <LlmQuestions />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Routes for coding challenges */}
+        <Route
+          path="/coding-challenges"
+          element={
+            <ProtectedRoute>
+              <CodingChallengeList />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/coding-challenges/:challengeId"
+          element={
+            <ProtectedRoute>
+              <CodingChallenge />
             </ProtectedRoute>
           }
         />

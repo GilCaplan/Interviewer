@@ -5,6 +5,7 @@ from .config import Config
 from .routes import main
 from .auth import auth
 from .questions import questions
+from .coding_challenges import coding_challenges
 
 
 def create_app(config_class=Config):
@@ -21,6 +22,8 @@ def create_app(config_class=Config):
     app.register_blueprint(main)
     app.register_blueprint(auth)
     app.register_blueprint(questions)
+
+    app.register_blueprint(coding_challenges)
 
     @app.after_request
     def after_request(response):

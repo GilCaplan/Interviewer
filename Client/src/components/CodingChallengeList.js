@@ -13,13 +13,20 @@ function CodingChallengeList() {
     tags: []
   });
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [availableTags, setAvailableTags] = useState([]);
 
   useEffect(() => {
     const fetchChallenges = async () => {
       try {
-        // For development, use mock data
+        // For development, check if we should use mock data
         if (process.env.NODE_ENV === 'development' && !process.env.REACT_APP_USE_API) {
-          setChallenges(getMockChallenges());
+          const mockData = getMockChallenges();
+          setChallenges(mockData);
+
+          // Extract all unique tags for filter
+          const tags = [...new Set(mockData.flatMap(challenge => challenge.tags || []))];
+          setAvailableTags(tags);
+
           setLoading(false);
           return;
         }
@@ -38,11 +45,24 @@ function CodingChallengeList() {
         }
 
         const data = await response.json();
-        setChallenges(data.challenges);
+        if (data.success && data.challenges) {
+          setChallenges(data.challenges);
+
+          // Extract all unique tags for filter
+          const tags = [...new Set(data.challenges.flatMap(challenge => challenge.tags || []))];
+          setAvailableTags(tags);
+        } else {
+          throw new Error(data.message || 'Failed to fetch challenges');
+        }
       } catch (error) {
         console.error('Error fetching challenges:', error);
         // Fallback to mock data
-        setChallenges(getMockChallenges());
+        const mockData = getMockChallenges();
+        setChallenges(mockData);
+
+        // Extract all unique tags for filter
+        const tags = [...new Set(mockData.flatMap(challenge => challenge.tags || []))];
+        setAvailableTags(tags);
       } finally {
         setLoading(false);
       }
@@ -61,7 +81,7 @@ function CodingChallengeList() {
 
     // Apply tags filter (if any tags are selected)
     const matchesTags = filter.tags.length === 0 ||
-      filter.tags.some(tag => challenge.tags.includes(tag));
+      filter.tags.some(tag => challenge.tags && challenge.tags.includes(tag));
 
     return matchesSearch && matchesDifficulty && matchesTags;
   });
@@ -82,18 +102,19 @@ function CodingChallengeList() {
     }
   };
 
+  const clearAllFilters = () => {
+    setFilter({ search: '', difficulty: 'all', tags: [] });
+  };
+
   if (loading) {
     return <div className="loading">Loading challenges...</div>;
   }
-
-  // Extract all unique tags from challenges
-  const allTags = [...new Set(challenges.flatMap(challenge => challenge.tags))];
 
   return (
     <div className="coding-challenges-container">
       <div className="challenges-header">
         <h2>Programming Challenges</h2>
-        <p>Sharpen your coding skills with these programming challenges. Practice algorithms, data structures, and problem-solving.</p>
+        <p>Sharpen your coding skills with these programming challenges. Practice algorithms, data structures, and problem-solving to prepare for technical interviews.</p>
       </div>
 
       <div className="challenges-controls">
@@ -144,27 +165,29 @@ function CodingChallengeList() {
           ))}
           <button
             className="clear-filters"
-            onClick={() => setFilter({ ...filter, tags: [] })}
+            onClick={clearAllFilters}
           >
             Clear all
           </button>
         </div>
       )}
 
-      <div className="tags-section">
-        <h3>Filter by Tags:</h3>
-        <div className="tags-container">
-          {allTags.map(tag => (
-            <button
-              key={tag}
-              className={`filter-tag ${filter.tags.includes(tag) ? 'active' : ''}`}
-              onClick={() => handleTagClick(tag)}
-            >
-              {tag}
-            </button>
-          ))}
+      {availableTags.length > 0 && (
+        <div className="tags-section">
+          <h3>Filter by Tags:</h3>
+          <div className="tags-container">
+            {availableTags.map(tag => (
+              <button
+                key={tag}
+                className={`filter-tag ${filter.tags.includes(tag) ? 'active' : ''}`}
+                onClick={() => handleTagClick(tag)}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {showCreateForm && (
         <CreateChallengeForm
@@ -172,6 +195,14 @@ function CodingChallengeList() {
           onSuccess={(newChallenge) => {
             setChallenges([...challenges, newChallenge]);
             setShowCreateForm(false);
+
+            // Update available tags if new tags were added
+            if (newChallenge.tags && newChallenge.tags.length > 0) {
+              const newTags = newChallenge.tags.filter(tag => !availableTags.includes(tag));
+              if (newTags.length > 0) {
+                setAvailableTags([...availableTags, ...newTags]);
+              }
+            }
           }}
           user={user}
         />
@@ -181,6 +212,13 @@ function CodingChallengeList() {
         {filteredChallenges.length === 0 ? (
           <div className="no-challenges">
             <p>No challenges match your current filters.</p>
+            <button
+              onClick={clearAllFilters}
+              className="create-button"
+              style={{ marginTop: '15px' }}
+            >
+              Clear Filters
+            </button>
           </div>
         ) : (
           filteredChallenges.map(challenge => (
@@ -194,7 +232,7 @@ function CodingChallengeList() {
                 </div>
 
                 <div className="challenge-card-tags">
-                  {challenge.tags.map((tag, index) => (
+                  {challenge.tags && challenge.tags.map((tag, index) => (
                     <span key={index} className="challenge-tag">{tag}</span>
                   ))}
                 </div>
@@ -394,7 +432,11 @@ function CreateChallengeForm({ onClose, onSuccess, user }) {
       }
 
       const data = await response.json();
-      onSuccess(data.challenge);
+      if (data.success && data.challenge) {
+        onSuccess(data.challenge);
+      } else {
+        throw new Error(data.message || 'Failed to create challenge');
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -468,8 +510,8 @@ function CreateChallengeForm({ onClose, onSuccess, user }) {
             name="description"
             value={formData.description}
             onChange={handleChange}
-            rows={5}
             placeholder="Describe the challenge in detail. You can use markdown."
+            rows={5}
             required
           />
         </div>
@@ -481,8 +523,8 @@ function CreateChallengeForm({ onClose, onSuccess, user }) {
             name="starterCode"
             value={formData.starterCode}
             onChange={handleChange}
-            rows={8}
             placeholder="Provide starter code for the challenge"
+            rows={8}
           />
         </div>
 
@@ -649,7 +691,7 @@ function getMockChallenges() {
     {
       id: '1',
       title: 'Two Sum',
-      difficulty: 'easy',
+      difficulty: 'Easy',
       description: 'Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.',
       tags: ['Arrays', 'Hash Table'],
       completion: false,
@@ -658,7 +700,7 @@ function getMockChallenges() {
     {
       id: '2',
       title: 'Palindrome Number',
-      difficulty: 'easy',
+      difficulty: 'Easy',
       description: 'Given an integer x, return true if x is a palindrome, and false otherwise.',
       tags: ['Math'],
       completion: true,
@@ -667,7 +709,7 @@ function getMockChallenges() {
     {
       id: '3',
       title: 'Valid Parentheses',
-      difficulty: 'medium',
+      difficulty: 'Medium',
       description: 'Given a string s containing just the characters \'(\', \')\', \'{\', \'}\', \'[\' and \']\', determine if the input string is valid.',
       tags: ['Stack', 'String'],
       completion: false,
@@ -676,11 +718,29 @@ function getMockChallenges() {
     {
       id: '4',
       title: 'Merge K Sorted Lists',
-      difficulty: 'hard',
+      difficulty: 'Hard',
       description: 'You are given an array of k linked-lists lists, each linked-list is sorted in ascending order.',
       tags: ['Linked List', 'Divide and Conquer', 'Heap'],
       completion: false,
       starterCode: `def merge_k_lists(lists):\n    # Your code here\n    pass`
+    },
+    {
+      id: '5',
+      title: 'Reverse String',
+      difficulty: 'Easy',
+      description: 'Write a function that reverses a string. The input string is given as an array of characters s.',
+      tags: ['String', 'Two Pointers'],
+      completion: false,
+      starterCode: `def reverse_string(s):\n    # Your code here\n    pass`
+    },
+    {
+      id: '6',
+      title: 'Maximum Subarray',
+      difficulty: 'Medium',
+      description: 'Given an integer array nums, find the contiguous subarray which has the largest sum and return its sum.',
+      tags: ['Array', 'Divide and Conquer', 'Dynamic Programming'],
+      completion: false,
+      starterCode: `def max_sub_array(nums):\n    # Your code here\n    pass`
     }
   ];
 }

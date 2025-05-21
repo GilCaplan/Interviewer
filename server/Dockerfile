@@ -6,6 +6,7 @@ COPY requirements.txt .
 
 # Clean install with specific versions
 RUN pip install --no-cache-dir -r requirements.txt
+RUN npm install @monaco-editor/react
 
 COPY . .
 

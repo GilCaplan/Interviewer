@@ -1,27 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import MonacoEditor from 'react-monaco-editor';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import Editor from '@monaco-editor/react';
+import { processSafeMarkdown } from '../utils/markdownUtils';
 import './CodingChallenge.css';
 import { useAuth } from '../context/AuthContext';
 
 function CodingChallenge() {
   const { challengeId } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [challenge, setChallenge] = useState(null);
   const [code, setCode] = useState('');
+  const [originalCode, setOriginalCode] = useState(''); // For reset functionality
   const [output, setOutput] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [testResults, setTestResults] = useState([]);
-  const [editorOptions, setEditorOptions] = useState({
-    selectOnLineNumbers: true,
-    roundedSelection: false,
-    readOnly: false,
-    cursorStyle: 'line',
-    automaticLayout: true,
+  const [successMessage, setSuccessMessage] = useState('');
+  const [language, setLanguage] = useState('python');
+  const [editorOptions] = useState({
     minimap: { enabled: false },
     scrollBeyondLastLine: false,
-    lineNumbers: 'on',
     fontSize: 14,
+    automaticLayout: true,
   });
 
   useEffect(() => {
@@ -33,6 +33,7 @@ function CodingChallenge() {
           const mockChallenge = getMockChallenge(challengeId);
           setChallenge(mockChallenge);
           setCode(mockChallenge.starterCode);
+          setOriginalCode(mockChallenge.starterCode);
           return;
         }
 
@@ -50,24 +51,36 @@ function CodingChallenge() {
         }
 
         const data = await response.json();
-        setChallenge(data.challenge);
-        setCode(data.challenge.starterCode);
+        if (data.success && data.challenge) {
+          setChallenge(data.challenge);
+          setCode(data.challenge.starterCode);
+          setOriginalCode(data.challenge.starterCode);
+        } else {
+          throw new Error(data.message || 'Challenge not found');
+        }
       } catch (error) {
         console.error('Error fetching challenge:', error);
         // If API fails, fall back to mock data
         const mockChallenge = getMockChallenge(challengeId);
-        setChallenge(mockChallenge);
-        setCode(mockChallenge.starterCode);
+        if (mockChallenge) {
+          setChallenge(mockChallenge);
+          setCode(mockChallenge.starterCode);
+          setOriginalCode(mockChallenge.starterCode);
+        } else {
+          // If no mock data, redirect to challenges list
+          navigate('/coding-challenges');
+        }
       }
     };
 
     fetchChallenge();
-  }, [challengeId, user]);
+  }, [challengeId, user, navigate]);
 
   const runCode = async () => {
     setIsRunning(true);
     setOutput('Running your code...');
     setTestResults([]);
+    setSuccessMessage('');
 
     try {
       // For development without API, use mock execution
@@ -120,6 +133,12 @@ function CodingChallenge() {
         setOutput(result.output);
         setTestResults(result.results);
 
+        // Check if all tests passed
+        const allPassed = result.results.every(test => test.passed);
+        if (allPassed) {
+          setSuccessMessage('Congratulations! All tests passed. Great job!');
+        }
+
         return;
       }
 
@@ -134,14 +153,23 @@ function CodingChallenge() {
         body: JSON.stringify({
           code,
           challengeId,
-          language: 'python'
+          language
         }),
         credentials: 'include'
       });
 
       const data = await response.json();
-      setOutput(data.output);
-      setTestResults(data.testResults || []);
+
+      if (data.success) {
+        setOutput(data.output || 'Code executed successfully');
+        setTestResults(data.testResults || []);
+
+        if (data.allPassed) {
+          setSuccessMessage('Congratulations! All tests passed. Great job!');
+        }
+      } else {
+        setOutput(`Error: ${data.message || 'Failed to run code'}`);
+      }
     } catch (error) {
       setOutput(`Error: ${error.message}`);
     } finally {
@@ -149,12 +177,15 @@ function CodingChallenge() {
     }
   };
 
-  const handleEditorChange = (newValue) => {
-    setCode(newValue);
+  const handleEditorChange = (value) => {
+    setCode(value);
   };
 
-  const editorDidMount = (editor, monaco) => {
-    editor.focus();
+  const resetCode = () => {
+    setCode(originalCode);
+    setOutput('');
+    setTestResults([]);
+    setSuccessMessage('');
   };
 
   if (!challenge) {
@@ -169,7 +200,7 @@ function CodingChallenge() {
           <span className="difficulty-tag" data-difficulty={challenge.difficulty.toLowerCase()}>
             {challenge.difficulty}
           </span>
-          {challenge.tags.map((tag, index) => (
+          {challenge.tags && challenge.tags.map((tag, index) => (
             <span key={index} className="tag">{tag}</span>
           ))}
         </div>
@@ -179,11 +210,11 @@ function CodingChallenge() {
         <div className="description-panel">
           <div className="description-content">
             <h3>Problem Description</h3>
-            <div dangerouslySetInnerHTML={{ __html: challenge.description }} />
+            <div dangerouslySetInnerHTML={{ __html: processSafeMarkdown(challenge.description) }} />
 
             <h3>Examples</h3>
             <div className="examples">
-              {challenge.examples.map((example, index) => (
+              {challenge.examples && challenge.examples.map((example, index) => (
                 <div key={index} className="example-item">
                   <div className="example-header">Example {index + 1}:</div>
                   <pre className="example-code">
@@ -201,7 +232,7 @@ function CodingChallenge() {
               ))}
             </div>
 
-            {challenge.constraints && (
+            {challenge.constraints && challenge.constraints.length > 0 && (
               <>
                 <h3>Constraints</h3>
                 <ul className="constraints-list">
@@ -217,7 +248,11 @@ function CodingChallenge() {
         <div className="editor-panel">
           <div className="editor-header">
             <span>Solution</span>
-            <select className="language-selector">
+            <select
+              className="language-selector"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+            >
               <option value="python">Python</option>
               <option value="javascript" disabled>JavaScript (Coming Soon)</option>
               <option value="java" disabled>Java (Coming Soon)</option>
@@ -226,15 +261,13 @@ function CodingChallenge() {
           </div>
 
           <div className="editor-container">
-            <MonacoEditor
-              width="100%"
-              height="400"
-              language="python"
+            <Editor
+              height="400px"
+              language={language}
               theme="vs-dark"
               value={code}
               options={editorOptions}
               onChange={handleEditorChange}
-              editorDidMount={editorDidMount}
             />
           </div>
 
@@ -246,13 +279,24 @@ function CodingChallenge() {
             >
               {isRunning ? 'Running...' : 'Run Tests'}
             </button>
-            <button className="reset-button">Reset Code</button>
+            <button
+              onClick={resetCode}
+              className="reset-button"
+            >
+              Reset Code
+            </button>
           </div>
 
           <div className="output-panel">
             <h3>Console Output</h3>
             <pre className="output-content">{output}</pre>
           </div>
+
+          {successMessage && (
+            <div className="success-message">
+              {successMessage}
+            </div>
+          )}
 
           <div className="test-results">
             <h3>Test Results</h3>
@@ -376,23 +420,65 @@ function getMockChallenge(id) {
         {
           functionName: 'is_palindrome',
           input: '121',
-          expectedOutput: 'true'
+          expectedOutput: 'True'
         },
         {
           functionName: 'is_palindrome',
           input: '-121',
-          expectedOutput: 'false'
+          expectedOutput: 'False'
         },
         {
           functionName: 'is_palindrome',
           input: '10',
-          expectedOutput: 'false'
+          expectedOutput: 'False'
+        }
+      ]
+    },
+    '3': {
+      id: '3',
+      title: 'Reverse String',
+      difficulty: 'Easy',
+      tags: ['String', 'Two Pointers'],
+      description: `<p>Write a function that reverses a string. The input string is given as an array of characters <code>s</code>.</p>
+                   <p>You must do this by modifying the input array <a href="https://en.wikipedia.org/wiki/In-place_algorithm" target="_blank">in-place</a> with <code>O(1)</code> extra memory.</p>`,
+      examples: [
+        {
+          input: 's = ["h","e","l","l","o"]',
+          output: '["o","l","l","e","h"]'
+        },
+        {
+          input: 's = ["H","a","n","n","a","h"]',
+          output: '["h","a","n","n","a","H"]'
+        }
+      ],
+      constraints: [
+        '1 <= s.length <= 105',
+        's[i] is a printable ascii character'
+      ],
+      starterCode: `def reverse_string(s):
+    """
+    :type s: List[str]
+    :rtype: None Do not return anything, modify s in-place instead.
+    """
+    # Your code here
+    
+`,
+      testCases: [
+        {
+          functionName: 'reverse_string',
+          input: '["h","e","l","l","o"]',
+          expectedOutput: '["o","l","l","e","h"]'
+        },
+        {
+          functionName: 'reverse_string',
+          input: '["H","a","n","n","a","h"]',
+          expectedOutput: '["h","a","n","n","a","H"]'
         }
       ]
     }
   };
 
-  return challenges[id] || challenges['1'];
+  return challenges[id] || null;
 }
 
 export default CodingChallenge;
