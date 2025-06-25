@@ -1,4 +1,4 @@
-# server/app/simple_websocket_handlers.py
+# server/app/websocket_handlers.py
 from flask_socketio import emit, join_room, leave_room
 from flask import request
 from pymongo import MongoClient
@@ -350,4 +350,5 @@ def init_simple_websockets(socketio):
             print(f"Error handling status update: {str(e)}")
             emit('error', {'message': 'Failed to update session status'})
 
-    return socketio
+    # The function doesn't need to return anything - it just sets up the handlers
+    print("WebSocket handlers initialized successfully")
