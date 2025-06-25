@@ -1,12 +1,14 @@
 import os
 from flask import Flask
 from flask_cors import CORS
+from flask_socketio import SocketIO
 from .config import Config
 from .routes import main
 from .auth import auth
 from .questions import questions
+from .sessions import sessions_bp  # NEW IMPORT
 from .coding_challenges import coding_challenges
-
+from .websocket_handlers import socketio  # NEW IMPORT
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -15,6 +17,13 @@ def create_app(config_class=Config):
     # Initialize the app with the config
     config_class.init_app(app)
 
+    # Initialize SocketIO with the app
+    socketio.init_app(app,
+                     cors_allowed_origins="*",
+                     async_mode='threading',
+                     logger=True,
+                     engineio_logger=True)
+
     # Enable CORS with more specific configuration
     CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
@@ -22,7 +31,7 @@ def create_app(config_class=Config):
     app.register_blueprint(main)
     app.register_blueprint(auth)
     app.register_blueprint(questions)
-
+    app.register_blueprint(sessions_bp)  # NEW BLUEPRINT
     app.register_blueprint(coding_challenges)
 
     @app.after_request
@@ -31,12 +40,11 @@ def create_app(config_class=Config):
         response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
         return response
 
-    return app
+    return app, socketio
 
-
-app = create_app()
+app, socketio_instance = create_app()
 
 if __name__ == '__main__':
     # Use environment variable SERVER_PORT if available, else default to 5000
     port = int(os.environ.get('SERVER_PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    socketio_instance.run(app, host='0.0.0.0', port=port, debug=True)
