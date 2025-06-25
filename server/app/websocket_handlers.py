@@ -1,230 +1,353 @@
-from flask_socketio import SocketIO, emit, join_room, leave_room, rooms, disconnect
+# server/app/simple_websocket_handlers.py
+from flask_socketio import emit, join_room, leave_room
 from flask import request
 from pymongo import MongoClient
 import datetime
-import json
 import uuid
 from .auth import get_current_user
 from .config import Config
 
-# Initialize SocketIO
-socketio = SocketIO(cors_allowed_origins="*", async_mode='threading')
-
 # MongoDB connection
 client = MongoClient(Config.MONGO_URI)
 db = client.get_default_database()
-template_sessions_collection = db.template_sessions
-session_participants_collection = db.session_participants
-session_messages_collection = db.session_messages
-question_queue_collection = db.question_queue
+sessions_collection = db.sessions
+messages_collection = db.session_messages
+questions_collection = db.session_questions
 
-# Store active connections
-active_connections = {}
-
-
-@socketio.on('connect')
-def handle_connect():
-    """Handle client connection"""
-    print(f"Client {request.sid} connected")
-    emit('connected', {'message': 'Connected to server'})
+# Store active connections per session
+session_connections = {}
 
 
-@socketio.on('disconnect')
-def handle_disconnect():
-    """Handle client disconnection"""
-    print(f"Client {request.sid} disconnected")
+def init_simple_websockets(socketio):
+    """Initialize WebSocket handlers for simple sessions"""
 
-    # Remove from active connections
-    if request.sid in active_connections:
-        session_id = active_connections[request.sid].get('session_id')
-        if session_id:
-            leave_room(session_id)
-            # Notify other participants
-            emit('participant_left', {
-                'username': active_connections[request.sid].get('username'),
+    @socketio.on('connect')
+    def handle_connect():
+        """Handle client connection"""
+        print(f"Client {request.sid} connected")
+        emit('connected', {'message': 'Connected to server'})
+
+    @socketio.on('disconnect')
+    def handle_disconnect():
+        """Handle client disconnection"""
+        print(f"Client {request.sid} disconnected")
+
+        # Remove from all session rooms
+        for session_id, connections in session_connections.items():
+            if request.sid in connections:
+                connections.remove(request.sid)
+                # Notify others in the session
+                emit('user_disconnected', {
+                    'timestamp': datetime.datetime.utcnow().isoformat()
+                }, room=session_id)
+
+    @socketio.on('join_session_room')
+    def handle_join_session_room(data):
+        """Handle user joining a session room for real-time updates"""
+        try:
+            # Get user from token
+            user = get_current_user(request)
+            if not user:
+                emit('error', {'message': 'Authentication required'})
+                return
+
+            session_id = data.get('session_id')
+            if not session_id:
+                emit('error', {'message': 'Session ID required'})
+                return
+
+            # Verify user is a participant of this session
+            session = sessions_collection.find_one({"session_id": session_id})
+            if not session:
+                emit('error', {'message': 'Session not found'})
+                return
+
+            if user["username"] not in session.get("participants", []):
+                emit('error', {'message': 'Access denied - not a participant'})
+                return
+
+            # Join the session room
+            join_room(session_id)
+
+            # Track connection
+            if session_id not in session_connections:
+                session_connections[session_id] = []
+            session_connections[session_id].append(request.sid)
+
+            # Notify others that user joined
+            emit('user_joined_room', {
+                'username': user["username"],
+                'timestamp': datetime.datetime.utcnow().isoformat()
+            }, room=session_id, include_self=False)
+
+            emit('joined_session_room', {
+                'session_id': session_id,
+                'message': 'Successfully joined session room'
+            })
+
+        except Exception as e:
+            print(f"Error joining session room: {str(e)}")
+            emit('error', {'message': 'Failed to join session room'})
+
+    @socketio.on('leave_session_room')
+    def handle_leave_session_room(data):
+        """Handle user leaving a session room"""
+        try:
+            user = get_current_user(request)
+            if not user:
+                return
+
+            session_id = data.get('session_id')
+            if session_id:
+                leave_room(session_id)
+
+                # Remove from tracking
+                if session_id in session_connections:
+                    if request.sid in session_connections[session_id]:
+                        session_connections[session_id].remove(request.sid)
+
+                # Notify others
+                emit('user_left_room', {
+                    'username': user["username"],
+                    'timestamp': datetime.datetime.utcnow().isoformat()
+                }, room=session_id)
+
+        except Exception as e:
+            print(f"Error leaving session room: {str(e)}")
+
+    @socketio.on('send_chat_message')
+    def handle_chat_message(data):
+        """Handle real-time chat messages"""
+        try:
+            user = get_current_user(request)
+            if not user:
+                emit('error', {'message': 'Authentication required'})
+                return
+
+            session_id = data.get('session_id')
+            message_text = data.get('message', '').strip()
+
+            if not session_id or not message_text:
+                emit('error', {'message': 'Session ID and message are required'})
+                return
+
+            # Verify user is a participant
+            session = sessions_collection.find_one({"session_id": session_id})
+            if not session or user["username"] not in session.get("participants", []):
+                emit('error', {'message': 'Access denied'})
+                return
+
+            # Create message
+            message_data = {
+                "message_id": str(uuid.uuid4()),
+                "session_id": session_id,
+                "username": user["username"],
+                "message": message_text,
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+                "type": data.get('type', 'chat')
+            }
+
+            # Save to database
+            messages_collection.insert_one({
+                **message_data,
+                "timestamp": datetime.datetime.utcnow()  # Store as datetime in DB
+            })
+
+            # Broadcast to all users in the session
+            emit('new_chat_message', message_data, room=session_id)
+
+        except Exception as e:
+            print(f"Error handling chat message: {str(e)}")
+            emit('error', {'message': 'Failed to send message'})
+
+    @socketio.on('suggest_question')
+    def handle_question_suggestion(data):
+        """Handle real-time question suggestions"""
+        try:
+            user = get_current_user(request)
+            if not user:
+                emit('error', {'message': 'Authentication required'})
+                return
+
+            session_id = data.get('session_id')
+            question_text = data.get('question_text', '').strip()
+
+            if not session_id or not question_text:
+                emit('error', {'message': 'Session ID and question text are required'})
+                return
+
+            # Verify user is a participant
+            session = sessions_collection.find_one({"session_id": session_id})
+            if not session or user["username"] not in session.get("participants", []):
+                emit('error', {'message': 'Access denied'})
+                return
+
+            # Create question suggestion
+            suggestion_data = {
+                "suggestion_id": str(uuid.uuid4()),
+                "session_id": session_id,
+                "username": user["username"],
+                "question_text": question_text,
+                "difficulty": data.get('difficulty', 'medium'),
+                "type": data.get('type', 'open_ended'),
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+                "status": "suggestion"
+            }
+
+            # Broadcast question suggestion to all users
+            emit('new_question_suggestion', suggestion_data, room=session_id)
+
+            # If it's the host, they can approve/reject
+            if user["username"] == session.get("host_username"):
+                emit('host_question_action', {
+                    'suggestion_id': suggestion_data['suggestion_id'],
+                    'can_approve': True
+                }, room=request.sid)
+
+        except Exception as e:
+            print(f"Error handling question suggestion: {str(e)}")
+            emit('error', {'message': 'Failed to suggest question'})
+
+    @socketio.on('approve_question_suggestion')
+    def handle_approve_question_suggestion(data):
+        """Handle host approving/rejecting question suggestions"""
+        try:
+            user = get_current_user(request)
+            if not user:
+                emit('error', {'message': 'Authentication required'})
+                return
+
+            session_id = data.get('session_id')
+            suggestion_id = data.get('suggestion_id')
+            action = data.get('action', 'approve')  # approve or reject
+
+            if not session_id or not suggestion_id:
+                emit('error', {'message': 'Session ID and suggestion ID are required'})
+                return
+
+            # Verify user is the host
+            session = sessions_collection.find_one({"session_id": session_id})
+            if not session or user["username"] != session.get("host_username"):
+                emit('error', {'message': 'Only the host can approve questions'})
+                return
+
+            # Broadcast the decision
+            emit('question_suggestion_result', {
+                'suggestion_id': suggestion_id,
+                'action': action,
+                'approved_by': user["username"],
                 'timestamp': datetime.datetime.utcnow().isoformat()
             }, room=session_id)
-        del active_connections[request.sid]
 
+        except Exception as e:
+            print(f"Error handling question approval: {str(e)}")
+            emit('error', {'message': 'Failed to process approval'})
 
-@socketio.on('join_session')
-def handle_join_session(data):
-    """Handle user joining a session room"""
-    try:
-        # Get user from token
-        user = get_current_user(request)
-        if not user:
-            emit('error', {'message': 'Authentication required'})
-            return
+    @socketio.on('request_llm_question')
+    def handle_llm_question_request(data):
+        """Handle real-time LLM question generation requests"""
+        try:
+            user = get_current_user(request)
+            if not user:
+                emit('error', {'message': 'Authentication required'})
+                return
 
-        session_id = data.get('session_id')
-        if not session_id:
-            emit('error', {'message': 'Session ID required'})
-            return
+            session_id = data.get('session_id')
+            subject = data.get('subject', 'general')
+            context = data.get('context', '')
 
-        # Verify user is participant
-        participant = session_participants_collection.find_one({
-            "session_id": session_id,
-            "user_id": user["user_id"],
-            "is_active": True
-        })
+            if not session_id:
+                emit('error', {'message': 'Session ID required'})
+                return
 
-        if not participant:
-            emit('error', {'message': 'Not authorized to join this session'})
-            return
+            # Verify user is a participant
+            session = sessions_collection.find_one({"session_id": session_id})
+            if not session or user["username"] not in session.get("participants", []):
+                emit('error', {'message': 'Access denied'})
+                return
 
-        # Join the room
-        join_room(session_id)
+            if not session["settings"].get("allow_llm", True):
+                emit('error', {'message': 'LLM questions are disabled'})
+                return
 
-        # Store connection info
-        active_connections[request.sid] = {
-            'user_id': user["user_id"],
-            'username': user["username"],
-            'session_id': session_id,
-            'role': participant['role']
-        }
+            # Notify all users that LLM is generating a question
+            emit('llm_generating', {
+                'username': user["username"],
+                'subject': subject,
+                'timestamp': datetime.datetime.utcnow().isoformat()
+            }, room=session_id)
 
-        # Notify other participants
-        emit('participant_joined', {
-            'username': user["username"],
-            'role': participant['role'],
-            'timestamp': datetime.datetime.utcnow().isoformat()
-        }, room=session_id, include_self=False)
+            # This would integrate with the mock LLM from the main sessions module
+            # For now, just notify that a question was requested
+            emit('llm_question_requested', {
+                'username': user["username"],
+                'subject': subject,
+                'context': context,
+                'timestamp': datetime.datetime.utcnow().isoformat()
+            }, room=session_id)
 
-        emit('session_joined', {
-            'message': 'Successfully joined session'
-        })
+        except Exception as e:
+            print(f"Error handling LLM question request: {str(e)}")
+            emit('error', {'message': 'Failed to request LLM question'})
 
-    except Exception as e:
-        print(f"Error joining session: {str(e)}")
-        emit('error', {'message': 'Failed to join session'})
+    @socketio.on('typing_indicator')
+    def handle_typing_indicator(data):
+        """Handle typing indicators for chat"""
+        try:
+            user = get_current_user(request)
+            if not user:
+                return
 
+            session_id = data.get('session_id')
+            is_typing = data.get('is_typing', False)
 
-@socketio.on('send_message')
-def handle_send_message(data):
-    """Handle chat messages in session"""
-    try:
-        if request.sid not in active_connections:
-            emit('error', {'message': 'Not connected to any session'})
-            return
+            if session_id:
+                emit('user_typing', {
+                    'username': user["username"],
+                    'is_typing': is_typing,
+                    'timestamp': datetime.datetime.utcnow().isoformat()
+                }, room=session_id, include_self=False)
 
-        connection_info = active_connections[request.sid]
-        session_id = connection_info['session_id']
-        user_id = connection_info['user_id']
-        username = connection_info['username']
+        except Exception as e:
+            print(f"Error handling typing indicator: {str(e)}")
 
-        message_text = data.get('message', '').strip()
-        if not message_text:
-            emit('error', {'message': 'Message cannot be empty'})
-            return
+    @socketio.on('session_status_update')
+    def handle_session_status_update(data):
+        """Handle session status updates (host only)"""
+        try:
+            user = get_current_user(request)
+            if not user:
+                emit('error', {'message': 'Authentication required'})
+                return
 
-        # Store message in database
-        message_data = {
-            "session_id": session_id,
-            "user_id": user_id,
-            "username": username,
-            "message": message_text,
-            "message_type": "chat",
-            "timestamp": datetime.datetime.utcnow()
-        }
+            session_id = data.get('session_id')
+            status = data.get('status')
 
-        session_messages_collection.insert_one(message_data)
+            if not session_id or not status:
+                emit('error', {'message': 'Session ID and status required'})
+                return
 
-        # Broadcast to all session participants
-        emit('new_message', {
-            'username': username,
-            'message': message_text,
-            'message_type': 'chat',
-            'timestamp': message_data['timestamp'].isoformat()
-        }, room=session_id)
+            # Verify user is the host
+            session = sessions_collection.find_one({"session_id": session_id})
+            if not session or user["username"] != session.get("host_username"):
+                emit('error', {'message': 'Only the host can update session status'})
+                return
 
-    except Exception as e:
-        print(f"Error sending message: {str(e)}")
-        emit('error', {'message': 'Failed to send message'})
+            # Update session status in database
+            sessions_collection.update_one(
+                {"session_id": session_id},
+                {"$set": {"status": status, "updated_at": datetime.datetime.utcnow()}}
+            )
 
+            # Broadcast status update
+            emit('session_status_changed', {
+                'status': status,
+                'updated_by': user["username"],
+                'timestamp': datetime.datetime.utcnow().isoformat()
+            }, room=session_id)
 
-@socketio.on('request_llm_questions')
-def handle_llm_request(data):
-    """Handle LLM question generation requests"""
-    try:
-        if request.sid not in active_connections:
-            emit('error', {'message': 'Not connected to any session'})
-            return
+        except Exception as e:
+            print(f"Error handling status update: {str(e)}")
+            emit('error', {'message': 'Failed to update session status'})
 
-        connection_info = active_connections[request.sid]
-        session_id = connection_info['session_id']
-        username = connection_info['username']
-
-        # Get session details
-        session = template_sessions_collection.find_one({"session_id": session_id})
-        if not session or not session.get('settings', {}).get('llm_enabled', False):
-            emit('error', {'message': 'LLM is not enabled for this session'})
-            return
-
-        prompt = data.get('prompt', '').strip()
-        num_questions = min(data.get('num_questions', 3), 10)  # Max 10 at once
-
-        if not prompt:
-            emit('error', {'message': 'Prompt is required for LLM generation'})
-            return
-
-        # Notify participants that LLM is generating
-        emit('llm_generating', {
-            'username': username,
-            'prompt': prompt,
-            'num_questions': num_questions,
-            'timestamp': datetime.datetime.utcnow().isoformat()
-        }, room=session_id)
-
-        # For now, return mock questions (you'll replace this with real LLM later)
-        mock_questions = [
-            {
-                "question_text": f"What are the key concepts of {prompt}?",
-                "question_type": "open_ended",
-                "difficulty": "NORMAL",
-                "answer": f"This question tests understanding of {prompt}",
-                "hints": ["Think about fundamentals", "Consider practical applications"]
-            },
-            {
-                "question_text": f"How would you implement {prompt} in a real project?",
-                "question_type": "open_ended",
-                "difficulty": "MODERATE",
-                "answer": f"Implementation details for {prompt}",
-                "hints": ["Consider scalability", "Think about best practices"]
-            }
-        ]
-
-        # Add generated questions to queue
-        for question in mock_questions[:num_questions]:
-            question_data = {
-                "question_id": str(uuid.uuid4()),
-                "session_id": session_id,
-                "submitted_by": "llm_system",
-                "submitted_by_username": "AI Assistant",
-                "question_text": question.get("question_text", ""),
-                "answer": question.get("answer", ""),
-                "question_type": question.get("question_type", "open_ended"),
-                "difficulty": question.get("difficulty", "NORMAL"),
-                "hints": question.get("hints", []),
-                "multiple_choice_options": question.get("multiple_choice_options", []),
-                "correct_answer": question.get("correct_answer", ""),
-                "source": "llm",
-                "status": "pending",
-                "submitted_at": datetime.datetime.utcnow(),
-                "metadata": {"llm_prompt": prompt}
-            }
-
-            question_queue_collection.insert_one(question_data)
-
-        # Notify all session participants
-        emit('llm_questions_generated', {
-            'questions': mock_questions[:num_questions],
-            'num_generated': len(mock_questions[:num_questions]),
-            'timestamp': datetime.datetime.utcnow().isoformat()
-        }, room=session_id)
-
-    except Exception as e:
-        print(f"Error requesting LLM questions: {str(e)}")
-        emit('error', {'message': 'Failed to request LLM questions'})
-
-
+    return socketio

@@ -1,57 +1,95 @@
+# server/app/simple_sessions.py
 from flask import Blueprint, request, jsonify, current_app
+from flask_socketio import emit, join_room, leave_room
 from pymongo import MongoClient
-from bson.objectid import ObjectId
 import datetime
 import secrets
 import string
 import uuid
-from enum import Enum
-from .auth import token_required, get_current_user
+import random
+from .auth import token_required
 from .config import Config
 
-sessions_bp = Blueprint('sessions', __name__)
+sessions = Blueprint('sessions', __name__)
 
-# Connect to MongoDB
+# MongoDB connection
 client = MongoClient(Config.MONGO_URI)
 db = client.get_default_database()
-template_sessions_collection = db.template_sessions
-templates_collection = db.templates
-session_participants_collection = db.session_participants
-session_messages_collection = db.session_messages
-question_queue_collection = db.question_queue
+sessions_collection = db.sessions
+messages_collection = db.session_messages
+questions_collection = db.session_questions
 
-
-class SessionStatus(Enum):
-    ACTIVE = "active"
-    PAUSED = "paused"
-    COMPLETED = "completed"
-    CLOSED = "closed"
-
-
-class QuestionStatus(Enum):
-    PENDING = "pending"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-
-
-class ParticipantRole(Enum):
-    HOST = "host"
-    CONTRIBUTOR = "contributor"
-    VIEWER = "viewer"
+# Mock LLM responses for different subjects
+MOCK_LLM_RESPONSES = {
+    "python": [
+        "What is the difference between a list and a tuple in Python?",
+        "Explain the concept of list comprehensions with an example.",
+        "How do you handle exceptions in Python?",
+        "What are decorators and how do you use them?",
+        "Explain the difference between __str__ and __repr__ methods."
+    ],
+    "javascript": [
+        "What is the difference between let, const, and var?",
+        "Explain event bubbling and event capturing.",
+        "What are promises and how do they work?",
+        "What is the difference between == and === in JavaScript?",
+        "Explain the concept of closures with an example."
+    ],
+    "algorithms": [
+        "Implement a binary search algorithm.",
+        "Explain the time complexity of quicksort.",
+        "What is the difference between BFS and DFS?",
+        "How would you detect a cycle in a linked list?",
+        "Implement a function to reverse a binary tree."
+    ],
+    "system_design": [
+        "How would you design a URL shortener like bit.ly?",
+        "Explain how you would design a chat application.",
+        "How would you scale a web application to handle millions of users?",
+        "Design a caching system for a web application.",
+        "How would you design a file storage system like Dropbox?"
+    ]
+}
 
 
 def generate_session_code():
-    """Generate a unique 6-character session code"""
+    """Generate a 6-character session code"""
     return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
 
 
-def generate_session_password():
-    """Generate a random session password"""
-    return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
+def mock_llm_generate_question(subject="general", context=""):
+    """Mock LLM API that generates questions based on subject"""
+    subject_lower = subject.lower()
+
+    # Find matching subject
+    questions = MOCK_LLM_RESPONSES.get(subject_lower, MOCK_LLM_RESPONSES["python"])
+
+    # Add some randomness and context awareness
+    base_question = random.choice(questions)
+
+    if context:
+        # Simple context awareness
+        if "beginner" in context.lower():
+            base_question = "Beginner level: " + base_question
+        elif "advanced" in context.lower():
+            base_question = "Advanced: " + base_question
+
+    return {
+        "question": base_question,
+        "difficulty": random.choice(["easy", "medium", "hard"]),
+        "type": "multiple_choice" if random.choice([True, False]) else "open_ended",
+        "hints": [
+            "Think about the core concepts",
+            "Consider edge cases",
+            "Try to provide examples"
+        ],
+        "generated_by": "mock_llm",
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }
 
 
-# Create a new template building session
-@sessions_bp.route('/api/sessions/create', methods=['POST'])
+# Create a new session
+@sessions.route('/api/sessions/create', methods=['POST'])
 @token_required
 def create_session(user):
     try:
@@ -59,322 +97,363 @@ def create_session(user):
 
         # Generate unique session code
         session_code = generate_session_code()
-        while template_sessions_collection.find_one({"session_code": session_code}):
+        while sessions_collection.find_one({"session_code": session_code}):
             session_code = generate_session_code()
-
-        # Generate password if not provided
-        password = data.get('password') or generate_session_password()
 
         session_data = {
             "session_id": str(uuid.uuid4()),
             "session_code": session_code,
-            "password": password,
-            "host_user_id": user["user_id"],
-            "host_username": user["username"],
-            "title": data.get('title', f"Template Session {session_code}"),
+            "title": data.get('title', f"Question Session {session_code}"),
+            "subject": data.get('subject', 'general'),
             "description": data.get('description', ''),
-            "max_participants": data.get('max_participants', 10),
-            "max_questions": data.get('max_questions', 20),
-            "template_config": {
-                "subject": data.get('subject', ''),
-                "sub_subject": data.get('sub_subject', ''),
-                "difficulty": data.get('difficulty', 'NORMAL'),
-                "question_types": data.get('question_types', ['open_ended']),
-                "allow_hints": data.get('allow_hints', True)
-            },
-            "status": SessionStatus.ACTIVE.value,
+            "host_id": user["user_id"],
+            "host_username": user["username"],
+            "participants": [user["username"]],
             "created_at": datetime.datetime.utcnow(),
             "updated_at": datetime.datetime.utcnow(),
+            "status": "active",
             "settings": {
-                "llm_enabled": data.get('llm_enabled', True),
-                "auto_approve_llm": data.get('auto_approve_llm', False),
-                "participant_suggestions": data.get('participant_suggestions', True),
-                "require_approval": data.get('require_approval', True)
+                "max_participants": data.get('max_participants', 10),
+                "allow_llm": data.get('allow_llm', True),
+                "allow_user_questions": data.get('allow_user_questions', True),
+                "auto_approve_questions": data.get('auto_approve_questions', False)
             }
         }
 
-        result = template_sessions_collection.insert_one(session_data)
-        session_data["_id"] = str(result.inserted_id)
+        result = sessions_collection.insert_one(session_data)
 
-        # Add host as first participant
-        participant_data = {
-            "session_id": session_data["session_id"],
-            "user_id": user["user_id"],
-            "username": user["username"],
-            "role": ParticipantRole.HOST.value,
-            "joined_at": datetime.datetime.utcnow(),
-            "is_active": True
-        }
-        session_participants_collection.insert_one(participant_data)
+        # Remove MongoDB ObjectId for response
+        session_data.pop('_id', None)
 
         return jsonify({
-            "success": True,
-            "session": {
-                "session_id": session_data["session_id"],
-                "session_code": session_code,
-                "password": password,
-                "title": session_data["title"],
-                "description": session_data["description"],
-                "max_participants": session_data["max_participants"],
-                "max_questions": session_data["max_questions"],
-                "template_config": session_data["template_config"],
-                "settings": session_data["settings"],
-                "created_at": session_data["created_at"].isoformat()
-            }
+            "message": "Session created successfully",
+            "session": session_data
         }), 201
 
     except Exception as e:
         current_app.logger.error(f"Error creating session: {str(e)}")
-        return jsonify({
-            "success": False,
-            "message": "Failed to create session"
-        }), 500
+        return jsonify({"error": "Failed to create session"}), 500
 
 
-# Join an existing session
-@sessions_bp.route('/api/sessions/join', methods=['POST'])
+# Join a session
+@sessions.route('/api/sessions/join/<session_code>', methods=['POST'])
 @token_required
-def join_session(user):
+def join_session(user, session_code):
     try:
-        data = request.get_json()
-        session_code = data.get('session_code')
-        password = data.get('password')
-
-        if not session_code or not password:
-            return jsonify({
-                "success": False,
-                "message": "Session code and password are required"
-            }), 400
-
-        # Find session
-        session = template_sessions_collection.find_one({
-            "session_code": session_code,
-            "password": password,
-            "status": SessionStatus.ACTIVE.value
-        })
+        session = sessions_collection.find_one({"session_code": session_code.upper()})
 
         if not session:
-            return jsonify({
-                "success": False,
-                "message": "Invalid session code, password, or session is not active"
-            }), 404
+            return jsonify({"error": "Session not found"}), 404
+
+        if session["status"] != "active":
+            return jsonify({"error": "Session is not active"}), 400
 
         # Check if user is already in session
-        existing_participant = session_participants_collection.find_one({
-            "session_id": session["session_id"],
-            "user_id": user["user_id"]
-        })
-
-        if existing_participant:
-            # Reactivate if they were inactive
-            session_participants_collection.update_one(
-                {"_id": existing_participant["_id"]},
-                {"$set": {"is_active": True, "rejoined_at": datetime.datetime.utcnow()}}
-            )
-        else:
+        if user["username"] not in session["participants"]:
             # Check participant limit
-            active_participants = session_participants_collection.count_documents({
-                "session_id": session["session_id"],
-                "is_active": True
-            })
+            if len(session["participants"]) >= session["settings"]["max_participants"]:
+                return jsonify({"error": "Session is full"}), 400
 
-            if active_participants >= session["max_participants"]:
-                return jsonify({
-                    "success": False,
-                    "message": "Session is full"
-                }), 400
+            # Add user to session
+            sessions_collection.update_one(
+                {"session_code": session_code.upper()},
+                {
+                    "$push": {"participants": user["username"]},
+                    "$set": {"updated_at": datetime.datetime.utcnow()}
+                }
+            )
 
-            # Add new participant
-            participant_data = {
-                "session_id": session["session_id"],
-                "user_id": user["user_id"],
-                "username": user["username"],
-                "role": ParticipantRole.CONTRIBUTOR.value,
-                "joined_at": datetime.datetime.utcnow(),
-                "is_active": True
-            }
-            session_participants_collection.insert_one(participant_data)
+        # Get updated session
+        updated_session = sessions_collection.find_one({"session_code": session_code.upper()})
+        updated_session.pop('_id', None)
 
         return jsonify({
-            "success": True,
-            "session": {
-                "session_id": session["session_id"],
-                "session_code": session["session_code"],
-                "title": session["title"],
-                "description": session["description"],
-                "template_config": session["template_config"],
-                "settings": session["settings"],
-                "is_host": session["host_user_id"] == user["user_id"]
-            }
+            "message": "Joined session successfully",
+            "session": updated_session
         }), 200
 
     except Exception as e:
         current_app.logger.error(f"Error joining session: {str(e)}")
-        return jsonify({
-            "success": False,
-            "message": "Failed to join session"
-        }), 500
+        return jsonify({"error": "Failed to join session"}), 500
 
 
-# Submit a question to the queue
-@sessions_bp.route('/api/sessions/<session_id>/questions', methods=['POST'])
+# Become host (take over hosting)
+@sessions.route('/api/sessions/<session_id>/become-host', methods=['POST'])
 @token_required
-def submit_question(user, session_id):
+def become_host(user, session_id):
     try:
-        data = request.get_json()
-
-        # Verify user is participant
-        participant = session_participants_collection.find_one({
-            "session_id": session_id,
-            "user_id": user["user_id"],
-            "is_active": True
-        })
-
-        if not participant:
-            return jsonify({
-                "success": False,
-                "message": "Not authorized to submit questions to this session"
-            }), 403
-
-        session = template_sessions_collection.find_one({"session_id": session_id})
-        if not session or session["status"] != SessionStatus.ACTIVE.value:
-            return jsonify({
-                "success": False,
-                "message": "Session not found or not active"
-            }), 404
-
-        question_data = {
-            "question_id": str(uuid.uuid4()),
-            "session_id": session_id,
-            "submitted_by": user["user_id"],
-            "submitted_by_username": user["username"],
-            "question_text": data.get('question_text', ''),
-            "answer": data.get('answer', ''),
-            "question_type": data.get('question_type', 'open_ended'),
-            "difficulty": data.get('difficulty', session["template_config"]["difficulty"]),
-            "hints": data.get('hints', []),
-            "multiple_choice_options": data.get('multiple_choice_options', []),
-            "correct_answer": data.get('correct_answer', ''),
-            "source": data.get('source', 'user'),
-            "status": QuestionStatus.PENDING.value,
-            "submitted_at": datetime.datetime.utcnow(),
-            "metadata": data.get('metadata', {})
-        }
-
-        result = question_queue_collection.insert_one(question_data)
-        question_data["_id"] = str(result.inserted_id)
-
-        return jsonify({
-            "success": True,
-            "question": question_data
-        }), 201
-
-    except Exception as e:
-        current_app.logger.error(f"Error submitting question: {str(e)}")
-        return jsonify({
-            "success": False,
-            "message": "Failed to submit question"
-        }), 500
-
-
-# Approve or reject a question (host only)
-@sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/review', methods=['POST'])
-@token_required
-def review_question(user, session_id, question_id):
-    try:
-        data = request.get_json()
-        action = data.get('action')  # approve or reject
-
-        if action not in ['approve', 'reject']:
-            return jsonify({
-                "success": False,
-                "message": "Action must be 'approve' or 'reject'"
-            }), 400
-
-        # Verify user is host
-        session = template_sessions_collection.find_one({
-            "session_id": session_id,
-            "host_user_id": user["user_id"]
-        })
+        session = sessions_collection.find_one({"session_id": session_id})
 
         if not session:
-            return jsonify({
-                "success": False,
-                "message": "Not authorized to review questions in this session"
-            }), 403
+            return jsonify({"error": "Session not found"}), 404
 
-        # Find the question
-        question = question_queue_collection.find_one({
-            "question_id": question_id,
-            "session_id": session_id
-        })
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "You must be a participant to become host"}), 400
 
-        if not question:
-            return jsonify({
-                "success": False,
-                "message": "Question not found"
-            }), 404
-
-        # Update question status
-        new_status = QuestionStatus.APPROVED.value if action == 'approve' else QuestionStatus.REJECTED.value
-
-        question_queue_collection.update_one(
-            {"question_id": question_id},
+        # Update host
+        sessions_collection.update_one(
+            {"session_id": session_id},
             {
                 "$set": {
-                    "status": new_status,
-                    "reviewed_at": datetime.datetime.utcnow(),
-                    "reviewed_by": user["user_id"],
-                    "review_comments": data.get('comments', '')
+                    "host_id": user["user_id"],
+                    "host_username": user["username"],
+                    "updated_at": datetime.datetime.utcnow()
                 }
             }
         )
 
+        # Broadcast host change to all participants
+        emit('host_changed', {
+            'new_host': user["username"],
+            'timestamp': datetime.datetime.utcnow().isoformat()
+        }, room=session_id, namespace='/')
+
+        return jsonify({"message": f"{user['username']} is now the host"}), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error changing host: {str(e)}")
+        return jsonify({"error": "Failed to change host"}), 500
+
+
+# Get LLM generated question
+@sessions.route('/api/sessions/<session_id>/llm-question', methods=['POST'])
+@token_required
+def get_llm_question(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+
+        if not session["settings"]["allow_llm"]:
+            return jsonify({"error": "LLM questions are disabled for this session"}), 400
+
+        data = request.get_json() or {}
+        subject = data.get('subject', session.get('subject', 'general'))
+        context = data.get('context', '')
+
+        # Generate question using mock LLM
+        llm_response = mock_llm_generate_question(subject, context)
+
+        # Save question to database
+        question_data = {
+            "question_id": str(uuid.uuid4()),
+            "session_id": session_id,
+            "question_text": llm_response["question"],
+            "difficulty": llm_response["difficulty"],
+            "type": llm_response["type"],
+            "hints": llm_response["hints"],
+            "source": "llm",
+            "created_by": "mock_llm",
+            "created_at": datetime.datetime.utcnow(),
+            "status": "pending",  # Host needs to approve
+            "subject": subject
+        }
+
+        questions_collection.insert_one(question_data)
+        question_data.pop('_id', None)
+
         return jsonify({
-            "success": True,
-            "message": f"Question {action}d successfully"
+            "message": "LLM question generated",
+            "question": question_data
         }), 200
 
     except Exception as e:
-        current_app.logger.error(f"Error reviewing question: {str(e)}")
-        return jsonify({
-            "success": False,
-            "message": "Failed to review question"
-        }), 500
+        current_app.logger.error(f"Error generating LLM question: {str(e)}")
+        return jsonify({"error": "Failed to generate question"}), 500
 
 
-# Get user's sessions
-@sessions_bp.route('/api/sessions/my-sessions', methods=['GET'])
+# User submits their own question
+@sessions.route('/api/sessions/<session_id>/add-question', methods=['POST'])
 @token_required
-def get_user_sessions(user):
+def add_user_question(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+
+        if not session["settings"]["allow_user_questions"]:
+            return jsonify({"error": "User questions are disabled for this session"}), 400
+
+        data = request.get_json() or {}
+
+        if not data.get('question_text'):
+            return jsonify({"error": "Question text is required"}), 400
+
+        question_data = {
+            "question_id": str(uuid.uuid4()),
+            "session_id": session_id,
+            "question_text": data["question_text"],
+            "difficulty": data.get('difficulty', 'medium'),
+            "type": data.get('type', 'open_ended'),
+            "hints": data.get('hints', []),
+            "source": "user",
+            "created_by": user["username"],
+            "created_at": datetime.datetime.utcnow(),
+            "status": "approved" if session["settings"]["auto_approve_questions"] else "pending",
+            "subject": data.get('subject', session.get('subject', 'general'))
+        }
+
+        questions_collection.insert_one(question_data)
+        question_data.pop('_id', None)
+
+        return jsonify({
+            "message": "Question added successfully",
+            "question": question_data
+        }), 201
+
+    except Exception as e:
+        current_app.logger.error(f"Error adding user question: {str(e)}")
+        return jsonify({"error": "Failed to add question"}), 500
+
+
+# Send chat message
+@sessions.route('/api/sessions/<session_id>/chat', methods=['POST'])
+@token_required
+def send_chat_message(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+
+        data = request.get_json() or {}
+        message_text = data.get('message', '').strip()
+
+        if not message_text:
+            return jsonify({"error": "Message cannot be empty"}), 400
+
+        message_data = {
+            "message_id": str(uuid.uuid4()),
+            "session_id": session_id,
+            "username": user["username"],
+            "message": message_text,
+            "timestamp": datetime.datetime.utcnow(),
+            "type": data.get('type', 'chat')  # chat, question_suggestion, etc.
+        }
+
+        messages_collection.insert_one(message_data)
+        message_data.pop('_id', None)
+
+        # Broadcast message to all session participants
+        emit('new_message', message_data, room=session_id, namespace='/')
+
+        return jsonify({
+            "message": "Message sent",
+            "chat_message": message_data
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error sending message: {str(e)}")
+        return jsonify({"error": "Failed to send message"}), 500
+
+
+# Get session data (questions, messages, etc.)
+@sessions.route('/api/sessions/<session_id>', methods=['GET'])
+@token_required
+def get_session_data(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+
+        # Get questions
+        questions = list(questions_collection.find(
+            {"session_id": session_id},
+            {"_id": 0}
+        ).sort("created_at", 1))
+
+        # Get recent messages
+        messages = list(messages_collection.find(
+            {"session_id": session_id},
+            {"_id": 0}
+        ).sort("timestamp", -1).limit(50))
+        messages.reverse()  # Show chronologically
+
+        session.pop('_id', None)
+
+        return jsonify({
+            "session": session,
+            "questions": questions,
+            "messages": messages
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error getting session data: {str(e)}")
+        return jsonify({"error": "Failed to get session data"}), 500
+
+
+# Approve/reject questions (host only)
+@sessions.route('/api/sessions/<session_id>/questions/<question_id>/approve', methods=['POST'])
+@token_required
+def approve_question(user, session_id, question_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can approve questions"}), 403
+
+        data = request.get_json() or {}
+        action = data.get('action', 'approve')  # approve or reject
+
+        if action not in ['approve', 'reject']:
+            return jsonify({"error": "Invalid action"}), 400
+
+        # Update question status
+        result = questions_collection.update_one(
+            {"question_id": question_id, "session_id": session_id},
+            {"$set": {"status": "approved" if action == "approve" else "rejected"}}
+        )
+
+        if result.matched_count == 0:
+            return jsonify({"error": "Question not found"}), 404
+
+        return jsonify({"message": f"Question {action}d successfully"}), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error approving question: {str(e)}")
+        return jsonify({"error": "Failed to approve question"}), 500
+
+
+# List all active sessions
+@sessions.route('/api/sessions/list', methods=['GET'])
+@token_required
+def list_sessions(user):
     try:
         # Get sessions where user is a participant
-        user_sessions = list(session_participants_collection.find({
-            "user_id": user["user_id"],
-            "is_active": True
-        }, {"session_id": 1, "_id": 0}))
+        user_sessions = list(sessions_collection.find(
+            {"participants": user["username"], "status": "active"},
+            {
+                "_id": 0,
+                "session_id": 1,
+                "session_code": 1,
+                "title": 1,
+                "subject": 1,
+                "host_username": 1,
+                "participants": 1,
+                "created_at": 1
+            }
+        ).sort("created_at", -1))
 
-        session_ids = [s["session_id"] for s in user_sessions]
-
-        sessions = list(template_sessions_collection.find({
-            "session_id": {"$in": session_ids}
-        }, {"password": 0}))
-
-        # Convert ObjectId to string
-        for session in sessions:
-            session["_id"] = str(session["_id"])
-            session["is_host"] = session["host_user_id"] == user["user_id"]
-
-        return jsonify({
-            "success": True,
-            "sessions": sessions
-        }), 200
+        return jsonify({"sessions": user_sessions}), 200
 
     except Exception as e:
-        current_app.logger.error(f"Error getting user sessions: {str(e)}")
-        return jsonify({
-            "success": False,
-            "message": "Failed to get user sessions"
-        }), 500
-
-
+        current_app.logger.error(f"Error listing sessions: {str(e)}")
+        return jsonify({"error": "Failed to list sessions"}), 500
