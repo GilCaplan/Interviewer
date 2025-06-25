@@ -91,24 +91,8 @@ def handle_join_session(data):
             'timestamp': datetime.datetime.utcnow().isoformat()
         }, room=session_id, include_self=False)
 
-        # Send recent messages to the joining user
-        recent_messages = list(session_messages_collection.find({
-            "session_id": session_id
-        }).sort("timestamp", -1).limit(50))
-
-        recent_messages.reverse()  # Show in chronological order
-
         emit('session_joined', {
-            'message': 'Successfully joined session',
-            'recent_messages': [
-                {
-                    'username': msg['username'],
-                    'message': msg['message'],
-                    'message_type': msg['message_type'],
-                    'timestamp': msg['timestamp'].isoformat()
-                }
-                for msg in recent_messages
-            ]
+            'message': 'Successfully joined session'
         })
 
     except Exception as e:
@@ -192,23 +176,26 @@ def handle_llm_request(data):
             'timestamp': datetime.datetime.utcnow().isoformat()
         }, room=session_id)
 
-        # Generate questions using LLM (in a separate thread to avoid blocking)
-        socketio.start_background_task(generate_llm_questions, session_id, prompt, num_questions,
-                                       session['template_config'])
-
-    except Exception as e:
-        print(f"Error requesting LLM questions: {str(e)}")
-        emit('error', {'message': 'Failed to request LLM questions'})
-
-
-def generate_llm_questions(session_id, prompt, num_questions, template_config):
-    """Generate questions using LLM (background task)"""
-    try:
-        # Mock LLM response for demonstration
-        generated_questions = generate_mock_llm_questions(prompt, num_questions, template_config)
+        # For now, return mock questions (you'll replace this with real LLM later)
+        mock_questions = [
+            {
+                "question_text": f"What are the key concepts of {prompt}?",
+                "question_type": "open_ended",
+                "difficulty": "NORMAL",
+                "answer": f"This question tests understanding of {prompt}",
+                "hints": ["Think about fundamentals", "Consider practical applications"]
+            },
+            {
+                "question_text": f"How would you implement {prompt} in a real project?",
+                "question_type": "open_ended",
+                "difficulty": "MODERATE",
+                "answer": f"Implementation details for {prompt}",
+                "hints": ["Consider scalability", "Think about best practices"]
+            }
+        ]
 
         # Add generated questions to queue
-        for question in generated_questions:
+        for question in mock_questions[:num_questions]:
             question_data = {
                 "question_id": str(uuid.uuid4()),
                 "session_id": session_id,
@@ -217,12 +204,12 @@ def generate_llm_questions(session_id, prompt, num_questions, template_config):
                 "question_text": question.get("question_text", ""),
                 "answer": question.get("answer", ""),
                 "question_type": question.get("question_type", "open_ended"),
-                "difficulty": question.get("difficulty", template_config.get("difficulty", "NORMAL")),
+                "difficulty": question.get("difficulty", "NORMAL"),
                 "hints": question.get("hints", []),
                 "multiple_choice_options": question.get("multiple_choice_options", []),
                 "correct_answer": question.get("correct_answer", ""),
                 "source": "llm",
-                "status": "approved" if template_config.get("auto_approve_llm", False) else "pending",
+                "status": "pending",
                 "submitted_at": datetime.datetime.utcnow(),
                 "metadata": {"llm_prompt": prompt}
             }
@@ -230,55 +217,14 @@ def generate_llm_questions(session_id, prompt, num_questions, template_config):
             question_queue_collection.insert_one(question_data)
 
         # Notify all session participants
-        socketio.emit('llm_questions_generated', {
-            'questions': generated_questions,
-            'num_generated': len(generated_questions),
-            'auto_approved': template_config.get("auto_approve_llm", False),
+        emit('llm_questions_generated', {
+            'questions': mock_questions[:num_questions],
+            'num_generated': len(mock_questions[:num_questions]),
             'timestamp': datetime.datetime.utcnow().isoformat()
         }, room=session_id)
 
     except Exception as e:
-        print(f"Error generating LLM questions: {str(e)}")
-        socketio.emit('llm_error', {
-            'message': 'Failed to generate questions',
-            'timestamp': datetime.datetime.utcnow().isoformat()
-        }, room=session_id)
+        print(f"Error requesting LLM questions: {str(e)}")
+        emit('error', {'message': 'Failed to request LLM questions'})
 
 
-def generate_mock_llm_questions(prompt, num_questions, template_config):
-    """Generate mock questions when LLM is not available"""
-    difficulty = template_config.get('difficulty', 'NORMAL')
-    subject = template_config.get('subject', 'Programming')
-
-    mock_questions = [
-        {
-            "question_text": f"Explain the key concepts of {prompt} in the context of {subject}",
-            "question_type": "open_ended",
-            "difficulty": difficulty,
-            "answer": f"This question tests understanding of {prompt} fundamentals",
-            "hints": [f"Think about the core principles of {prompt}", "Consider practical applications"]
-        },
-        {
-            "question_text": f"What are the best practices when implementing {prompt}?",
-            "question_type": "open_ended",
-            "difficulty": difficulty,
-            "answer": f"Best practices for {prompt} implementation",
-            "hints": [f"Consider scalability", "Think about maintainability"]
-        },
-        {
-            "question_text": f"Which of the following is a key benefit of {prompt}?",
-            "question_type": "multiple_choice",
-            "difficulty": difficulty,
-            "answer": "Improved system performance and reliability",
-            "multiple_choice_options": [
-                "Improved system performance and reliability",
-                "Increased code complexity",
-                "Reduced maintainability",
-                "Higher resource consumption"
-            ],
-            "correct_answer": "A",
-            "hints": ["Think about positive outcomes", "Consider system benefits"]
-        }
-    ]
-
-    return mock_questions[:num_questions]

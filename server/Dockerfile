@@ -28,4 +28,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:5000/api/health || exit 1
 
 # Run the application
-CMD ["python", "-m", "app"]
+CMD ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=5000"]

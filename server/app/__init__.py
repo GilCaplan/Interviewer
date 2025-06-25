@@ -6,9 +6,9 @@ from .config import Config
 from .routes import main
 from .auth import auth
 from .questions import questions
-from .sessions import sessions_bp  # NEW IMPORT
+from .sessions import sessions_bp
 from .coding_challenges import coding_challenges
-from .websocket_handlers import socketio  # NEW IMPORT
+from .websocket_handlers import socketio
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -18,8 +18,8 @@ def create_app(config_class=Config):
     config_class.init_app(app)
 
     # Initialize SocketIO with the app
-    socketio.init_app(app,
-                     cors_allowed_origins="*",
+    socketio.init_app(app, 
+                     cors_allowed_origins="*", 
                      async_mode='threading',
                      logger=True,
                      engineio_logger=True)
@@ -31,7 +31,7 @@ def create_app(config_class=Config):
     app.register_blueprint(main)
     app.register_blueprint(auth)
     app.register_blueprint(questions)
-    app.register_blueprint(sessions_bp)  # NEW BLUEPRINT
+    app.register_blueprint(sessions_bp)
     app.register_blueprint(coding_challenges)
 
     @app.after_request
