@@ -10,7 +10,7 @@ from .config import Config
 # MongoDB connection
 client = MongoClient(Config.MONGO_URI)
 db = client.get_default_database()
-sessions_collection = db.sessions
+sessions_collection = db.simple_sessions
 messages_collection = db.session_messages
 questions_collection = db.session_questions
 

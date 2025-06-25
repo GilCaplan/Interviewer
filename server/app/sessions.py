@@ -1,4 +1,4 @@
-# server/app/simple_sessions.py
+# server/app/sessions.py
 from flask import Blueprint, request, jsonify, current_app
 from flask_socketio import emit, join_room, leave_room
 from pymongo import MongoClient
@@ -10,12 +10,12 @@ import random
 from .auth import token_required
 from .config import Config
 
-sessions = Blueprint('sessions', __name__)
+sessions_bp = Blueprint('sessions', __name__)
 
 # MongoDB connection
 client = MongoClient(Config.MONGO_URI)
 db = client.get_default_database()
-sessions_collection = db.sessions
+sessions_collection = db.simple_sessions  # Fixed collection name
 messages_collection = db.session_messages
 questions_collection = db.session_questions
 
@@ -89,7 +89,7 @@ def mock_llm_generate_question(subject="general", context=""):
 
 
 # Create a new session
-@sessions.route('/api/sessions/create', methods=['POST'])
+@sessions_bp.route('/api/sessions/create', methods=['POST'])
 @token_required
 def create_session(user):
     try:
@@ -136,7 +136,7 @@ def create_session(user):
 
 
 # Join a session
-@sessions.route('/api/sessions/join/<session_code>', methods=['POST'])
+@sessions_bp.route('/api/sessions/join/<session_code>', methods=['POST'])
 @token_required
 def join_session(user, session_code):
     try:
@@ -178,7 +178,7 @@ def join_session(user, session_code):
 
 
 # Become host (take over hosting)
-@sessions.route('/api/sessions/<session_id>/become-host', methods=['POST'])
+@sessions_bp.route('/api/sessions/<session_id>/become-host', methods=['POST'])
 @token_required
 def become_host(user, session_id):
     try:
@@ -216,7 +216,7 @@ def become_host(user, session_id):
 
 
 # Get LLM generated question
-@sessions.route('/api/sessions/<session_id>/llm-question', methods=['POST'])
+@sessions_bp.route('/api/sessions/<session_id>/llm-question', methods=['POST'])
 @token_required
 def get_llm_question(user, session_id):
     try:
@@ -267,7 +267,7 @@ def get_llm_question(user, session_id):
 
 
 # User submits their own question
-@sessions.route('/api/sessions/<session_id>/add-question', methods=['POST'])
+@sessions_bp.route('/api/sessions/<session_id>/add-question', methods=['POST'])
 @token_required
 def add_user_question(user, session_id):
     try:
@@ -315,7 +315,7 @@ def add_user_question(user, session_id):
 
 
 # Send chat message
-@sessions.route('/api/sessions/<session_id>/chat', methods=['POST'])
+@sessions_bp.route('/api/sessions/<session_id>/chat', methods=['POST'])
 @token_required
 def send_chat_message(user, session_id):
     try:
@@ -359,7 +359,7 @@ def send_chat_message(user, session_id):
 
 
 # Get session data (questions, messages, etc.)
-@sessions.route('/api/sessions/<session_id>', methods=['GET'])
+@sessions_bp.route('/api/sessions/<session_id>', methods=['GET'])
 @token_required
 def get_session_data(user, session_id):
     try:
@@ -398,7 +398,7 @@ def get_session_data(user, session_id):
 
 
 # Approve/reject questions (host only)
-@sessions.route('/api/sessions/<session_id>/questions/<question_id>/approve', methods=['POST'])
+@sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/approve', methods=['POST'])
 @token_required
 def approve_question(user, session_id, question_id):
     try:
@@ -433,7 +433,7 @@ def approve_question(user, session_id, question_id):
 
 
 # List all active sessions
-@sessions.route('/api/sessions/list', methods=['GET'])
+@sessions_bp.route('/api/sessions/list', methods=['GET'])
 @token_required
 def list_sessions(user):
     try:

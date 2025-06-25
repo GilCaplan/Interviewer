@@ -8,7 +8,7 @@ from .auth import auth
 from .questions import questions
 from .sessions import sessions_bp
 from .coding_challenges import coding_challenges
-from .websocket_handlers import socketio
+from .websocket_handlers import socketio, init_simple_websockets
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -23,7 +23,7 @@ def create_app(config_class=Config):
                      async_mode='threading',
                      logger=True,
                      engineio_logger=True)
-
+    init_simple_websockets(socketio)
     # Enable CORS with more specific configuration
     CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
