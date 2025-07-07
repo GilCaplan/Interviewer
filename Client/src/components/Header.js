@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import './Header.css';
 
 function Header({ title, subtitle, username, onLogout, isAuthenticated }) {
   return (
@@ -28,8 +29,9 @@ function Header({ title, subtitle, username, onLogout, isAuthenticated }) {
 
       {isAuthenticated && (
         <nav className="main-nav">
-          <Link to="/" className="nav-link">Home</Link>
-          {/* Add more navigation links as needed */}
+            <Link to="/" className="nav-link">Home</Link>
+            <Link to="/templates" className="nav-link">Templates</Link>
+            {/* Add more navigation links as needed */}
         </nav>
       )}
     </header>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Header from './components/Header';
+import TemplatesGallery from "./components/TemplatesGallery";
 import FeatureList from './components/FeatureList';
 import FeaturePage from './components/FeaturePage';
 import Login from './components/Login';
@@ -12,6 +13,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import './index.css';
 import './components/Login.css';
 import './components/Questions.css';
+import TemplateDetails from "./components/TemplateDetails";
 
 // Protected route component
 const ProtectedRoute = ({ children }) => {
@@ -143,6 +145,24 @@ function AppContent() {
                 </div>
               )}
             </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path={"/templates"}
+          element={
+            <ProtectedRoute>
+              <TemplatesGallery />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+            path="/template/:templateId"
+            element={
+              <ProtectedRoute>
+                <TemplateDetails />
+              </ProtectedRoute>
           }
         />
 

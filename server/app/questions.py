@@ -235,7 +235,7 @@ def insert_dummy_template():
 		client = MongoClient(Config.MONGO_URI)
 		db = client.get_default_database()
 		# questions_collection = db.interview_questions
-		questions_collection = db['interview_questions']
+		templates_collection = db['templates']
 
 		dummy_template = {
 			"template_name": "Dummy Template: Algorithms",
@@ -263,7 +263,7 @@ def insert_dummy_template():
 			}
 		}
 
-		result = questions_collection.insert_one(dummy_template)
+		result = templates_collection.insert_one(dummy_template)
 		return jsonify({"message": "Dummy template inserted", "id": str(result.inserted_id)}), 200
 
 	except Exception as e:
