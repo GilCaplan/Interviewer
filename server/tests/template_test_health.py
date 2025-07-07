@@ -15,7 +15,7 @@ import statistics
 from collections import deque, defaultdict
 
 # Configuration
-API_URL = "http://localhost:5001"
+API_URL = "http://localhost:5000"
 MONITOR_INTERVAL = 5  # seconds between checks
 METRIC_HISTORY_SIZE = 100  # keep last 100 measurements
 ALERT_THRESHOLDS = {

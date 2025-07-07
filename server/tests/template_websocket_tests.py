@@ -18,8 +18,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 # Configuration
-API_URL = "http://localhost:5001"
-WS_URL = "http://localhost:5001"
+API_URL = "http://localhost:5000"
+WS_URL = "http://localhost:5000"
 NUM_CONCURRENT_USERS = 8
 TEST_DURATION = 60  # seconds
 MESSAGE_FREQUENCY = 2  # messages per second per user

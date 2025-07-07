@@ -32,7 +32,9 @@ def create_app(config_class=Config):
     init_simple_websockets(socketio)
 
     # Enable CORS with more specific configuration
-    CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+    # CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
 
     # Register blueprints
     app.register_blueprint(main)

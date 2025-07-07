@@ -31,7 +31,7 @@ function CodingChallenge() {
         }
 
         // For production, fetch from API
-        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
         const response = await fetch(`${apiUrl}/api/coding-challenges/${challengeId}`, {
           headers: {
             'Authorization': `Bearer ${user?.sessionToken}`
@@ -136,7 +136,7 @@ function CodingChallenge() {
       }
 
       // For production, use API
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       const response = await fetch(`${apiUrl}/api/run-code`, {
         method: 'POST',
         headers: {

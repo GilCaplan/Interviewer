@@ -8,7 +8,7 @@ Run with: python minimal_test.py
 import requests
 import json
 
-API_URL = "http://localhost:5001"
+API_URL = "http://localhost:5000"
 
 
 def test_basic_functionality():

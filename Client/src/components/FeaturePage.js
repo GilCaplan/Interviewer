@@ -122,6 +122,7 @@ function FeaturePage({ features }) {
       <div className="feature-description">
         {getDetailedDescription(feature.name)}
       </div>
+
       <div className="navigation-buttons">
         <Link to="/" className="back-button">Back to Features</Link>
         {isInterviewQuestions && (
@@ -131,6 +132,50 @@ function FeaturePage({ features }) {
           </>
         )}
       </div>
+
+      {/* ✅ Inserted button to create dummy template */}
+      {isInterviewQuestions && (
+        <div style={{ marginTop: "20px" }}>
+          <button
+            onClick={() => {
+/*              fetch("http://localhost:5000/questions/insert_dummy")
+                .then(res => res.json())
+                .then(data => alert("Dummy template created! ID: " + data.id))
+                .catch(err => {
+                  console.error(err);
+                  alert("Failed to create dummy template lol.");
+                });*/
+              fetch("http://localhost:5000/questions/insert_dummy")
+              .then(async res => {
+                if (!res.ok) {
+                  const err = await res.json().catch(() => ({}));
+                  throw new Error(err.message || "Unknown error from server");
+                }
+                return res.json();
+              })
+              .then(data => {
+                alert("✅ Dummy template created! ID: " + data.id);
+              })
+              .catch(err => {
+                console.error("❌ Error creating template:", err);
+                alert("Failed to create dummy template: " + err.message);
+              });
+            }}
+            style={{
+              padding: "10px 20px",
+              fontSize: "16px",
+              backgroundColor: "#4CAF50",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer"
+            }}
+          >
+            ➕ Create Dummy Template
+          </button>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -18,8 +18,8 @@ from datetime import datetime, timedelta
 import uuid
 
 # Test Configuration
-API_URL = "http://localhost:5001"
-WS_URL = "http://localhost:5001"
+API_URL = "http://localhost:5000"
+WS_URL = "http://localhost:5000"
 MAX_CONCURRENT_USERS = 10
 STRESS_TEST_DURATION = 30  # seconds
 
