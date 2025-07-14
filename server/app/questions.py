@@ -19,7 +19,7 @@ questions_collection = db.interview_questions
 @token_required
 def get_user_questions(user):
     try:
-        # Get user's questions
+        # Get user's questions,
         user_questions = list(questions_collection.find({"user_id": user["user_id"]}))
 
         # Convert ObjectId to string for JSON serialization
@@ -167,7 +167,7 @@ def delete_question(user, question_id):
 def generate_questions(user):
     try:
         data = request.get_json()
-
+        #hello
         if not data or not data.get('prompt'):
             return jsonify({
                 "success": False,

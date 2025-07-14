@@ -4,9 +4,9 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter, MemoryRouter } from 'react-router-dom';
-import App from '../../Client/src/App';
-import FeatureList from '../../Client/src/components/FeatureList';
-import FeaturePage from '../../Client/src/components/FeaturePage';
+import App from '../../../Client/src/App';
+import FeatureList from '../../../Client/src/components/FeatureList';
+import FeaturePage from '../../../Client/src/components/FeaturePage';
 
 // Setup mocks
 // Mock useParams for FeaturePage tests
