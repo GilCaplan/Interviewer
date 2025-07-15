@@ -1,18 +1,28 @@
 # Interview Process Assistant
 
-A full-stack application to help users prepare for interviews with practice problems, logical puzzles, interview questions, and more.
+A full-stack application to help users prepare for interviews with practice problems, logical puzzles, interview questions, and more. This is a university project (Semester 6 FullStack course).
 
 ## Project Structure
 
 ```
 Project_Interviewer/
-├── .venv/                # Python virtual environment
-├── Client/               # React frontend
-├── server/               # Flask backend
-├── .env                  # Environment variables
-├── Docker                # Docker reference file
-├── docker-compose.yml    # Docker Compose configuration
-└── tests/                # Test files for both client and server
+├── Client/                     # React frontend
+│   ├── src/
+│   │   ├── components/        # React components
+│   │   ├── context/          # React context (AuthContext)
+│   │   └── utils/            # Utility functions
+├── server/                    # Flask backend
+│   ├── app/
+│   │   ├── auth.py           # Authentication routes
+│   │   ├── coding_challenges.py
+│   │   ├── questions.py      # Question management
+│   │   ├── routes.py         # Main API routes
+│   │   ├── sessions.py       # Session management
+│   │   └── websocket_handlers.py
+│   └── tests/               # Server tests
+├── .env                     # Environment variables
+├── docker-compose.yml       # Docker Compose configuration
+└── CLAUDE.md               # Project documentation
 ```
 
 ## Prerequisites
@@ -25,7 +35,7 @@ Project_Interviewer/
 1. Clone the repository:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/GilCaplan/Interviewer.git
 cd Project_Interviewer
 ```
 
@@ -36,39 +46,56 @@ docker-compose up --build
 ```
 
 This will:
-- Build and start the Flask server
-- Build and start the React client
+- Build and start the Flask server on port 5001
+- Build and start the React client on port 3000
 - Start a MongoDB database
 
 3. Access the application:
-   - Client: http://localhost:3000
-   - Server API: http://localhost:5000/api/health
+   - **Client**: http://localhost:3000
+   - **Server API**: http://localhost:5001/api/health
 
-## Development
+## Key Features (Implemented)
 
-### Server (Flask)
+✅ **Authentication system** with JWT  
+✅ **Coding challenges** with Monaco editor  
+✅ **Multi-room collaborative** template building  
+✅ **WebSocket real-time** communication  
+✅ **Interview questions** management  
 
-The server is located in the `server/` directory and uses Flask with the following structure:
-- `app/__init__.py`: Application factory
-- `app/routes.py`: API routes
-- `app/config.py`: Configuration settings
-
-### Client (React)
-
-The client is located in the `Client/` directory and uses React with the following structure:
-- `src/App.js`: Main application component
-- `src/components/`: React components
-- `public/`: Static files
+🔄 **In Progress**: Practice programming problems, logical puzzles, mock interviews
 
 ## Testing
 
-You can run tests for both the server and client components:
-
 ### Server Tests
+
+Run server tests using Docker (recommended):
+
+```bash
+# Start the containers
+docker-compose up --build
+
+# Run tests inside the server container
+docker exec -it project_interviewer-server-1 python -m unittest discover -s tests -p "test_server.py"
+```
+
+Or run locally:
 
 ```bash
 cd server
 python -m unittest discover -s ../tests -p "test_server.py"
+```
+
+### WebSocket Tests
+
+Run WebSocket tests (requires python-socketio):
+
+```bash
+# Inside Docker container
+docker exec -it project_interviewer-server-1 python tests/template_websocket_tests.py
+
+# Or locally (after installing dependencies)
+cd server/tests
+python3 template_websocket_tests.py
 ```
 
 ### Client Tests
@@ -78,22 +105,39 @@ cd Client
 npm test
 ```
 
-## Features (Planned)
+## Development Commands
 
-1. Practice programming problems
-2. Logical puzzles/riddles
-3. Interview questions
-4. Behavioral questions
-5. Case studies
-6. Mock interviews
-7. Interview Dashboard
-8. Resume help
-9. Q/A with model & discussion forums
-10. Gamification
+- **Start application**: `docker-compose up --build`
+- **Client dev mode**: `cd Client && npm start`
+- **Server tests**: `cd server && python -m unittest discover -s ../tests -p "test_server.py"`
+- **Client tests**: `cd Client && npm test`
+
+## API Endpoints
+
+- Health check: `http://localhost:5001/api/health`
+- Authentication endpoints in `server/app/auth.py`
+- Session management with dual endpoints for multi-room support
+- Question management endpoints in `server/app/questions.py`
 
 ## Tech Stack
 
-- **Server**: Flask (Python)
-- **Client**: React (JavaScript)
+- **Frontend**: React 18, React Router, Monaco Editor
+- **Backend**: Flask 2.x, Flask-CORS, PyMongo, PyJWT
 - **Database**: MongoDB
-- **Containerization**: Docker
+- **Real-time**: WebSocket support with Flask-SocketIO
+- **Containerization**: Docker & Docker Compose
+
+## Environment Configuration
+
+The application uses environment variables defined in `.env`:
+- `SERVER_PORT=5001`
+- `MONGO_URI=mongodb://mongo:27017/interviewer_db`
+- `JWT_SECRET_KEY=your-secret-key`
+- `REACT_APP_API_URL=http://localhost:5001`
+
+## Troubleshooting
+
+1. **Port conflicts**: Ensure ports 3000, 5001, and 27017 are available
+2. **Docker issues**: Try `docker-compose down` then `docker-compose up --build`
+3. **Database connection**: MongoDB runs in a separate container, accessible at `mongo:27017`
+4. **WebSocket tests**: Ensure `python-socketio` is installed (included in requirements.txt)
