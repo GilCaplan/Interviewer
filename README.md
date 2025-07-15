@@ -66,44 +66,119 @@ This will:
 
 ## Testing
 
-### Server Tests
+The project has comprehensive testing structure organized by team members and functionality.
 
-Run server tests using Docker (recommended):
+### Test Directory Structure
 
-```bash
-# Start the containers
-docker-compose up --build
-
-# Run tests inside the server container
-docker exec -it project_interviewer-server-1 python -m unittest discover -s tests -p "test_server.py"
+```
+server/tests/
+├── test_server.py                    # Main server functionality tests
+├── gil_tests/                        # Gil's test suite
+│   ├── test_server.py               # Server API tests
+│   ├── test_session_2.py            # Session management tests
+│   ├── test_features_ui.py          # UI feature tests
+│   ├── template_websocket_tests.py  # WebSocket stress tests
+│   ├── comprehensive_session_template_testing.py
+│   ├── template_test_health.py      # Health check tests
+│   └── test_client.js               # Client-side tests
+└── murad_daniel_tests/              # Murad & Daniel's test suite
+    ├── test_features_ui.py          # UI feature tests
+    └── test_client.js               # Client-side tests
 ```
 
-Or run locally:
+### Server Tests
 
+#### Main Server Tests
 ```bash
+# Using Docker (recommended)
+docker-compose up --build
+docker exec -it project_interviewer-server-1 python -m unittest discover -s tests -p "test_server.py"
+
+# Or run locally
 cd server
-python -m unittest discover -s ../tests -p "test_server.py"
+python -m unittest discover -s tests -p "test_server.py"
+```
+
+#### Gil's Test Suite
+```bash
+# Run all Gil's tests
+docker exec -it project_interviewer-server-1 python -m unittest discover -s tests/gil_tests -p "test_*.py"
+
+# Run specific test files
+docker exec -it project_interviewer-server-1 python tests/gil_tests/test_server.py
+docker exec -it project_interviewer-server-1 python tests/gil_tests/test_session_2.py
+docker exec -it project_interviewer-server-1 python tests/gil_tests/test_features_ui.py
+```
+
+#### Murad & Daniel's Test Suite
+```bash
+# Run Murad & Daniel's tests
+docker exec -it project_interviewer-server-1 python -m unittest discover -s tests/murad_daniel_tests -p "test_*.py"
+
+# Run specific test files
+docker exec -it project_interviewer-server-1 python tests/murad_daniel_tests/test_features_ui.py
 ```
 
 ### WebSocket Tests
 
-Run WebSocket tests (requires python-socketio):
+Run WebSocket stress tests for real-time collaboration features:
 
 ```bash
-# Inside Docker container
-docker exec -it project_interviewer-server-1 python tests/template_websocket_tests.py
+# Inside Docker container (recommended)
+docker exec -it project_interviewer-server-1 python tests/gil_tests/template_websocket_tests.py
 
-# Or locally (after installing dependencies)
-cd server/tests
+# Or locally (after installing python-socketio)
+cd server/tests/gil_tests
 python3 template_websocket_tests.py
+```
+
+### Health Check Tests
+
+```bash
+# Test server health endpoints
+docker exec -it project_interviewer-server-1 python tests/gil_tests/template_test_health.py
 ```
 
 ### Client Tests
 
+The client uses React Testing Library and Jest:
+
 ```bash
+# Run all client tests
 cd Client
 npm test
+
+# Run tests in watch mode
+npm test -- --watch
+
+# Run tests with coverage
+npm test -- --coverage
 ```
+
+### Running All Tests
+
+```bash
+# Start the application
+docker-compose up --build
+
+# Run all server tests
+docker exec -it project_interviewer-server-1 python -m unittest discover -s tests
+
+# Run client tests (in another terminal)
+cd Client && npm test -- --watchAll=false
+
+# Run WebSocket tests
+docker exec -it project_interviewer-server-1 python tests/gil_tests/template_websocket_tests.py
+```
+
+### Test Categories
+
+- **Unit Tests**: Individual component/function testing
+- **Integration Tests**: API endpoint and database interaction tests
+- **UI Tests**: Frontend component and feature tests
+- **WebSocket Tests**: Real-time communication stress tests
+- **Health Tests**: System health and availability tests
+- **Session Tests**: Multi-user session management tests
 
 ## Development Commands
 
