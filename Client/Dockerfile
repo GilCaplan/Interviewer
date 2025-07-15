@@ -9,8 +9,6 @@ COPY package*.json ./
 
 # Install dependencies
 RUN npm install --no-audit --no-fund
-# Explicitly install Monaco Editor
-RUN npm install @monaco-editor/react --save
 
 COPY . ./
 
