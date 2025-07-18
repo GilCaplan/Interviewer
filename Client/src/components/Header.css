@@ -42,3 +42,15 @@
 .nav-link:hover::after {
   width: 100%;
 }
+
+.nav-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-grow: 1;
+}
+
+.flag-icon {
+  height: 45px;
+  width: auto;
+}

@@ -14,6 +14,7 @@ import './index.css';
 import './components/Login.css';
 import './components/Questions.css';
 import TemplateDetails from "./components/TemplateDetails";
+import SessionRoom from "./components/SessionRoom";
 
 // Protected route component
 const ProtectedRoute = ({ children }) => {
@@ -165,6 +166,10 @@ function AppContent() {
               </ProtectedRoute>
           }
         />
+
+        <Route path="/session/:sessionId" element={<SessionRoom />} />
+
+
 
         <Route
           path="/feature/:featureId"

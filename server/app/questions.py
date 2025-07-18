@@ -229,6 +229,7 @@ def generate_questions(user):
 
 
 @questions.route("/insert_dummy", methods=["GET"])
+@token_required
 def insert_dummy_template():
 	try:
 		# Connect to MongoDB

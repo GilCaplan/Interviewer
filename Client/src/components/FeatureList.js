@@ -55,13 +55,13 @@ function getFeatureIcon(featureName) {
   const name = featureName.toLowerCase();
 
   if (name.includes('programming') || name.includes('coding')) {
-    return '💻';
+    return '🤓💻';
   } else if (name.includes('puzzle') || name.includes('riddle')) {
     return '🧩';
   } else if (name.includes('interview question')) {
-    return '❓';
+    return '🧐❓';
   } else if (name.includes('behavioral')) {
-    return '🗣️';
+    return '😯🗣️';
   } else if (name.includes('case stud')) {
     return '📊';
   } else if (name.includes('mock')) {
@@ -71,7 +71,7 @@ function getFeatureIcon(featureName) {
   } else if (name.includes('dashboard')) {
     return '📈';
   } else {
-    return '🎯';
+    return '';
   }
 }
 

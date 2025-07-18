@@ -16,8 +16,35 @@ function TemplateDetails() {
     return <p>Loading template details...</p>;
   }
 
+  const handleStartSimulation = async () => {
+  const user = JSON.parse(localStorage.getItem('user'));
+  const token = user?.sessionToken;
+
+  if (!token) {
+    alert("You must be logged in order to start a simulation.");
+    return;
+  }
+
+  const response = await fetch(`http://localhost:5000/sessions/start_from_template/${templateId}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  const data = await response.json();
+  if (response.ok) {
+    await fetch(`http://localhost:5000/sessions/${data.session_id}`);
+  } else {
+    alert("Failed to start session: " + data.error);
+  }
+};
+
   return (
     <div style={{ padding: '20px 40px' }}>
+        <button onClick={handleStartSimulation} className="start-simulation-button">
+            Start Simulation
+        </button>
       <h2>{template.template_name}</h2>
       <p><strong>Difficulty:</strong> {template.difficulty}</p>
       <p><strong>Subject:</strong> {template.subject}</p>

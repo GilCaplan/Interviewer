@@ -39,40 +39,52 @@ function TemplatesGallery() {
     return nameMatch && difficultyMatch && subjectMatch;
   });
 
+  // 🔵 NEW: reset handler
+  const handleReset = () => {
+    setSearchQuery('');
+    setDifficultyFilter('');
+    setSubjectFilter('');
+  };
+
   return (
     <div className="template-gallery">
-      <h2>Templates Gallery</h2>
-      <div className="template-controls">
-        <input
-          type="text"
-          placeholder="Search by name..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
+      <h1>Templates Gallery</h1>
+        <div className="template-controls">
+            <input
+                type="text"
+                placeholder="Search by name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+            />
 
-        <select
-          value={difficultyFilter}
-          onChange={(e) => setDifficultyFilter(e.target.value)}
-        >
-          <option value="">All Difficulties</option>
-          {availableDifficulties.map((diff, idx) => (
-            <option key={idx} value={diff}>{diff.charAt(0).toUpperCase() + diff.slice(1)}</option>
-          ))}
-        </select>
+            <select
+                value={difficultyFilter}
+                onChange={(e) => setDifficultyFilter(e.target.value)}
+            >
+                <option value="">All Difficulties</option>
+                {availableDifficulties.map((diff, idx) => (
+                    <option key={idx} value={diff}>{diff.charAt(0).toUpperCase() + diff.slice(1)}</option>
+                ))}
+            </select>
 
-        <select
-          value={subjectFilter}
-          onChange={(e) => setSubjectFilter(e.target.value)}
-        >
-          <option value="">All Subjects</option>
-          {availableSubjects.map((subject, idx) => (
-            <option key={idx} value={subject}>{subject.charAt(0).toUpperCase() + subject.slice(1)}</option>
-          ))}
-        </select>
-      </div>
+            <select
+                value={subjectFilter}
+                onChange={(e) => setSubjectFilter(e.target.value)}
+            >
+                <option value="">All Subjects</option>
+                {availableSubjects.map((subject, idx) => (
+                    <option key={idx} value={subject}>{subject.charAt(0).toUpperCase() + subject.slice(1)}</option>
+                ))}
+            </select>
 
-      <div className="template-grid">
-        {filteredTemplates.map((template, index) => (
+            <button className="reset-btn" onClick={handleReset}>
+                Reset
+            </button>
+
+        </div>
+
+        <div className="template-grid">
+            {filteredTemplates.map((template, index) => (
            <Link to={`/template/${template._id}`} key={template._id} style={{ textDecoration: 'none', color: 'inherit' }}>
               <div className="template-card" key={template._id || index}>
                 <h3>{template.template_name || 'Untitled Template'}</h3>

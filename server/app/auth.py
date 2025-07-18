@@ -4,14 +4,12 @@ import datetime
 import secrets
 import uuid
 from functools import wraps
-from pymongo import MongoClient
-from .config import Config
+from .server_utils import get_db
 
 auth = Blueprint('auth', __name__)
 
 # Connect to MongoDB
-client = MongoClient(Config.MONGO_URI)
-db = client.get_default_database()
+db = get_db()
 users_collection = db.users
 sessions_collection = db.sessions
 
@@ -202,3 +200,17 @@ def get_user(user):
         'user_id': user['user_id'],
         'is_guest': user.get('is_guest', False)
     }), 200
+
+
+def decode_token(token):
+    try:
+        # Remove "Bearer " if it's included
+        if token.startswith("Bearer "):
+            token = token.split(" ")[1]
+
+        decoded = jwt.decode(token, current_app.config["SECRET_KEY"], algorithms=["HS256"])
+        return decoded.get("username")  # Or however your payload is structured
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
