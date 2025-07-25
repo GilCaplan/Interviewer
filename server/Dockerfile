@@ -20,5 +20,4 @@ EXPOSE 5001
 
 USER flaskuser
 
-# Use app/__init__.py which reads SERVER_PORT from environment
-CMD ["python", "app/__init__.py"]
+CMD ["python", "-c", "from app import app, socketio_instance; import os; socketio_instance.run(app, host='0.0.0.0', port=int(os.environ.get('SERVER_PORT', 5001)), debug=True, allow_unsafe_werkzeug=True)"]

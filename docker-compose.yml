@@ -23,7 +23,7 @@ services:
       - app-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "curl -f http://localhost:$SERVER_PORT/api/health"]
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:5001/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
