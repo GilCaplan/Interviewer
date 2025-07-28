@@ -135,59 +135,11 @@ def create_session(user):
         return jsonify({"error": "Failed to create session"}), 500
 
 
-# Join a session by URL parameter (preserving existing functionality)
+# Join a session
 @sessions_bp.route('/api/sessions/join/<session_code>', methods=['POST'])
 @token_required
-def join_session_by_url(user, session_code):
+def join_session(user, session_code):
     try:
-        session = sessions_collection.find_one({"session_code": session_code.upper()})
-
-        if not session:
-            return jsonify({"error": "Session not found"}), 404
-
-        if session["status"] != "active":
-            return jsonify({"error": "Session is not active"}), 400
-
-        # Check if user is already in session
-        if user["username"] not in session["participants"]:
-            # Check participant limit
-            if len(session["participants"]) >= session["settings"]["max_participants"]:
-                return jsonify({"error": "Session is full"}), 400
-
-            # Add user to session
-            sessions_collection.update_one(
-                {"session_code": session_code.upper()},
-                {
-                    "$push": {"participants": user["username"]},
-                    "$set": {"updated_at": datetime.datetime.utcnow()}
-                }
-            )
-
-        # Get updated session
-        updated_session = sessions_collection.find_one({"session_code": session_code.upper()})
-        updated_session.pop('_id', None)
-
-        return jsonify({
-            "message": "Joined session successfully",
-            "session": updated_session
-        }), 200
-
-    except Exception as e:
-        current_app.logger.error(f"Error joining session: {str(e)}")
-        return jsonify({"error": "Failed to join session"}), 500
-
-
-# Join a session by JSON body (for test compatibility)
-@sessions_bp.route('/api/sessions/join', methods=['POST'])
-@token_required
-def join_session_by_json(user):
-    try:
-        data = request.get_json()
-        session_code = data.get('session_code')
-        
-        if not session_code:
-            return jsonify({"error": "Session code is required"}), 400
-            
         session = sessions_collection.find_one({"session_code": session_code.upper()})
 
         if not session:
@@ -314,55 +266,7 @@ def get_llm_question(user, session_id):
         return jsonify({"error": "Failed to generate question"}), 500
 
 
-# User submits their own question (alternative endpoint for test compatibility)
-@sessions_bp.route('/api/sessions/<session_id>/user-question', methods=['POST'])
-@token_required
-def add_user_question_alt(user, session_id):
-    try:
-        session = sessions_collection.find_one({"session_id": session_id})
-
-        if not session:
-            return jsonify({"error": "Session not found"}), 404
-
-        if user["username"] not in session["participants"]:
-            return jsonify({"error": "Access denied"}), 403
-
-        if not session["settings"]["allow_user_questions"]:
-            return jsonify({"error": "User questions are disabled for this session"}), 400
-
-        data = request.get_json() or {}
-
-        if not data.get('question_text'):
-            return jsonify({"error": "Question text is required"}), 400
-
-        question_data = {
-            "question_id": str(uuid.uuid4()),
-            "session_id": session_id,
-            "question_text": data["question_text"],
-            "difficulty": data.get('difficulty', 'medium'),
-            "type": data.get('type', 'open_ended'),
-            "hints": data.get('hints', []),
-            "source": "user",
-            "created_by": user["username"],
-            "created_at": datetime.datetime.utcnow(),
-            "status": "approved" if session["settings"]["auto_approve_questions"] else "pending",
-            "subject": data.get('subject', session.get('subject', 'general'))
-        }
-
-        questions_collection.insert_one(question_data)
-        question_data.pop('_id', None)
-
-        return jsonify({
-            "message": "Question added successfully",
-            "question": question_data
-        }), 201
-
-    except Exception as e:
-        current_app.logger.error(f"Error adding user question: {str(e)}")
-        return jsonify({"error": "Failed to add question"}), 500
-
-
-# User submits their own question (original endpoint)
+# User submits their own question
 @sessions_bp.route('/api/sessions/<session_id>/add-question', methods=['POST'])
 @token_required
 def add_user_question(user, session_id):

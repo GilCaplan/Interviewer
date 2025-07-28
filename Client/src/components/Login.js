@@ -22,7 +22,7 @@ function Login() {
 
     try {
       // Get API URL from environment or use default
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
       const response = await fetch(`${apiUrl}/api/auth/login`, {
         method: 'POST',

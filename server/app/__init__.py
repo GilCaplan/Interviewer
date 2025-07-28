@@ -32,7 +32,9 @@ def create_app(config_class=Config):
     init_simple_websockets(socketio)
 
     # Enable CORS with more specific configuration
-    CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+    # CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
 
     # Register blueprints
     app.register_blueprint(main)
@@ -54,5 +56,5 @@ app, socketio_instance = create_app()
 
 if __name__ == '__main__':
     # Use environment variable SERVER_PORT if available, else default to 5000
-    port = int(os.environ.get('SERVER_PORT', 5001))
-    socketio_instance.run(app, host='0.0.0.0', port=port, debug=True, allow_unsafe_werkzeug=True)
+    port = int(os.environ.get('SERVER_PORT', 5000))
+    socketio_instance.run(app, host='0.0.0.0', port=port, debug=True)
