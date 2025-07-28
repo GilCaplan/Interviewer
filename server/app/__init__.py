@@ -7,6 +7,7 @@ from .routes import main
 from .auth import auth
 from .questions import questions
 from .sessions import sessions_bp
+from .templates import templates_bp
 from .coding_challenges import coding_challenges
 from .websocket_handlers import init_simple_websockets  # Only import the function
 
@@ -41,6 +42,7 @@ def create_app(config_class=Config):
     app.register_blueprint(auth)
     app.register_blueprint(questions)
     app.register_blueprint(sessions_bp)
+    app.register_blueprint(templates_bp)
     app.register_blueprint(coding_challenges)
 
     @app.after_request

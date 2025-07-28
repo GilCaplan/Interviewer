@@ -9,6 +9,7 @@ import uuid
 import random
 from .auth import token_required
 from .config import Config
+from .templates import QUESTION_TYPES, validate_question_data
 
 sessions_bp = Blueprint('sessions', __name__)
 
@@ -57,8 +58,8 @@ def generate_session_code():
     return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
 
 
-def mock_llm_generate_question(subject="general", context=""):
-    """Mock LLM API that generates questions based on subject"""
+def mock_llm_generate_question(subject="general", context="", question_type="open_ended", question_number=1):
+    """Enhanced mock LLM API that generates structured questions based on type and context"""
     subject_lower = subject.lower()
 
     # Find matching subject
@@ -73,11 +74,14 @@ def mock_llm_generate_question(subject="general", context=""):
             base_question = "Beginner level: " + base_question
         elif "advanced" in context.lower():
             base_question = "Advanced: " + base_question
+        if "question " + str(question_number) in context.lower():
+            base_question = f"Question {question_number}: " + base_question
 
-    return {
-        "question": base_question,
+    # Generate type-specific content
+    question_data = {
+        "question_text": base_question,
         "difficulty": random.choice(["easy", "medium", "hard"]),
-        "type": "multiple_choice" if random.choice([True, False]) else "open_ended",
+        "type": question_type,
         "hints": [
             "Think about the core concepts",
             "Consider edge cases",
@@ -86,6 +90,32 @@ def mock_llm_generate_question(subject="general", context=""):
         "generated_by": "mock_llm",
         "timestamp": datetime.datetime.utcnow().isoformat()
     }
+
+    # Add type-specific fields
+    if question_type == "multiple_choice":
+        # Generate sample options based on subject
+        if subject_lower == "python":
+            question_data["options"] = ["True", "False", "It depends", "None of the above"]
+            question_data["correct_answer"] = "True"
+        else:
+            question_data["options"] = ["Option A", "Option B", "Option C", "Option D"]
+            question_data["correct_answer"] = "Option A"
+        question_data["explanation"] = "This is the correct answer because..."
+    
+    elif question_type == "true_false":
+        question_data["correct_answer"] = random.choice([True, False])
+        question_data["explanation"] = "This statement is correct/incorrect because..."
+    
+    elif question_type == "coding":
+        question_data["language"] = subject_lower if subject_lower in ["python", "javascript", "java"] else "python"
+        question_data["starter_code"] = "# Write your solution here\ndef solution():\n    pass"
+        question_data["solution"] = "# Sample solution\ndef solution():\n    return 'implemented'"
+    
+    elif question_type == "short_answer":
+        question_data["expected_keywords"] = ["key", "concept", "important"]
+        question_data["max_words"] = 50
+    
+    return question_data
 
 
 # Create a new session
@@ -112,11 +142,19 @@ def create_session(user):
             "created_at": datetime.datetime.utcnow(),
             "updated_at": datetime.datetime.utcnow(),
             "status": "active",
+            "template_mode": data.get('template_mode', False),  # NEW: Flag for template building
             "settings": {
                 "max_participants": data.get('max_participants', 10),
+                "max_questions": data.get('max_questions', 20),  # NEW: Question limit for template
                 "allow_llm": data.get('allow_llm', True),
                 "allow_user_questions": data.get('allow_user_questions', True),
-                "auto_approve_questions": data.get('auto_approve_questions', False)
+                "auto_approve_questions": data.get('auto_approve_questions', False),
+                "question_numbering": data.get('question_numbering', True)  # NEW: Sequential numbering
+            },
+            "template_data": {  # NEW: Template building data
+                "current_question_number": 0,
+                "questions_queue": [],  # Questions being built
+                "ready_questions": []   # Finalized questions
             }
         }
 
@@ -457,3 +495,448 @@ def list_sessions(user):
     except Exception as e:
         current_app.logger.error(f"Error listing sessions: {str(e)}")
         return jsonify({"error": "Failed to list sessions"}), 500
+
+
+# NEW ENDPOINTS FOR STRUCTURED TEMPLATE BUILDING
+
+# Start building a specific question number
+@sessions_bp.route('/api/sessions/<session_id>/questions/<int:question_number>/start', methods=['POST'])
+@token_required
+def start_question_building(user, session_id, question_number):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        data = request.get_json() or {}
+        question_type = data.get('type', 'open_ended')
+        
+        if question_type not in QUESTION_TYPES:
+            return jsonify({"error": f"Invalid question type: {question_type}"}), 400
+        
+        # Check if question number is valid
+        max_questions = session["settings"]["max_questions"]
+        if question_number < 1 or question_number > max_questions:
+            return jsonify({"error": f"Question number must be between 1 and {max_questions}"}), 400
+        
+        # Initialize question structure
+        question_structure = {
+            "question_number": question_number,
+            "type": question_type,
+            "status": "building",  # building, ready, finalized
+            "created_by": user["username"],
+            "created_at": datetime.datetime.utcnow(),
+            "question_id": str(uuid.uuid4()),
+            "collaboration_notes": [],
+            "llm_suggestions": [],
+            "user_content": {}
+        }
+        
+        # Add type-specific template fields
+        type_config = QUESTION_TYPES[question_type]
+        for field in type_config['required_fields'] + type_config['optional_fields']:
+            question_structure["user_content"][field] = ""
+        
+        # Update session with new question
+        sessions_collection.update_one(
+            {"session_id": session_id},
+            {
+                "$push": {"template_data.questions_queue": question_structure},
+                "$set": {
+                    "template_data.current_question_number": question_number,
+                    "updated_at": datetime.datetime.utcnow()
+                }
+            }
+        )
+        
+        # Broadcast to all participants
+        emit('question_building_started', {
+            'question_number': question_number,
+            'question_type': question_type,
+            'started_by': user["username"],
+            'question_structure': question_structure
+        }, room=session_id, namespace='/')
+        
+        return jsonify({
+            "message": f"Started building question {question_number}",
+            "question": question_structure
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error starting question building: {str(e)}")
+        return jsonify({"error": "Failed to start question building"}), 500
+
+
+# Update question content (collaborative editing)
+@sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/update', methods=['PUT'])
+@token_required
+def update_question_content(user, session_id, question_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        data = request.get_json() or {}
+        field_name = data.get('field')
+        field_value = data.get('value')
+        
+        if not field_name:
+            return jsonify({"error": "Field name is required"}), 400
+        
+        # Find the question in the queue
+        questions_queue = session.get("template_data", {}).get("questions_queue", [])
+        question_index = None
+        
+        for i, q in enumerate(questions_queue):
+            if q["question_id"] == question_id:
+                question_index = i
+                break
+        
+        if question_index is None:
+            return jsonify({"error": "Question not found in building queue"}), 404
+        
+        current_question = questions_queue[question_index]
+        
+        # Validate field for question type
+        type_config = QUESTION_TYPES[current_question["type"]]
+        allowed_fields = type_config['required_fields'] + type_config['optional_fields']
+        
+        if field_name not in allowed_fields:
+            return jsonify({"error": f"Field '{field_name}' not allowed for question type '{current_question['type']}'"}), 400
+        
+        # Update the field
+        update_path = f"template_data.questions_queue.{question_index}.user_content.{field_name}"
+        sessions_collection.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    update_path: field_value,
+                    f"template_data.questions_queue.{question_index}.updated_at": datetime.datetime.utcnow(),
+                    "updated_at": datetime.datetime.utcnow()
+                }
+            }
+        )
+        
+        # Broadcast update to all participants
+        emit('question_content_updated', {
+            'question_id': question_id,
+            'question_number': current_question["question_number"],
+            'field': field_name,
+            'value': field_value,
+            'updated_by': user["username"]
+        }, room=session_id, namespace='/')
+        
+        return jsonify({
+            "message": "Question content updated",
+            "field": field_name,
+            "value": field_value
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error updating question content: {str(e)}")
+        return jsonify({"error": "Failed to update question content"}), 500
+
+
+# Generate LLM suggestion for specific question field
+@sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/llm-suggest', methods=['POST'])
+@token_required
+def generate_llm_suggestion(user, session_id, question_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        if not session["settings"]["allow_llm"]:
+            return jsonify({"error": "LLM suggestions are disabled for this session"}), 400
+        
+        data = request.get_json() or {}
+        field_name = data.get('field', 'question_text')
+        context = data.get('context', '')
+        
+        # Find the question
+        questions_queue = session.get("template_data", {}).get("questions_queue", [])
+        current_question = None
+        
+        for q in questions_queue:
+            if q["question_id"] == question_id:
+                current_question = q
+                break
+        
+        if not current_question:
+            return jsonify({"error": "Question not found"}), 404
+        
+        # Generate LLM suggestion
+        subject = session.get('subject', 'general')
+        question_type = current_question["type"]
+        question_number = current_question["question_number"]
+        
+        # Build context with existing question content
+        existing_content = current_question.get("user_content", {})
+        full_context = f"{context}. Question {question_number}. Existing content: {existing_content}"
+        
+        llm_response = mock_llm_generate_question(
+            subject=subject,
+            context=full_context,
+            question_type=question_type,
+            question_number=question_number
+        )
+        
+        # Extract the requested field from LLM response
+        suggested_value = llm_response.get(field_name, f"LLM suggestion for {field_name}")
+        
+        suggestion_data = {
+            "suggestion_id": str(uuid.uuid4()),
+            "field": field_name,
+            "suggested_value": suggested_value,
+            "full_llm_response": llm_response,
+            "context_used": full_context,
+            "generated_at": datetime.datetime.utcnow(),
+            "requested_by": user["username"]
+        }
+        
+        # Save suggestion to question
+        sessions_collection.update_one(
+            {"session_id": session_id, "template_data.questions_queue.question_id": question_id},
+            {
+                "$push": {"template_data.questions_queue.$.llm_suggestions": suggestion_data},
+                "$set": {"updated_at": datetime.datetime.utcnow()}
+            }
+        )
+        
+        # Broadcast to participants
+        emit('llm_suggestion_generated', {
+            'question_id': question_id,
+            'question_number': current_question["question_number"],
+            'suggestion': suggestion_data,
+            'requested_by': user["username"]
+        }, room=session_id, namespace='/')
+        
+        return jsonify({
+            "message": "LLM suggestion generated",
+            "suggestion": suggestion_data
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error generating LLM suggestion: {str(e)}")
+        return jsonify({"error": "Failed to generate LLM suggestion"}), 500
+
+
+# Add collaboration note to question
+@sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/note', methods=['POST'])
+@token_required
+def add_collaboration_note(user, session_id, question_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        data = request.get_json() or {}
+        note_text = data.get('note', '').strip()
+        
+        if not note_text:
+            return jsonify({"error": "Note text is required"}), 400
+        
+        note_data = {
+            "note_id": str(uuid.uuid4()),
+            "note": note_text,
+            "author": user["username"],
+            "timestamp": datetime.datetime.utcnow(),
+            "field_reference": data.get('field_reference')  # Optional: which field this note refers to
+        }
+        
+        # Add note to question
+        sessions_collection.update_one(
+            {"session_id": session_id, "template_data.questions_queue.question_id": question_id},
+            {
+                "$push": {"template_data.questions_queue.$.collaboration_notes": note_data},
+                "$set": {"updated_at": datetime.datetime.utcnow()}
+            }
+        )
+        
+        # Broadcast to participants
+        emit('collaboration_note_added', {
+            'question_id': question_id,
+            'note': note_data
+        }, room=session_id, namespace='/')
+        
+        return jsonify({
+            "message": "Collaboration note added",
+            "note": note_data
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error adding collaboration note: {str(e)}")
+        return jsonify({"error": "Failed to add collaboration note"}), 500
+
+
+# Finalize question (move from queue to ready questions)
+@sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/finalize', methods=['POST'])
+@token_required
+def finalize_question(user, session_id, question_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can finalize questions
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can finalize questions"}), 403
+        
+        # Find and remove question from queue
+        questions_queue = session.get("template_data", {}).get("questions_queue", [])
+        question_to_finalize = None
+        updated_queue = []
+        
+        for q in questions_queue:
+            if q["question_id"] == question_id:
+                question_to_finalize = q
+            else:
+                updated_queue.append(q)
+        
+        if not question_to_finalize:
+            return jsonify({"error": "Question not found in building queue"}), 404
+        
+        # Validate question completeness
+        question_type = question_to_finalize["type"]
+        user_content = question_to_finalize.get("user_content", {})
+        
+        is_valid, validation_message = validate_question_data(question_type, user_content)
+        if not is_valid:
+            return jsonify({"error": f"Question validation failed: {validation_message}"}), 400
+        
+        # Prepare finalized question
+        finalized_question = {
+            "question_id": question_to_finalize["question_id"],
+            "question_number": question_to_finalize["question_number"],
+            "type": question_type,
+            "status": "finalized",
+            "created_by": question_to_finalize["created_by"],
+            "finalized_by": user["username"],
+            "created_at": question_to_finalize["created_at"],
+            "finalized_at": datetime.datetime.utcnow(),
+            **user_content  # Include all the question content
+        }
+        
+        # Update session: remove from queue, add to ready questions
+        sessions_collection.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    "template_data.questions_queue": updated_queue,
+                    "updated_at": datetime.datetime.utcnow()
+                },
+                "$push": {"template_data.ready_questions": finalized_question}
+            }
+        )
+        
+        # Broadcast to participants
+        emit('question_finalized', {
+            'question': finalized_question,
+            'finalized_by': user["username"]
+        }, room=session_id, namespace='/')
+        
+        return jsonify({
+            "message": f"Question {question_to_finalize['question_number']} finalized successfully",
+            "question": finalized_question
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error finalizing question: {str(e)}")
+        return jsonify({"error": "Failed to finalize question"}), 500
+
+
+# Convert session to template
+@sessions_bp.route('/api/sessions/<session_id>/convert-to-template', methods=['POST'])
+@token_required
+def convert_session_to_template(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can convert to template
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can convert session to template"}), 403
+        
+        data = request.get_json() or {}
+        
+        # Get finalized questions
+        ready_questions = session.get("template_data", {}).get("ready_questions", [])
+        
+        if not ready_questions:
+            return jsonify({"error": "No finalized questions to convert"}), 400
+        
+        # Import templates collection
+        from .templates import templates_collection
+        
+        # Create template data
+        template_data = {
+            "template_id": str(uuid.uuid4()),
+            "template_name": data.get('template_name', session.get('title', 'Converted Template')),
+            "description": data.get('description', f"Converted from session {session['session_code']}"),
+            "subject": session.get('subject', 'general'),
+            "sub_subject": data.get('sub_subject', ''),
+            "difficulty": data.get('difficulty', 'medium'),
+            "created_by": user["username"],
+            "created_by_id": user["user_id"],
+            "is_public": data.get('is_public', False),
+            "tags": data.get('tags', []),
+            "metadata": {
+                "created_at": datetime.datetime.utcnow(),
+                "updated_at": datetime.datetime.utcnow(),
+                "version": 1,
+                "question_count": len(ready_questions),
+                "estimated_time": len(ready_questions) * 3,  # 3 minutes per question estimate
+                "converted_from_session": session_id
+            },
+            "settings": {
+                "max_questions": len(ready_questions),
+                "allow_shuffle": data.get('allow_shuffle', True),
+                "show_hints": data.get('show_hints', True),
+                "time_limit": data.get('time_limit', len(ready_questions) * 3)
+            },
+            "questions": ready_questions
+        }
+        
+        # Save template
+        result = templates_collection.insert_one(template_data)
+        template_data.pop('_id', None)
+        
+        # Update session to mark as converted
+        sessions_collection.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    "converted_to_template": template_data["template_id"],
+                    "conversion_date": datetime.datetime.utcnow(),
+                    "updated_at": datetime.datetime.utcnow()
+                }
+            }
+        )
+        
+        return jsonify({
+            "message": "Session converted to template successfully",
+            "template": template_data
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error converting session to template: {str(e)}")
+        return jsonify({"error": "Failed to convert session to template"}), 500
