@@ -493,6 +493,53 @@ const TemplateEditor = ({
         )}
       </div>
 
+      {/* Debug Section (Host Only) */}
+      {isHost && (
+        <div className="debug-section" style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f0f0f0', borderRadius: '5px' }}>
+          <h3>Debug Info</h3>
+          <button 
+            onClick={async () => {
+              try {
+                const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+                let token = localStorage.getItem('token');
+                if (!token) {
+                  const storedUser = localStorage.getItem('user');
+                  if (storedUser) {
+                    const userData = JSON.parse(storedUser);
+                    token = userData.sessionToken;
+                  }
+                }
+                
+                const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/debug`, {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                  const data = await response.json();
+                  console.log('=== BACKEND DEBUG INFO ===');
+                  console.log('Backend questions in queue:', data.debug.queue_question_ids);  
+                  console.log('Backend questions ready:', data.debug.ready_question_ids);
+                  console.log('Full backend data:', data.debug);
+                  
+                  console.log('=== FRONTEND STATE ===');
+                  console.log('Frontend questions:', questions.map(q => ({ id: q.question_id, number: q.question_number, status: q.status })));
+                  
+                  alert(`Backend has ${data.debug.questions_in_queue} in queue, ${data.debug.questions_ready} ready. Check console for details.`);
+                } else {
+                  alert('Failed to get debug info');
+                }
+              } catch (error) {
+                console.error('Debug error:', error);
+                alert('Debug failed: ' + error.message);
+              }
+            }}
+            style={{ backgroundColor: '#2196F3', color: 'white', padding: '8px 15px', border: 'none', borderRadius: '4px' }}
+          >
+            🐛 Debug Backend State
+          </button>
+        </div>
+      )}
+
       {/* Template Actions (Host Only) */}
       {isHost && questions.filter(q => q.status === 'finalized').length > 0 && (
         <div className="template-actions">

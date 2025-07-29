@@ -1111,6 +1111,43 @@ def llm_chat(user, session_id):
         return jsonify({"error": "Failed to process LLM chat"}), 500
 
 
+# DEBUG: Get detailed session state  
+@sessions_bp.route('/api/sessions/<session_id>/debug', methods=['GET'])
+@token_required
+def debug_session_state(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        template_data = session.get("template_data", {})
+        questions_queue = template_data.get("questions_queue", [])
+        ready_questions = template_data.get("ready_questions", [])
+        
+        debug_info = {
+            "session_id": session_id,
+            "template_data": template_data,
+            "questions_in_queue": len(questions_queue),
+            "questions_ready": len(ready_questions),
+            "queue_question_ids": [q.get("question_id") for q in questions_queue],
+            "queue_question_numbers": [q.get("question_number") for q in questions_queue],
+            "ready_question_ids": [q.get("question_id") for q in ready_questions],
+            "ready_question_numbers": [q.get("question_number") for q in ready_questions],
+            "queue_details": questions_queue,
+            "ready_details": ready_questions
+        }
+        
+        return jsonify({"debug": debug_info}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error debugging session: {str(e)}")
+        return jsonify({"error": "Failed to debug session"}), 500
+
+
 # Get session chat history
 @sessions_bp.route('/api/sessions/<session_id>/chat-history', methods=['GET'])
 @token_required
