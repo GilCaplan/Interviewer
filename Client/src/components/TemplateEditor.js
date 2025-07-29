@@ -454,7 +454,14 @@ const TemplateEditor = ({
                   )}
                   {isHost && question.status !== 'finalized' && (
                     <button
-                      onClick={() => onFinalizeQuestion(question.question_id)}
+                      onClick={async () => {
+                        // Save any unsaved changes first
+                        if (unsavedChanges[question.question_id]) {
+                          await saveQuestion(question.question_id);
+                        }
+                        // Then finalize
+                        onFinalizeQuestion(question.question_id);
+                      }}
                       className="finalize-btn"
                     >
                       Finalize

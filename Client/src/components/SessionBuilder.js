@@ -417,8 +417,27 @@ const SessionBuilder = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to finalize question');
+        let errorMessage = `HTTP ${response.status}`;
+        try {
+          const errorData = await response.text();
+          console.error('Finalize question failed:', response.status, errorData);
+          
+          if (errorData) {
+            try {
+              const errorJson = JSON.parse(errorData);
+              errorMessage = errorJson.error || errorData;
+            } catch (parseError) {
+              errorMessage = errorData;
+            }
+          }
+        } catch (readError) {
+          console.error('Could not read error response:', readError);
+        }
+        
+        throw new Error(errorMessage);
       }
+      
+      console.log('Question finalized successfully');
     } catch (err) {
       console.error('Error finalizing question:', err);
       alert('Failed to finalize question: ' + err.message);
