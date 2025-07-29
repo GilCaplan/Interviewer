@@ -18,7 +18,7 @@ export const AuthProvider = ({ children }) => {
           const userData = JSON.parse(storedUser);
 
           // Verify token on the server (optional but recommended)
-          const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+          const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
           const response = await fetch(`${apiUrl}/api/auth/verify`, {
             headers: {
@@ -32,11 +32,13 @@ export const AuthProvider = ({ children }) => {
           } else {
             // Token is invalid or expired, clear the stored data
             localStorage.removeItem('user');
+            localStorage.removeItem('token');
           }
         }
       } catch (error) {
         console.error('Error verifying authentication:', error);
         localStorage.removeItem('user');
+        localStorage.removeItem('token');
       } finally {
         setLoading(false);
       }
@@ -55,7 +57,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       // Call logout endpoint to invalidate token on server
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
       await fetch(`${apiUrl}/api/auth/logout`, {
         method: 'POST',
@@ -70,6 +72,7 @@ export const AuthProvider = ({ children }) => {
       // Clear user from state and localStorage
       setUser(null);
       localStorage.removeItem('user');
+      localStorage.removeItem('token');
     }
   };
 

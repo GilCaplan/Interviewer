@@ -6,7 +6,7 @@ function TemplateDetails() {
   const [template, setTemplate] = useState(null);
 
   useEffect(() => {
-    fetch(`http://localhost:5000/templates/${templateId}`)
+    fetch(`http://localhost:5001/templates/${templateId}`)
       .then(res => res.json())
       .then(data => setTemplate(data.template))
       .catch(err => console.error(err));

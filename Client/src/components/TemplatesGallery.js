@@ -11,7 +11,7 @@ function TemplatesGallery() {
   const [availableSubjects, setAvailableSubjects] = useState([]);
 
   useEffect(() => {
-    fetch('http://localhost:5000/templates')
+    fetch('http://localhost:5001/templates')
       .then(res => res.json())
       .then(data => {
         const templates = data.templates || [];

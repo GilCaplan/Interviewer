@@ -22,7 +22,7 @@ function Login() {
 
     try {
       // Get API URL from environment or use default
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
       const response = await fetch(`${apiUrl}/api/auth/login`, {
         method: 'POST',
@@ -45,6 +45,9 @@ function Login() {
         username: data.username,
         sessionToken: data.token
       }));
+      
+      // Also store token separately for easy access
+      localStorage.setItem('token', data.token);
 
       // Call the login function from AuthContext
       login({

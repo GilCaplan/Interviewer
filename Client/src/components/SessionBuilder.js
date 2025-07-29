@@ -34,6 +34,8 @@ const SessionBuilder = () => {
     const initializeSession = async () => {
       try {
         const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+        
+        // Get token from localStorage
         const token = localStorage.getItem('token');
         
         if (!token) {
