@@ -298,6 +298,8 @@ const SessionBuilder = () => {
   };
 
   const handleUpdateQuestion = async (questionId, field, value) => {
+    console.log('handleUpdateQuestion called:', { questionId, field, value, sessionId: session?.session_id });
+    
     try {
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
       
@@ -306,6 +308,12 @@ const SessionBuilder = () => {
       if (!authToken && user?.sessionToken) {
         authToken = user.sessionToken;
       }
+      
+      console.log('Update request params:', { 
+        sessionId: session?.session_id, 
+        hasToken: !!authToken,
+        apiUrl 
+      });
       
       const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/questions/${questionId}/update`, {
         method: 'PUT',
@@ -318,10 +326,15 @@ const SessionBuilder = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update question');
+        const errorData = await response.text();
+        console.error('Update question failed:', response.status, errorData);
+        throw new Error(`Failed to update question: ${response.status}`);
       }
+      
+      console.log('Question update successful');
     } catch (err) {
       console.error('Error updating question:', err);
+      alert('Failed to update question: ' + err.message);
     }
   };
 

@@ -39,13 +39,24 @@ const TemplateEditor = ({
   };
 
   const handleFieldUpdate = (questionId, field, value) => {
+    console.log('handleFieldUpdate called:', { questionId, field, value });
     onUpdateQuestion(questionId, field, value);
   };
 
   const renderQuestionFields = (question) => {
     const userContent = question.user_content || {};
     const isFinalized = question.status === 'finalized';
-    const canEdit = isHost && !isFinalized;
+    // Temporarily allow editing for debugging
+    const canEdit = !isFinalized; // TODO: Change back to: isHost && !isFinalized;
+    
+    // Debug logging
+    console.log('TemplateEditor render debug:', {
+      questionId: question.question_id,
+      isHost,
+      isFinalized,
+      canEdit,
+      userContent
+    });
 
     switch (question.type) {
       case 'multiple_choice':
