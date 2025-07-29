@@ -336,7 +336,6 @@ REACT_APP_API_URL=http://localhost:5001
 
 1. **Port conflicts**: 
    - Ensure ports 3000, 5001, and 27017 are available
-   - macOS users: Disable AirPlay Receiver if using port 5000
 
 2. **Docker issues**:
    ```bash
@@ -376,7 +375,6 @@ This is a university project. For development:
 1. Focus on the collaborative template building system
 2. Test thoroughly using the comprehensive test suite
 3. Maintain the 98%+ test pass rate
-4. Document any new features in `CLAUDE.md`
 
 ## 📄 License
 
