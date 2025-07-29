@@ -10,6 +10,7 @@ import random
 from .auth import token_required
 from .config import Config
 from .templates import QUESTION_TYPES, validate_question_data
+from .llm_service import LLMService
 
 sessions_bp = Blueprint('sessions', __name__)
 
@@ -686,7 +687,7 @@ def generate_llm_suggestion(user, session_id, question_id):
         existing_content = current_question.get("user_content", {})
         full_context = f"{context}. Question {question_number}. Existing content: {existing_content}"
         
-        llm_response = mock_llm_generate_question(
+        llm_response = LLMService.generate_question(
             subject=subject,
             context=full_context,
             question_type=question_type,
@@ -940,3 +941,178 @@ def convert_session_to_template(user, session_id):
     except Exception as e:
         current_app.logger.error(f"Error converting session to template: {str(e)}")
         return jsonify({"error": "Failed to convert session to template"}), 500
+
+
+# Update session mode/visibility settings
+@sessions_bp.route('/api/sessions/<session_id>/settings', methods=['PUT'])
+@token_required
+def update_session_settings(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can update settings
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can update session settings"}), 403
+        
+        data = request.get_json() or {}
+        
+        # Updatable settings
+        update_fields = {}
+        if 'viewing_mode' in data:  # edit, view_only, suggestions_only
+            update_fields['settings.viewing_mode'] = data['viewing_mode']
+        if 'allow_llm' in data:
+            update_fields['settings.allow_llm'] = data['allow_llm']
+        if 'allow_user_questions' in data:
+            update_fields['settings.allow_user_questions'] = data['allow_user_questions']
+        if 'max_participants' in data:
+            update_fields['settings.max_participants'] = data['max_participants']
+        
+        if update_fields:
+            update_fields['updated_at'] = datetime.datetime.utcnow()
+            
+            sessions_collection.update_one(
+                {"session_id": session_id},
+                {"$set": update_fields}
+            )
+            
+            # Broadcast settings update to all participants
+            emit('session_settings_updated', {
+                'session_id': session_id,
+                'settings': data,
+                'updated_by': user["username"]
+            }, room=session_id, namespace='/')
+        
+        return jsonify({"message": "Session settings updated successfully"}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error updating session settings: {str(e)}")
+        return jsonify({"error": "Failed to update session settings"}), 500
+
+
+# Get session participants details
+@sessions_bp.route('/api/sessions/<session_id>/participants', methods=['GET'])
+@token_required
+def get_session_participants(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        # Get participant details from users collection
+        participant_usernames = session.get("participants", [])
+        participant_details = []
+        
+        for username in participant_usernames:
+            user_info = users_collection.find_one({"username": username}, {"_id": 0, "username": 1, "user_id": 1, "is_guest": 1, "created_at": 1})
+            if user_info:
+                user_info['is_host'] = username == session["host_username"]
+                user_info['online'] = True  # TODO: Implement real online status
+                participant_details.append(user_info)
+        
+        return jsonify({
+            "participants": participant_details,
+            "total_count": len(participant_details),
+            "host": session["host_username"]
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting session participants: {str(e)}")
+        return jsonify({"error": "Failed to get session participants"}), 500
+
+
+# General LLM chat endpoint for session
+@sessions_bp.route('/api/sessions/<session_id>/llm-chat', methods=['POST'])
+@token_required
+def llm_chat(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        if not session["settings"]["allow_llm"]:
+            return jsonify({"error": "LLM chat is disabled for this session"}), 400
+        
+        data = request.get_json() or {}
+        message = data.get('message', '').strip()
+        
+        if not message:
+            return jsonify({"error": "Message is required"}), 400
+        
+        # Build context from session
+        context = f"Session: {session.get('title', 'Untitled')}, Subject: {session.get('subject', 'general')}"
+        
+        # Get LLM response
+        llm_response = LLMService.generate_chat_response(message, context)
+        
+        # Store the chat message
+        chat_data = {
+            "message_id": str(uuid.uuid4()),
+            "session_id": session_id,
+            "user_message": message,
+            "llm_response": llm_response["response"],
+            "username": user["username"],
+            "timestamp": datetime.datetime.utcnow(),
+            "generated_by": llm_response["generated_by"]
+        }
+        
+        # Store in messages collection or session data
+        messages_collection.insert_one(chat_data)
+        
+        # Broadcast to all participants
+        emit('llm_chat_response', {
+            'message_id': chat_data["message_id"],
+            'user_message': message,
+            'llm_response': llm_response["response"],
+            'username': user["username"],
+            'timestamp': chat_data["timestamp"].isoformat()
+        }, room=session_id, namespace='/')
+        
+        return jsonify({
+            "message": "LLM chat response generated",
+            "response": llm_response["response"],
+            "message_id": chat_data["message_id"]
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error with LLM chat: {str(e)}")
+        return jsonify({"error": "Failed to process LLM chat"}), 500
+
+
+# Get session chat history
+@sessions_bp.route('/api/sessions/<session_id>/chat-history', methods=['GET'])
+@token_required
+def get_chat_history(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        # Get chat messages for this session
+        chat_messages = list(messages_collection.find(
+            {"session_id": session_id},
+            {"_id": 0}
+        ).sort("timestamp", 1).limit(100))  # Last 100 messages
+        
+        return jsonify({
+            "messages": chat_messages,
+            "total_count": len(chat_messages)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting chat history: {str(e)}")
+        return jsonify({"error": "Failed to get chat history"}), 500

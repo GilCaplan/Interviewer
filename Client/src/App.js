@@ -14,6 +14,7 @@ import './index.css';
 import './components/Login.css';
 import './components/Questions.css';
 import TemplateDetails from "./components/TemplateDetails";
+import SessionBuilder from './components/SessionBuilder';
 
 // Protected route component
 const ProtectedRoute = ({ children }) => {
@@ -39,7 +40,7 @@ function AppContent() {
 
   useEffect(() => {
     // Use the API URL from environment variables, or fallback to a default
-    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
     // Fetch information from the server with explicit URL
     fetch(`${apiUrl}/api/info`)
@@ -209,6 +210,16 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <CodingChallenge />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Session Builder Route */}
+        <Route
+          path="/session/:sessionCode"
+          element={
+            <ProtectedRoute>
+              <SessionBuilder />
             </ProtectedRoute>
           }
         />
