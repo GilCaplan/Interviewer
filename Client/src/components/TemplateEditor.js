@@ -173,21 +173,24 @@ const TemplateEditor = ({
             <div className="field-group">
               <label>Correct Answer:</label>
               <select
-                value={userContent.correct_answer || ''}
+                value={getFieldValue('correct_answer')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'correct_answer', e.target.value)}
                 disabled={!canEdit}
               >
                 <option value="">Select correct answer</option>
-                {(userContent.options || []).map((option, index) => (
-                  <option key={index} value={option}>{['A', 'B', 'C', 'D'][index]}. {option}</option>
-                ))}
+                {(() => {
+                  const options = getFieldValue('options');
+                  return Array.isArray(options) ? options.map((option, index) => (
+                    <option key={index} value={option}>{['A', 'B', 'C', 'D'][index]}. {option}</option>
+                  )) : [];
+                })()}
               </select>
             </div>
 
             <div className="field-group">
               <label>Explanation:</label>
               <textarea
-                value={userContent.explanation || ''}
+                value={getFieldValue('explanation')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'explanation', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Explain why this is the correct answer..."
@@ -202,7 +205,7 @@ const TemplateEditor = ({
             <div className="field-group">
               <label>Problem Description:</label>
               <textarea
-                value={userContent.question_text || ''}
+                value={getFieldValue('question_text')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'question_text', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Describe the coding problem..."
@@ -213,7 +216,7 @@ const TemplateEditor = ({
             <div className="field-group">
               <label>Programming Language:</label>
               <select
-                value={userContent.language || 'python'}
+                value={getFieldValue('language') || 'python'}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'language', e.target.value)}
                 disabled={!canEdit}
               >
@@ -227,7 +230,7 @@ const TemplateEditor = ({
             <div className="field-group">
               <label>Starter Code:</label>
               <textarea
-                value={userContent.starter_code || ''}
+                value={getFieldValue('starter_code')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'starter_code', e.target.value)}
                 disabled={!canEdit}
                 placeholder="def solution():\n    # Write your code here\n    pass"
@@ -239,7 +242,7 @@ const TemplateEditor = ({
             <div className="field-group">
               <label>Solution (Optional):</label>
               <textarea
-                value={userContent.solution || ''}
+                value={getFieldValue('solution')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'solution', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Complete solution code..."
@@ -256,7 +259,7 @@ const TemplateEditor = ({
             <div className="field-group">
               <label>Statement:</label>
               <textarea
-                value={userContent.question_text || ''}
+                value={getFieldValue('question_text')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'question_text', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Enter the true/false statement..."
@@ -266,7 +269,7 @@ const TemplateEditor = ({
             <div className="field-group">
               <label>Correct Answer:</label>
               <select
-                value={userContent.correct_answer || ''}
+                value={getFieldValue('correct_answer') === true ? 'true' : getFieldValue('correct_answer') === false ? 'false' : ''}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'correct_answer', e.target.value === 'true')}
                 disabled={!canEdit}
               >
@@ -279,7 +282,7 @@ const TemplateEditor = ({
             <div className="field-group">
               <label>Explanation:</label>
               <textarea
-                value={userContent.explanation || ''}
+                value={getFieldValue('explanation')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'explanation', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Explain why this statement is true or false..."
@@ -294,7 +297,7 @@ const TemplateEditor = ({
             <div className="field-group">
               <label>Question:</label>
               <textarea
-                value={userContent.question_text || ''}
+                value={getFieldValue('question_text')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'question_text', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Enter your short answer question..."
@@ -304,7 +307,10 @@ const TemplateEditor = ({
             <div className="field-group">
               <label>Expected Keywords (one per line):</label>
               <textarea
-                value={Array.isArray(userContent.expected_keywords) ? userContent.expected_keywords.join('\n') : ''}
+                value={(() => {
+                  const keywords = getFieldValue('expected_keywords');
+                  return Array.isArray(keywords) ? keywords.join('\n') : '';
+                })()}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'expected_keywords', e.target.value.split('\n').filter(k => k.trim()))}
                 disabled={!canEdit}
                 placeholder="keyword1\nkeyword2\nkeyword3"
@@ -316,7 +322,7 @@ const TemplateEditor = ({
               <label>Max Words:</label>
               <input
                 type="number"
-                value={userContent.max_words || 50}
+                value={getFieldValue('max_words') || 50}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'max_words', parseInt(e.target.value))}
                 disabled={!canEdit}
                 min="10"
@@ -354,7 +360,10 @@ const TemplateEditor = ({
             <div className="field-group">
               <label>Grading Criteria (one per line):</label>
               <textarea
-                value={Array.isArray(userContent.grading_criteria) ? userContent.grading_criteria.join('\n') : ''}
+                value={(() => {
+                  const criteria = getFieldValue('grading_criteria');
+                  return Array.isArray(criteria) ? criteria.join('\n') : '';
+                })()}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'grading_criteria', e.target.value.split('\n').filter(c => c.trim()))}
                 disabled={!canEdit}
                 placeholder="Demonstrates understanding of concepts\nProvides practical examples\nShows analytical thinking"
