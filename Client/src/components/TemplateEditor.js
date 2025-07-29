@@ -13,6 +13,7 @@ const TemplateEditor = ({
   const [selectedQuestionType, setSelectedQuestionType] = useState('open_ended');
   const [newQuestionNumber, setNewQuestionNumber] = useState(1);
   const [expandedQuestion, setExpandedQuestion] = useState(null);
+  const [isCreatingQuestion, setIsCreatingQuestion] = useState(false);
 
   const questionTypes = [
     { value: 'multiple_choice', label: 'Multiple Choice' },
@@ -32,10 +33,20 @@ const TemplateEditor = ({
     return existingNumbers.length + 1;
   };
 
-  const handleStartNewQuestion = () => {
+  const handleStartNewQuestion = async () => {
+    if (isCreatingQuestion) return; // Prevent double-clicks
+    
     const questionNumber = getNextQuestionNumber();
+    console.log('TemplateEditor: Starting question', { questionNumber, selectedQuestionType, existingQuestions: questions.length });
+    
+    setIsCreatingQuestion(true);
     setNewQuestionNumber(questionNumber);
-    onStartQuestion(questionNumber, selectedQuestionType);
+    
+    try {
+      await onStartQuestion(questionNumber, selectedQuestionType);
+    } finally {
+      setIsCreatingQuestion(false);
+    }
   };
 
   const handleFieldUpdate = (questionId, field, value) => {
@@ -289,6 +300,15 @@ const TemplateEditor = ({
   };
 
   const sortedQuestions = [...questions].sort((a, b) => a.question_number - b.question_number);
+  
+  // Debug logging
+  console.log('TemplateEditor render:', {
+    questionsLength: questions.length,
+    questions: questions.map(q => ({ id: q.question_id, number: q.question_number, status: q.status })),
+    sortedQuestions: sortedQuestions.length,
+    isHost,
+    user: user?.username
+  });
 
   return (
     <div className="template-editor">
@@ -315,8 +335,12 @@ const TemplateEditor = ({
                 </option>
               ))}
             </select>
-            <button onClick={handleStartNewQuestion}>
-              Start Question {getNextQuestionNumber()}
+            <button 
+              onClick={handleStartNewQuestion}
+              disabled={isCreatingQuestion}
+              style={{ opacity: isCreatingQuestion ? 0.6 : 1 }}
+            >
+              {isCreatingQuestion ? 'Creating...' : `Start Question ${getNextQuestionNumber()}`}
             </button>
           </div>
         </div>

@@ -289,8 +289,18 @@ const SessionBuilder = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to start question');
+        const errorData = await response.text();
+        console.error('Start question failed:', response.status, errorData);
+        
+        try {
+          const errorJson = JSON.parse(errorData);
+          throw new Error(errorJson.error || `Failed to start question: ${response.status}`);
+        } catch (parseError) {
+          throw new Error(`Failed to start question: ${response.status}`);
+        }
       }
+      
+      console.log('Question start successful');
     } catch (err) {
       console.error('Error starting question:', err);
       alert('Failed to start question: ' + err.message);
