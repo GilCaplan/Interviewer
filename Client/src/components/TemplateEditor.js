@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import './TemplateEditor.css';
 
 const TemplateEditor = ({ 
@@ -14,6 +14,9 @@ const TemplateEditor = ({
   const [newQuestionNumber, setNewQuestionNumber] = useState(1);
   const [expandedQuestion, setExpandedQuestion] = useState(null);
   const [isCreatingQuestion, setIsCreatingQuestion] = useState(false);
+  const [localQuestions, setLocalQuestions] = useState({});
+  const [unsavedChanges, setUnsavedChanges] = useState({});
+  const [savingQuestions, setSavingQuestions] = useState({});
 
   const questionTypes = [
     { value: 'multiple_choice', label: 'Multiple Choice' },
@@ -50,15 +53,73 @@ const TemplateEditor = ({
   };
 
   const handleFieldUpdate = (questionId, field, value) => {
-    console.log('handleFieldUpdate called:', { questionId, field, value });
-    onUpdateQuestion(questionId, field, value);
+    console.log('Local field update:', { questionId, field, value });
+    
+    // Update local state immediately for responsive UI
+    setLocalQuestions(prev => ({
+      ...prev,
+      [`${questionId}-${field}`]: value
+    }));
+    
+    // Mark as unsaved
+    setUnsavedChanges(prev => ({
+      ...prev,
+      [questionId]: true
+    }));
+  };
+
+  const saveQuestion = async (questionId) => {
+    const questionData = questions.find(q => q.question_id === questionId);
+    if (!questionData) return;
+
+    setSavingQuestions(prev => ({ ...prev, [questionId]: true }));
+
+    try {
+      // Get all local changes for this question
+      const localChanges = {};
+      Object.keys(localQuestions).forEach(key => {
+        if (key.startsWith(`${questionId}-`)) {
+          const field = key.replace(`${questionId}-`, '');
+          localChanges[field] = localQuestions[key];
+        }
+      });
+
+      // Save each changed field
+      for (const [field, value] of Object.entries(localChanges)) {
+        console.log('Saving field:', { questionId, field, value });
+        await onUpdateQuestion(questionId, field, value);
+      }
+
+      // Mark as saved
+      setUnsavedChanges(prev => {
+        const newState = { ...prev };
+        delete newState[questionId];
+        return newState;
+      });
+
+      console.log('Question saved successfully:', questionId);
+    } catch (error) {
+      console.error('Error saving question:', error);
+      alert('Failed to save question: ' + error.message);
+    } finally {
+      setSavingQuestions(prev => {
+        const newState = { ...prev };
+        delete newState[questionId];
+        return newState;
+      });
+    }
   };
 
   const renderQuestionFields = (question) => {
     const userContent = question.user_content || {};
     const isFinalized = question.status === 'finalized';
-    // Temporarily allow editing for debugging
-    const canEdit = !isFinalized; // TODO: Change back to: isHost && !isFinalized;
+    const canEdit = isHost && !isFinalized;
+    
+    // Helper function to get field value (local state takes precedence)
+    const getFieldValue = (field) => {
+      const localKey = `${question.question_id}-${field}`;
+      return localQuestions[localKey] !== undefined ? localQuestions[localKey] : (userContent[field] || '');
+    };
     
     // Debug logging
     console.log('TemplateEditor render debug:', {
@@ -76,7 +137,7 @@ const TemplateEditor = ({
             <div className="field-group">
               <label>Question Text:</label>
               <textarea
-                value={userContent.question_text || ''}
+                value={getFieldValue('question_text')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'question_text', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Enter your multiple choice question..."
@@ -90,9 +151,15 @@ const TemplateEditor = ({
                   <span>{letter}.</span>
                   <input
                     type="text"
-                    value={userContent.options?.[index] || ''}
+                    value={(() => {
+                      const options = getFieldValue('options');
+                      return Array.isArray(options) ? (options[index] || '') : '';
+                    })()}
                     onChange={(e) => {
-                      const newOptions = [...(userContent.options || ['', '', '', ''])];
+                      const currentOptions = getFieldValue('options');
+                      const newOptions = Array.isArray(currentOptions) 
+                        ? [...currentOptions] 
+                        : ['', '', '', ''];
                       newOptions[index] = e.target.value;
                       handleFieldUpdate(question.question_id, 'options', newOptions);
                     }}
@@ -265,7 +332,7 @@ const TemplateEditor = ({
             <div className="field-group">
               <label>Question:</label>
               <textarea
-                value={userContent.question_text || ''}
+                value={getFieldValue('question_text')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'question_text', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Enter your open-ended question..."
@@ -276,7 +343,7 @@ const TemplateEditor = ({
             <div className="field-group">
               <label>Sample Answer:</label>
               <textarea
-                value={userContent.sample_answer || ''}
+                value={getFieldValue('sample_answer')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'sample_answer', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Provide a sample answer or key points..."
@@ -372,6 +439,19 @@ const TemplateEditor = ({
                   >
                     {expandedQuestion === question.question_id ? 'Collapse' : 'Expand'}
                   </button>
+                  {isHost && question.status !== 'finalized' && unsavedChanges[question.question_id] && (
+                    <button
+                      onClick={() => saveQuestion(question.question_id)}
+                      className="save-btn"
+                      disabled={savingQuestions[question.question_id]}
+                      style={{ 
+                        backgroundColor: '#4CAF50',
+                        opacity: savingQuestions[question.question_id] ? 0.6 : 1 
+                      }}
+                    >
+                      {savingQuestions[question.question_id] ? 'Saving...' : 'Save'}
+                    </button>
+                  )}
                   {isHost && question.status !== 'finalized' && (
                     <button
                       onClick={() => onFinalizeQuestion(question.question_id)}

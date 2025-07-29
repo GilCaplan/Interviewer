@@ -186,10 +186,12 @@ const SessionBuilder = () => {
 
   const setupSocketListeners = (socket) => {
     socket.on('question_building_started', (data) => {
+      console.log('WebSocket: Question building started', data);
       setQuestions(prev => [...prev, data.question_structure]);
     });
 
     socket.on('question_content_updated', (data) => {
+      console.log('WebSocket: Question content updated', data);
       setQuestions(prev => 
         prev.map(q => 
           q.question_id === data.question_id 
@@ -289,18 +291,49 @@ const SessionBuilder = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.text();
-        console.error('Start question failed:', response.status, errorData);
-        
+        let errorMessage = `HTTP ${response.status}`;
         try {
-          const errorJson = JSON.parse(errorData);
-          throw new Error(errorJson.error || `Failed to start question: ${response.status}`);
-        } catch (parseError) {
-          throw new Error(`Failed to start question: ${response.status}`);
+          const errorData = await response.text();
+          console.error('Start question failed:', response.status, errorData);
+          
+          if (errorData) {
+            try {
+              const errorJson = JSON.parse(errorData);
+              errorMessage = errorJson.error || errorData;
+            } catch (parseError) {
+              errorMessage = errorData;
+            }
+          }
+        } catch (readError) {
+          console.error('Could not read error response:', readError);
         }
+        
+        throw new Error(errorMessage);
       }
       
       console.log('Question start successful');
+      
+      // Refresh session data to ensure UI is in sync
+      try {
+        const refreshResponse = await fetch(`${apiUrl}/api/sessions/${session.session_id}`, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`
+          }
+        });
+        
+        if (refreshResponse.ok) {
+          const refreshData = await refreshResponse.json();
+          const templateData = refreshData.session.template_data || {};
+          setQuestions([
+            ...(templateData.questions_queue || []),
+            ...(templateData.ready_questions || [])
+          ]);
+          console.log('Session state refreshed after question creation');
+        }
+      } catch (refreshError) {
+        console.warn('Could not refresh session state:', refreshError);
+      }
+      
     } catch (err) {
       console.error('Error starting question:', err);
       alert('Failed to start question: ' + err.message);
@@ -336,9 +369,24 @@ const SessionBuilder = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.text();
-        console.error('Update question failed:', response.status, errorData);
-        throw new Error(`Failed to update question: ${response.status}`);
+        let errorMessage = `HTTP ${response.status}`;
+        try {
+          const errorData = await response.text();
+          console.error('Update question failed:', response.status, errorData);
+          
+          if (errorData) {
+            try {
+              const errorJson = JSON.parse(errorData);
+              errorMessage = errorJson.error || errorData;
+            } catch (parseError) {
+              errorMessage = errorData;
+            }
+          }
+        } catch (readError) {
+          console.error('Could not read error response:', readError);
+        }
+        
+        throw new Error(errorMessage);
       }
       
       console.log('Question update successful');
