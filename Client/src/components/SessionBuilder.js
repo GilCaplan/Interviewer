@@ -113,7 +113,29 @@ const SessionBuilder = () => {
 
         const data = await response.json();
         setSession(data.session);
-        setIsHost(data.session.host_username === user.username);
+        
+        // Get username from multiple sources for reliability
+        let username = user?.username;
+        if (!username) {
+          const storedUser = localStorage.getItem('user');
+          if (storedUser) {
+            try {
+              const userData = JSON.parse(storedUser);
+              username = userData.username;
+            } catch (e) {
+              console.error('Failed to parse user data for host check:', e);
+            }
+          }
+        }
+        
+        const isHostUser = data.session.host_username === username;
+        setIsHost(isHostUser);
+        
+        console.log('Host check:', {
+          sessionHost: data.session.host_username,
+          currentUsername: username,
+          isHost: isHostUser
+        });
         
         // Set up questions from session data
         const templateData = data.session.template_data || {};
@@ -123,9 +145,14 @@ const SessionBuilder = () => {
         ]);
 
         // Initialize WebSocket connection
+        let socketToken = token;
+        if (!socketToken && user?.sessionToken) {
+          socketToken = user.sessionToken;
+        }
+        
         const newSocket = io(apiUrl, {
           auth: {
-            token: user.sessionToken
+            token: socketToken
           }
         });
 
@@ -217,9 +244,16 @@ const SessionBuilder = () => {
   const loadParticipants = async (sessionId) => {
     try {
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      
+      // Get token with fallback
+      let authToken = localStorage.getItem('token');
+      if (!authToken && user?.sessionToken) {
+        authToken = user.sessionToken;
+      }
+      
       const response = await fetch(`${apiUrl}/api/sessions/${sessionId}/participants`, {
         headers: {
-          'Authorization': `Bearer ${user.sessionToken}`
+          'Authorization': `Bearer ${authToken}`
         },
         credentials: 'include'
       });
@@ -237,10 +271,17 @@ const SessionBuilder = () => {
   const handleStartQuestion = async (questionNumber, questionType) => {
     try {
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      
+      // Get token with fallback
+      let authToken = localStorage.getItem('token');
+      if (!authToken && user?.sessionToken) {
+        authToken = user.sessionToken;
+      }
+      
       const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/questions/${questionNumber}/start`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${user.sessionToken}`,
+          'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ type: questionType }),
@@ -259,10 +300,17 @@ const SessionBuilder = () => {
   const handleUpdateQuestion = async (questionId, field, value) => {
     try {
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      
+      // Get token with fallback
+      let authToken = localStorage.getItem('token');
+      if (!authToken && user?.sessionToken) {
+        authToken = user.sessionToken;
+      }
+      
       const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/questions/${questionId}/update`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${user.sessionToken}`,
+          'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ field, value }),
@@ -280,10 +328,17 @@ const SessionBuilder = () => {
   const handleFinalizeQuestion = async (questionId) => {
     try {
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      
+      // Get token with fallback
+      let authToken = localStorage.getItem('token');
+      if (!authToken && user?.sessionToken) {
+        authToken = user.sessionToken;
+      }
+      
       const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/questions/${questionId}/finalize`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${user.sessionToken}`,
+          'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({}),
@@ -302,10 +357,17 @@ const SessionBuilder = () => {
   const handleLLMRequest = async (questionId, field, context) => {
     try {
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      
+      // Get token with fallback
+      let authToken = localStorage.getItem('token');
+      if (!authToken && user?.sessionToken) {
+        authToken = user.sessionToken;
+      }
+      
       const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/questions/${questionId}/llm-suggest`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${user.sessionToken}`,
+          'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ field, context }),

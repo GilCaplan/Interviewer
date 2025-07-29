@@ -525,6 +525,14 @@ def start_question_building(user, session_id, question_number):
         if question_number < 1 or question_number > max_questions:
             return jsonify({"error": f"Question number must be between 1 and {max_questions}"}), 400
         
+        # Check if question with this number already exists
+        questions_queue = session.get("template_data", {}).get("questions_queue", [])
+        ready_questions = session.get("template_data", {}).get("ready_questions", [])
+        
+        for q in questions_queue + ready_questions:
+            if q.get("question_number") == question_number:
+                return jsonify({"error": f"Question {question_number} already exists"}), 400
+        
         # Initialize question structure
         question_structure = {
             "question_number": question_number,

@@ -45,7 +45,7 @@ const TemplateEditor = ({
   const renderQuestionFields = (question) => {
     const userContent = question.user_content || {};
     const isFinalized = question.status === 'finalized';
-    const canEdit = isHost || (!isFinalized && session.settings?.viewing_mode !== 'view_only');
+    const canEdit = isHost && !isFinalized;
 
     switch (question.type) {
       case 'multiple_choice':
