@@ -20,6 +20,7 @@ db = client.get_default_database()
 sessions_collection = db.simple_sessions  # Fixed collection name
 messages_collection = db.session_messages
 questions_collection = db.session_questions
+users_collection = db.users
 
 # Mock LLM responses for different subjects
 MOCK_LLM_RESPONSES = {
