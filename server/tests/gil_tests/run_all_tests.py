@@ -13,6 +13,7 @@ import time
 import requests
 import sys
 import os
+import re
 from datetime import datetime
 
 class Colors:
@@ -100,7 +101,7 @@ def run_test_file(test_file):
         return False, "", str(e)
 
 def extract_test_results(output):
-    """Extract test results from output"""
+    """Extract test results from output with better ANSI handling"""
     results = {
         'passed': 0,
         'failed': 0,
@@ -108,26 +109,44 @@ def extract_test_results(output):
         'time': 0
     }
     
-    lines = output.split('\n')
+    # Remove ANSI color codes
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    clean_output = ansi_escape.sub('', output)
+    
+    lines = clean_output.split('\n')
     for line in lines:
+        line = line.strip()
+        
         if 'Passed:' in line:
             try:
-                results['passed'] = int(line.split('Passed:')[1].strip().split()[0])
+                # Look for pattern like "✅ Passed: 14" or "Passed: 14"
+                match = re.search(r'Passed:\s*(\d+)', line)
+                if match:
+                    results['passed'] = int(match.group(1))
             except:
                 pass
         elif 'Failed:' in line:
             try:
-                results['failed'] = int(line.split('Failed:')[1].strip().split()[0])
+                # Look for pattern like "❌ Failed: 0" or "Failed: 0"
+                match = re.search(r'Failed:\s*(\d+)', line)
+                if match:
+                    results['failed'] = int(match.group(1))
             except:
                 pass
         elif 'Pass Rate:' in line:
             try:
-                results['pass_rate'] = float(line.split('Pass Rate:')[1].strip().split('%')[0])
+                # Look for pattern like "📊 Pass Rate: 100.0%"
+                match = re.search(r'Pass Rate:\s*([\d.]+)%', line)
+                if match:
+                    results['pass_rate'] = float(match.group(1))
             except:
                 pass
         elif 'Total Time:' in line:
             try:
-                results['time'] = float(line.split('Total Time:')[1].strip().split()[0])
+                # Look for pattern like "⏱️ Total Time: 0.06 seconds"
+                match = re.search(r'Total Time:\s*([\d.]+)', line)
+                if match:
+                    results['time'] = float(match.group(1))
             except:
                 pass
     

@@ -133,33 +133,47 @@ function FeaturePage({ features }) {
         )}
       </div>
 
-      {/* ✅ Inserted button to create dummy template */}
+      {/* Template Creation Button */}
       {isInterviewQuestions && (
         <div style={{ marginTop: "20px" }}>
           <button
-            onClick={() => {
-/*              fetch("http://localhost:5000/questions/insert_dummy")
-                .then(res => res.json())
-                .then(data => alert("Dummy template created! ID: " + data.id))
-                .catch(err => {
-                  console.error(err);
-                  alert("Failed to create dummy template lol.");
-                });*/
-              fetch("http://localhost:5000/questions/insert_dummy")
-              .then(async res => {
-                if (!res.ok) {
-                  const err = await res.json().catch(() => ({}));
-                  throw new Error(err.message || "Unknown error from server");
+            onClick={async () => {
+              try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                  alert('Please login first');
+                  return;
                 }
-                return res.json();
-              })
-              .then(data => {
-                alert("✅ Dummy template created! ID: " + data.id);
-              })
-              .catch(err => {
-                console.error("❌ Error creating template:", err);
-                alert("Failed to create dummy template: " + err.message);
-              });
+
+                const dummyTemplate = {
+                  template_name: "Sample Interview Template",
+                  description: "A sample template with common interview questions",
+                  subject: "general",
+                  difficulty: "medium",
+                  is_public: true,
+                  tags: ["sample", "interview", "general"]
+                };
+
+                const response = await fetch("http://localhost:5001/api/templates", {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                  },
+                  body: JSON.stringify(dummyTemplate)
+                });
+
+                if (!response.ok) {
+                  const error = await response.json().catch(() => ({}));
+                  throw new Error(error.error || "Failed to create template");
+                }
+
+                const data = await response.json();
+                alert(`✅ Template created successfully! ID: ${data.template.template_id}`);
+              } catch (error) {
+                console.error("❌ Error creating template:", error);
+                alert(`Failed to create template: ${error.message}`);
+              }
             }}
             style={{
               padding: "10px 20px",
@@ -171,7 +185,7 @@ function FeaturePage({ features }) {
               cursor: "pointer"
             }}
           >
-            ➕ Create Dummy Template
+            ➕ Create Sample Template
           </button>
         </div>
       )}

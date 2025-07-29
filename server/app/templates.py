@@ -83,28 +83,31 @@ SUBJECTS = [
 ]
 
 
-def validate_question_data(question_type, question_data):
+def validate_question_data(question_type, question_data, is_update=False):
     """Validate question data against its type schema"""
     if question_type not in QUESTION_TYPES:
         return False, f"Invalid question type: {question_type}"
     
     type_config = QUESTION_TYPES[question_type]
     
-    # Check required fields
-    for field in type_config['required_fields']:
-        if field not in question_data:
-            return False, f"Missing required field: {field}"
+    # Check required fields (only for new questions, not updates)
+    if not is_update:
+        for field in type_config['required_fields']:
+            if field not in question_data:
+                return False, f"Missing required field: {field}"
     
     # Validate specific field types for multiple choice
     if question_type == 'multiple_choice':
-        options = question_data.get('options', [])
+        options = question_data.get('options')
         correct_answer = question_data.get('correct_answer')
         
-        if len(options) < 2:
-            return False, "Multiple choice questions must have at least 2 options"
-        
-        if correct_answer not in options:
-            return False, "Correct answer must be one of the provided options"
+        # Only validate if these fields are present
+        if options is not None:
+            if len(options) < 2:
+                return False, "Multiple choice questions must have at least 2 options"
+            
+            if correct_answer is not None and correct_answer not in options:
+                return False, "Correct answer must be one of the provided options"
     
     return True, "Valid"
 
@@ -377,12 +380,7 @@ def update_question_in_template(user, template_id, question_id):
         current_question = questions[question_index]
         question_type = data.get('type', current_question['type'])
         
-        # Validate question data
-        is_valid, validation_message = validate_question_data(question_type, data)
-        if not is_valid:
-            return jsonify({"error": validation_message}), 400
-        
-        # Update question data
+        # Update question data first
         updated_question = {**current_question}
         
         # Update allowed fields
@@ -393,6 +391,13 @@ def update_question_in_template(user, template_id, question_id):
         for field in updatable_fields:
             if field in data:
                 updated_question[field] = data[field]
+        
+        # Skip validation for updates since question was already validated on creation
+        # Only validate if the question type is changing
+        if data.get('type') and data.get('type') != current_question['type']:
+            is_valid, validation_message = validate_question_data(question_type, updated_question, is_update=False)
+            if not is_valid:
+                return jsonify({"error": validation_message}), 400
         
         updated_question['updated_at'] = datetime.datetime.utcnow()
         
