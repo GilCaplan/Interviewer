@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import './Header.css';
 
@@ -6,6 +6,9 @@ import './Header.css';
 function SessionControls() {
   const [sessionCode, setSessionCode] = useState('');
   const [showJoinModal, setShowJoinModal] = useState(false);
+  const [showSessionList, setShowSessionList] = useState(false);
+  const [userSessions, setUserSessions] = useState([]);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const createNewSession = () => {
@@ -20,6 +23,54 @@ function SessionControls() {
       setShowJoinModal(false);
       setSessionCode('');
     }
+  };
+
+  const loadUserSessions = async () => {
+    setLoading(true);
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      let token = localStorage.getItem('token');
+      
+      if (!token) {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const userData = JSON.parse(storedUser);
+          token = userData.sessionToken;
+        }
+      }
+
+      if (!token) {
+        console.error('No authentication token found');
+        return;
+      }
+
+      const response = await fetch(`${apiUrl}/api/sessions/list`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUserSessions(data.sessions || []);
+      } else {
+        console.error('Failed to load sessions:', response.status);
+      }
+    } catch (error) {
+      console.error('Error loading sessions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const showSessionListModal = () => {
+    setShowSessionList(true);
+    loadUserSessions();
+  };
+
+  const joinSessionById = (sessionCode) => {
+    navigate(`/session/${sessionCode}`);
+    setShowSessionList(false);
   };
 
   return (
@@ -37,7 +88,15 @@ function SessionControls() {
         onClick={() => setShowJoinModal(true)}
         title="Join Existing Template Building Session"
       >
-        🔗 Join Template Session
+        🔗 Join Session
+      </button>
+      
+      <button 
+        className="nav-link session-btn" 
+        onClick={showSessionListModal}
+        title="View Your Template Sessions"
+      >
+        📋 My Sessions
       </button>
 
       {showJoinModal && (
@@ -61,6 +120,54 @@ function SessionControls() {
                 setSessionCode('');
               }}>
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSessionList && (
+        <div className="modal-overlay">
+          <div className="modal-content session-list-modal">
+            <h3>Your Template Sessions</h3>
+            
+            {loading ? (
+              <div className="loading">Loading sessions...</div>
+            ) : userSessions.length === 0 ? (
+              <div className="no-sessions">
+                <p>No template sessions found.</p>
+                <p>Create a new template session to get started!</p>
+              </div>
+            ) : (
+              <div className="sessions-list">
+                {userSessions.map((session) => (
+                  <div key={session.session_id} className="session-item">
+                    <div className="session-info">
+                      <h4>{session.title}</h4>
+                      <p><strong>Code:</strong> {session.session_code}</p>
+                      <p><strong>Subject:</strong> {session.subject}</p>
+                      <p><strong>Participants:</strong> {session.participants?.length || 0}</p>
+                      <p><strong>Created:</strong> {new Date(session.created_at).toLocaleDateString()}</p>
+                      {session.host_username === JSON.parse(localStorage.getItem('user') || '{}').username && (
+                        <span className="host-badge">HOST</span>
+                      )}
+                    </div>
+                    <div className="session-actions">
+                      <button 
+                        className="join-btn"
+                        onClick={() => joinSessionById(session.session_code)}
+                      >
+                        Join Session
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            <div className="modal-buttons">
+              <button onClick={() => setShowSessionList(false)}>
+                Close
               </button>
             </div>
           </div>

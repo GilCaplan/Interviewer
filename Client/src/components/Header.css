@@ -147,3 +147,84 @@
 .modal-buttons button:last-child:hover {
   background: #da190b;
 }
+
+/* Session List Modal */
+.session-list-modal {
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.sessions-list {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 20px;
+}
+
+.session-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  background: #f9f9f9;
+}
+
+.session-info {
+  flex: 1;
+}
+
+.session-info h4 {
+  margin: 0 0 8px 0;
+  color: #333;
+  font-size: 1.1rem;
+}
+
+.session-info p {
+  margin: 2px 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.host-badge {
+  background: #4CAF50;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  margin-left: 8px;
+}
+
+.session-actions {
+  margin-left: 15px;
+}
+
+.join-btn {
+  background: #2196F3;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.join-btn:hover {
+  background: #1976D2;
+}
+
+.no-sessions {
+  text-align: center;
+  color: #666;
+  padding: 40px 20px;
+}
+
+.loading {
+  text-align: center;
+  color: #666;
+  padding: 20px;
+}
