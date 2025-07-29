@@ -811,17 +811,30 @@ def finalize_question(user, session_id, question_id):
         
         # Find and remove question from queue
         questions_queue = session.get("template_data", {}).get("questions_queue", [])
+        ready_questions = session.get("template_data", {}).get("ready_questions", [])
+        
+        # Debug logging
+        current_app.logger.info(f"Finalize attempt - Question ID: {question_id}")
+        current_app.logger.info(f"Questions in queue: {[q['question_id'] for q in questions_queue]}")
+        current_app.logger.info(f"Questions already ready: {[q['question_id'] for q in ready_questions]}")
+        
         question_to_finalize = None
         updated_queue = []
         
         for q in questions_queue:
             if q["question_id"] == question_id:
                 question_to_finalize = q
+                current_app.logger.info(f"Found question to finalize: {q['question_number']}")
             else:
                 updated_queue.append(q)
         
         if not question_to_finalize:
-            return jsonify({"error": "Question not found in building queue"}), 404
+            # Check if it's already finalized
+            for q in ready_questions:
+                if q["question_id"] == question_id:
+                    return jsonify({"error": "Question is already finalized"}), 400
+            
+            return jsonify({"error": f"Question not found in building queue. Available questions: {[q['question_id'] for q in questions_queue]}"}), 404
         
         # Validate question completeness
         question_type = question_to_finalize["type"]

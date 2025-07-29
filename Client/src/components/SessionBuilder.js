@@ -397,6 +397,12 @@ const SessionBuilder = () => {
   };
 
   const handleFinalizeQuestion = async (questionId) => {
+    console.log('Attempting to finalize question:', {
+      questionId,
+      sessionId: session?.session_id,
+      availableQuestions: questions.map(q => ({ id: q.question_id, number: q.question_number, status: q.status }))
+    });
+    
     try {
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
       
