@@ -31,23 +31,59 @@ const SessionBuilder = () => {
 
   // Initialize session and socket
   useEffect(() => {
-    const joinSession = async () => {
+    const initializeSession = async () => {
       try {
         const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+        const token = localStorage.getItem('token');
         
-        // Join session
-        const response = await fetch(`${apiUrl}/api/sessions/join/${sessionCode}`, {
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+
+        // First try to join existing session
+        let response = await fetch(`${apiUrl}/api/sessions/join/${sessionCode}`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${user.sessionToken}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({}),
-          credentials: 'include'
+          body: JSON.stringify({})
         });
 
+        // If joining failed, create new session and redirect to new session code
         if (!response.ok) {
-          throw new Error('Failed to join session');
+          const createResponse = await fetch(`${apiUrl}/api/sessions/create`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              title: `Collaborative Template Building`,
+              subject: 'general',
+              description: 'Building interview templates together',
+              template_mode: true,
+              settings: {
+                max_participants: 10,
+                max_questions: 15,
+                allow_llm: true,
+                allow_user_questions: true,
+                question_numbering: true
+              }
+            })
+          });
+
+          if (!createResponse.ok) {
+            throw new Error('Failed to create new session');
+          }
+
+          const createData = await createResponse.json();
+          const newSessionCode = createData.session.session_code;
+          
+          // Redirect to the new session code
+          console.log('Created new session, redirecting to:', newSessionCode);
+          navigate(`/session/${newSessionCode}`, { replace: true });
+          return;
         }
 
         const data = await response.json();
@@ -85,7 +121,7 @@ const SessionBuilder = () => {
     };
 
     if (user && sessionCode) {
-      joinSession();
+      initializeSession();
     }
 
     // Cleanup socket on unmount

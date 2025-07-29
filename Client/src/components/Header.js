@@ -9,7 +9,7 @@ function SessionControls() {
   const navigate = useNavigate();
 
   const createNewSession = () => {
-    // Generate a random session code
+    // Generate a random session code for template building
     const newSessionCode = Math.random().toString(36).substring(2, 8).toUpperCase();
     navigate(`/session/${newSessionCode}`);
   };
@@ -27,26 +27,26 @@ function SessionControls() {
       <button 
         className="nav-link session-btn" 
         onClick={createNewSession}
-        title="Create New Collaborative Session"
+        title="Create New Collaborative Template Building Session"
       >
-        ➕ New Session
+        ➕ New Template Session
       </button>
       
       <button 
         className="nav-link session-btn" 
         onClick={() => setShowJoinModal(true)}
-        title="Join Existing Session"
+        title="Join Existing Template Building Session"
       >
-        🔗 Join Session
+        🔗 Join Template Session
       </button>
 
       {showJoinModal && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h3>Join Session</h3>
+            <h3>Join Template Building Session</h3>
             <input
               type="text"
-              placeholder="Enter session code..."
+              placeholder="Enter template session code..."
               value={sessionCode}
               onChange={(e) => setSessionCode(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && joinSession()}
