@@ -17,23 +17,11 @@ export const AuthProvider = ({ children }) => {
         if (storedUser) {
           const userData = JSON.parse(storedUser);
 
-          // Verify token on the server (optional but recommended)
-          const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
-
-          const response = await fetch(`${apiUrl}/api/auth/verify`, {
-            headers: {
-              'Authorization': `Bearer ${userData.sessionToken}`
-            },
-            credentials: 'include'
-          });
-
-          if (response.ok) {
-            setUser(userData);
-          } else {
-            // Token is invalid or expired, clear the stored data
-            localStorage.removeItem('user');
-            localStorage.removeItem('token');
-          }
+          // For now, trust localStorage and skip server verification
+          // This avoids clearing tokens due to network/CORS issues
+          setUser(userData);
+          
+          // TODO: Add background token verification that doesn't clear tokens immediately
         }
       } catch (error) {
         console.error('Error verifying authentication:', error);

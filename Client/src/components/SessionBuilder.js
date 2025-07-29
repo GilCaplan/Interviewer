@@ -35,11 +35,34 @@ const SessionBuilder = () => {
       try {
         const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
         
-        // Get token from localStorage
-        const token = localStorage.getItem('token');
+        // Get token from localStorage with better error handling
+        let token = localStorage.getItem('token');
+        
+        // If no direct token, try to get from user object
+        if (!token) {
+          const storedUser = localStorage.getItem('user');
+          if (storedUser) {
+            try {
+              const userData = JSON.parse(storedUser);
+              token = userData.sessionToken;
+            } catch (e) {
+              console.error('Failed to parse stored user data:', e);
+            }
+          }
+        }
+        
+        console.log('Token check:', {
+          directToken: !!localStorage.getItem('token'),
+          userObject: !!localStorage.getItem('user'),
+          userFromContext: !!user,
+          finalToken: !!token
+        });
         
         if (!token) {
-          throw new Error('No authentication token found');
+          setError('Please login to access sessions');
+          setLoading(false);
+          navigate('/login');
+          return;
         }
 
         // First try to join existing session
@@ -122,7 +145,7 @@ const SessionBuilder = () => {
       }
     };
 
-    if (user && sessionCode) {
+    if (sessionCode) {
       initializeSession();
     }
 
@@ -132,7 +155,7 @@ const SessionBuilder = () => {
         socket.disconnect();
       }
     };
-  }, [sessionCode, user]);
+  }, [sessionCode, navigate]);
 
   const setupSocketListeners = (socket) => {
     socket.on('question_building_started', (data) => {
