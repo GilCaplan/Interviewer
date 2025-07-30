@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import io from 'socket.io-client';
+import { getApiUrl, getAuthToken } from '../utils/authUtils';
 import './SessionBuilder.css';
 
 // Sub-components for the 3 screens
@@ -31,8 +32,13 @@ const SessionBuilder = () => {
   const [participants, setParticipants] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
 
+  // Use ref to track if component is mounted
+  const isMountedRef = useRef(true);
+  
   // Initialize session and socket
   useEffect(() => {
+    isMountedRef.current = true;
+    
     const initializeSession = async () => {
       try {
         const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
@@ -156,26 +162,40 @@ const SessionBuilder = () => {
           ...(templateData.ready_questions || [])
         ]);
 
-        // Initialize WebSocket connection
-        let socketToken = token;
-        if (!socketToken && user?.sessionToken) {
-          socketToken = user.sessionToken;
-        }
-        
-        const newSocket = io(apiUrl, {
-          auth: {
-            token: socketToken
+        // Initialize WebSocket connection with error handling
+        if (isMountedRef.current) {
+          const socketToken = token || getAuthToken();
+          if (socketToken) {
+            try {
+              const newSocket = io(apiUrl, {
+                auth: { token: socketToken },
+                transports: ['websocket', 'polling'],
+                timeout: 10000,
+                reconnection: true,
+                reconnectionAttempts: 3
+              });
+              
+              // Set up error handling
+              newSocket.on('connect_error', (error) => {
+                console.warn('Socket connection error:', error);
+              });
+              
+              newSocket.on('connect', () => {
+                console.log('Socket connected successfully');
+                newSocket.emit('join_session', data.session.session_id);
+              });
+              
+              // Set up socket event listeners
+              setupSocketListeners(newSocket);
+              setSocket(newSocket);
+            } catch (socketError) {
+              console.warn('Failed to initialize socket:', socketError);
+            }
           }
-        });
-
-        newSocket.emit('join_session', data.session.session_id);
-
-        // Set up socket event listeners
-        setupSocketListeners(newSocket);
-        setSocket(newSocket);
-
-        // Load participants
-        loadParticipants(data.session.session_id);
+          
+          // Load participants
+          loadParticipants(data.session.session_id);
+        }
 
       } catch (err) {
         setError(err.message);
@@ -188,13 +208,24 @@ const SessionBuilder = () => {
       initializeSession();
     }
 
-    // Cleanup socket on unmount
+    // Cleanup function
     return () => {
+      isMountedRef.current = false;
       if (socket) {
+        console.log('Cleaning up socket connection');
+        socket.off(); // Remove all listeners
         socket.disconnect();
+        setSocket(null);
       }
     };
   }, [sessionCode, navigate]);
+  
+  // Additional cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const setupSocketListeners = (socket) => {
     socket.on('question_building_started', (data) => {

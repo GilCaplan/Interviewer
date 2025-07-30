@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, memo } from 'react';
 import './TemplateEditor.css';
 
 const TemplateEditor = ({ 
@@ -911,4 +911,4 @@ const TemplateEditor = ({
   );
 };
 
-export default TemplateEditor;
+export default memo(TemplateEditor);

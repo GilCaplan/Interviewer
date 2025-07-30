@@ -35,10 +35,14 @@ export const AuthProvider = ({ children }) => {
     checkLoggedIn();
   }, []);
 
-  // Login function
+  // Login function with unified token storage
   const login = (userData) => {
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
+    // Store token separately for easy access across components
+    if (userData.sessionToken) {
+      localStorage.setItem('token', userData.sessionToken);
+    }
   };
 
   // Logout function
@@ -57,10 +61,11 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Error during logout:', error);
     } finally {
-      // Clear user from state and localStorage
+      // Clear all auth data from state and localStorage
       setUser(null);
       localStorage.removeItem('user');
       localStorage.removeItem('token');
+      localStorage.removeItem('sessionToken'); // Clean any legacy tokens
     }
   };
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getApiUrl, makeAuthenticatedRequest } from '../utils/authUtils';
 import './SessionJoinForm.css';
 
 const SessionJoinForm = () => {
@@ -32,25 +33,13 @@ const SessionJoinForm = () => {
     setError('');
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
-      const token = localStorage.getItem('token') || user?.sessionToken;
-      
-      if (!token) {
-        setError('Please login to join sessions');
-        return;
-      }
-
       const requestBody = {};
       if (password.trim()) {
         requestBody.password = password.trim();
       }
 
-      const response = await fetch(`${apiUrl}/api/sessions/join/${sessionCode}`, {
+      const response = await makeAuthenticatedRequest(`${getApiUrl()}/api/sessions/join/${sessionCode}`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(requestBody)
       });
 
@@ -70,7 +59,12 @@ const SessionJoinForm = () => {
         setError(errorData.error || 'Failed to join session');
       }
     } catch (err) {
-      setError('Network error. Please try again.');
+      if (err.message.includes('Authentication expired')) {
+        setError('Session expired. Please login again.');
+        navigate('/login');
+      } else {
+        setError(err.message || 'Network error. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -87,14 +81,6 @@ const SessionJoinForm = () => {
     setError('');
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
-      const token = localStorage.getItem('token') || user?.sessionToken;
-      
-      if (!token) {
-        setError('Please login to create sessions');
-        return;
-      }
-
       const sessionData = {
         title: createForm.title.trim(),
         subject: createForm.subject,
@@ -114,12 +100,8 @@ const SessionJoinForm = () => {
         sessionData.password = createForm.password.trim();
       }
 
-      const response = await fetch(`${apiUrl}/api/sessions/create`, {
+      const response = await makeAuthenticatedRequest(`${getApiUrl()}/api/sessions/create`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(sessionData)
       });
 
@@ -132,7 +114,12 @@ const SessionJoinForm = () => {
         setError(errorData.error || 'Failed to create session');
       }
     } catch (err) {
-      setError('Network error. Please try again.');
+      if (err.message.includes('Authentication expired')) {
+        setError('Session expired. Please login again.');
+        navigate('/login');
+      } else {
+        setError(err.message || 'Network error. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

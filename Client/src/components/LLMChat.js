@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import './LLMChat.css';
 
 const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
@@ -326,4 +326,4 @@ const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
   );
 };
 
-export default LLMChat;
+export default memo(LLMChat);
