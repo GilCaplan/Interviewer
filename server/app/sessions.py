@@ -903,7 +903,7 @@ def start_question_building(user, session_id, question_number):
             question_structure["user_content"][field] = ""
         
         # Update session with new question
-        sessions_collection.update_one(
+        update_result = sessions_collection.update_one(
             {"session_id": session_id},
             {
                 "$push": {"template_data.questions_queue": question_structure},
@@ -913,6 +913,9 @@ def start_question_building(user, session_id, question_number):
                 }
             }
         )
+        
+        # Log update result for debugging
+        current_app.logger.info(f"Question creation update result: matched={update_result.matched_count}, modified={update_result.modified_count}")
         
         # Broadcast to all participants
         emit('question_building_started', {
@@ -1200,7 +1203,11 @@ def add_field_suggestion(user, session_id, question_id):
             }
         )
         
+        # Log update result for debugging
+        current_app.logger.info(f"Suggestion creation update result: matched={update_result.matched_count}, modified={update_result.modified_count}")
+        
         if update_result.matched_count == 0:
+            current_app.logger.error(f"Failed to add suggestion for question {question_id} in session {session_id}")
             return jsonify({"error": "Question not found or not accessible"}), 404
         
         # Broadcast suggestion to participants
@@ -1290,7 +1297,11 @@ def handle_field_suggestion(user, session_id, question_id, suggestion_id):
             ]
         )
         
+        # Log update result for debugging
+        current_app.logger.info(f"Suggestion handling update result: matched={update_result.matched_count}, modified={update_result.modified_count}")
+        
         if update_result.matched_count == 0:
+            current_app.logger.error(f"Failed to update suggestion {suggestion_id} for question {question_id}")
             return jsonify({"error": "Failed to update suggestion"}), 404
         
         # Broadcast the decision to participants
@@ -1343,8 +1354,8 @@ def get_suggestion_history(user, session_id):
             for note in question.get("collaboration_notes", []):
                 if note.get("type") == "field_suggestion":
                     suggestion_data = note.get("suggestion_data", {})
-                    # Only include suggestions that have been handled (accepted or rejected)
-                    if suggestion_data.get("status") in ["accepted", "rejected"]:
+                    # Only include suggestions that have been handled (accept or reject)
+                    if suggestion_data.get("status") in ["accept", "reject"]:
                         suggestion_history.append({
                             "question_number": question_number,
                             "question_id": question_id,
