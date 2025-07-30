@@ -277,6 +277,69 @@ const SessionBuilder = () => {
       }]);
     });
 
+    socket.on('field_suggestion_added', (data) => {
+      console.log('WebSocket: Field suggestion added', data);
+      // Update questions to include new suggestion in collaboration_notes
+      setQuestions(prev => 
+        prev.map(q => 
+          q.question_id === data.question_id 
+            ? { 
+                ...q, 
+                collaboration_notes: [
+                  ...(q.collaboration_notes || []),
+                  {
+                    note_id: data.suggestion.suggestion_id,
+                    type: 'field_suggestion',
+                    author: data.suggestion.author,
+                    timestamp: data.suggestion.timestamp,
+                    note: `Suggests changing '${data.suggestion.field}' to: ${data.suggestion.suggested_value}`,
+                    suggestion_data: data.suggestion
+                  }
+                ]
+              }
+            : q
+        )
+      );
+    });
+
+    socket.on('field_suggestion_handled', (data) => {
+      console.log('WebSocket: Field suggestion handled', data);
+      // Update question content if accepted and update suggestion status
+      setQuestions(prev => 
+        prev.map(q => {
+          if (q.question_id === data.question_id) {
+            let updatedQuestion = { ...q };
+            
+            // If accepted, update the field value
+            if (data.action === 'accept' && data.new_value !== null) {
+              updatedQuestion.user_content = {
+                ...updatedQuestion.user_content,
+                [data.field]: data.new_value
+              };
+            }
+            
+            // Update suggestion status in collaboration_notes
+            updatedQuestion.collaboration_notes = (updatedQuestion.collaboration_notes || []).map(note => 
+              note.suggestion_data?.suggestion_id === data.suggestion_id
+                ? {
+                    ...note,
+                    suggestion_data: {
+                      ...note.suggestion_data,
+                      status: data.action,
+                      handled_by: data.handled_by,
+                      handled_at: new Date()
+                    }
+                  }
+                : note
+            );
+            
+            return updatedQuestion;
+          }
+          return q;
+        })
+      );
+    });
+
     socket.on('user_joined', (data) => {
       setParticipants(prev => [...prev, data.user]);
     });

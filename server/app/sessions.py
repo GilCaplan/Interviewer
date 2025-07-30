@@ -1152,6 +1152,168 @@ def add_collaboration_note(user, session_id, question_id):
         return jsonify({"error": "Failed to add collaboration note"}), 500
 
 
+# Add field suggestion (for non-hosts to suggest field changes)
+@sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/suggest', methods=['POST'])
+@token_required
+def add_field_suggestion(user, session_id, question_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        data = request.get_json() or {}
+        field_name = sanitize_text_input(data.get("field", ""), max_length=50)
+        suggested_value = sanitize_text_input(data.get("suggested_value", ""), max_length=2000)
+        current_value = sanitize_text_input(data.get("current_value", ""), max_length=2000)
+        
+        if not field_name or not suggested_value:
+            return jsonify({"error": "Field name and suggested value are required"}), 400
+        
+        # Create suggestion data structure
+        suggestion_data = {
+            "suggestion_id": str(uuid.uuid4()),
+            "field": field_name,
+            "suggested_value": suggested_value,
+            "current_value": current_value,
+            "author": user["username"],
+            "timestamp": datetime.datetime.utcnow(),
+            "status": "pending"  # pending, accepted, rejected
+        }
+        
+        # Add suggestion to question's collaboration_notes with special type
+        update_result = sessions_collection.update_one(
+            {"session_id": session_id, "template_data.questions_queue.question_id": question_id},
+            {
+                "$push": {"template_data.questions_queue.$.collaboration_notes": {
+                    "note_id": suggestion_data["suggestion_id"],
+                    "type": "field_suggestion",
+                    "author": user["username"],
+                    "timestamp": suggestion_data["timestamp"],
+                    "note": f"Suggests changing '{field_name}' to: {suggested_value}",
+                    "suggestion_data": suggestion_data
+                }},
+                "$set": {"updated_at": datetime.datetime.utcnow()}
+            }
+        )
+        
+        if update_result.matched_count == 0:
+            return jsonify({"error": "Question not found or not accessible"}), 404
+        
+        # Broadcast suggestion to participants
+        emit('field_suggestion_added', {
+            'question_id': question_id,
+            'suggestion': suggestion_data
+        }, room=session_id, namespace='/')
+        
+        return jsonify({
+            "message": "Field suggestion added",
+            "suggestion": suggestion_data
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error adding field suggestion: {str(e)}")
+        return jsonify({"error": "Failed to add field suggestion"}), 500
+
+
+# Accept or reject field suggestion (host only)
+@sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/suggestions/<suggestion_id>', methods=['PUT'])
+@token_required
+def handle_field_suggestion(user, session_id, question_id, suggestion_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can accept/reject suggestions
+        if user["username"] != session["host_username"]:
+            return jsonify({"error": "Only the session host can handle suggestions"}), 403
+        
+        data = request.get_json() or {}
+        action = data.get("action")  # "accept" or "reject"
+        
+        if action not in ["accept", "reject"]:
+            return jsonify({"error": "Action must be 'accept' or 'reject'"}), 400
+        
+        # Find the question and suggestion
+        questions_queue = session.get("template_data", {}).get("questions_queue", [])
+        question = None
+        suggestion = None
+        
+        for q in questions_queue:
+            if q.get("question_id") == question_id:
+                question = q
+                for note in q.get("collaboration_notes", []):
+                    if (note.get("type") == "field_suggestion" and 
+                        note.get("suggestion_data", {}).get("suggestion_id") == suggestion_id):
+                        suggestion = note.get("suggestion_data")
+                        break
+                break
+        
+        if not question or not suggestion:
+            return jsonify({"error": "Question or suggestion not found"}), 404
+        
+        if suggestion.get("status") != "pending":
+            return jsonify({"error": "Suggestion already handled"}), 400
+        
+        # Update suggestion status
+        update_query = {
+            "session_id": session_id,
+            "template_data.questions_queue.question_id": question_id,
+            "template_data.questions_queue.collaboration_notes.suggestion_data.suggestion_id": suggestion_id
+        }
+        
+        update_data = {
+            "$set": {
+                "template_data.questions_queue.$[q].collaboration_notes.$[note].suggestion_data.status": action,
+                "template_data.questions_queue.$[q].collaboration_notes.$[note].suggestion_data.handled_by": user["username"],
+                "template_data.questions_queue.$[q].collaboration_notes.$[note].suggestion_data.handled_at": datetime.datetime.utcnow(),
+                "updated_at": datetime.datetime.utcnow()
+            }
+        }
+        
+        # If accepting, also update the actual field value
+        if action == "accept":
+            field_path = f"template_data.questions_queue.$[q].user_content.{suggestion['field']}"
+            update_data["$set"][field_path] = suggestion["suggested_value"]
+        
+        update_result = sessions_collection.update_one(
+            update_query,
+            update_data,
+            array_filters=[
+                {"q.question_id": question_id},
+                {"note.suggestion_data.suggestion_id": suggestion_id}
+            ]
+        )
+        
+        if update_result.matched_count == 0:
+            return jsonify({"error": "Failed to update suggestion"}), 404
+        
+        # Broadcast the decision to participants
+        emit('field_suggestion_handled', {
+            'question_id': question_id,
+            'suggestion_id': suggestion_id,
+            'action': action,
+            'field': suggestion['field'],
+            'new_value': suggestion['suggested_value'] if action == "accept" else None,
+            'handled_by': user["username"]
+        }, room=session_id, namespace='/')
+        
+        return jsonify({
+            "message": f"Suggestion {action}ed successfully",
+            "suggestion_id": suggestion_id,
+            "action": action
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error handling field suggestion: {str(e)}")
+        return jsonify({"error": "Failed to handle field suggestion"}), 500
+
+
 # Finalize question (move from queue to ready questions)
 @sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/finalize', methods=['POST'])
 @token_required
