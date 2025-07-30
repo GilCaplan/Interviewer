@@ -152,43 +152,44 @@ def create_template(user):
         if isinstance(data, dict) and len(str(data)) > 100000:
             return jsonify({"error": "Request payload too large"}), 413
         
-        # Sanitize input fields
-        def safe_str(value, default, max_len=None):
-            if not isinstance(value, str):
-                value = str(value) if value is not None else default
-            # Basic sanitization
+        # Helper to clean up user input
+        def clean_input(value, fallback, max_len=None):
+            if not value or not isinstance(value, str):
+                return fallback
             import html
-            value = html.escape(value.strip())
-            # Use default if value is empty after sanitization
-            if not value:
-                value = default
-            if max_len and len(value) > max_len:
-                value = value[:max_len]
-            return value
+            cleaned = html.escape(value.strip())
+            if not cleaned:
+                return fallback
+            return cleaned[:max_len] if max_len and len(cleaned) > max_len else cleaned
+        
+        # Build template with clean data
+        subject = data.get('subject', 'general')
+        difficulty = data.get('difficulty', 'medium')
+        tags = data.get('tags', []) if isinstance(data.get('tags'), list) else []
         
         template_data = {
             "template_id": str(uuid.uuid4()),
-            "template_name": safe_str(data.get('template_name') or 'Untitled Template', 'Untitled Template', 100),
-            "description": safe_str(data.get('description', ''), '', 1000),
-            "subject": data.get('subject', 'general') if data.get('subject') in SUBJECTS else 'general',
-            "sub_subject": safe_str(data.get('sub_subject', ''), '', 50),
-            "difficulty": data.get('difficulty', 'medium') if data.get('difficulty') in DIFFICULTY_LEVELS else 'medium',
+            "template_name": clean_input(data.get('template_name'), 'Untitled Template', 100),
+            "description": clean_input(data.get('description'), '', 1000),
+            "subject": subject if subject in SUBJECTS else 'general',
+            "sub_subject": clean_input(data.get('sub_subject'), '', 50),
+            "difficulty": difficulty if difficulty in DIFFICULTY_LEVELS else 'medium',
             "created_by": user["username"],
             "created_by_id": user["user_id"],
             "is_public": bool(data.get('is_public', False)),
-            "tags": [safe_str(tag, '', 50) for tag in (data.get('tags', []) if isinstance(data.get('tags', []), list) else [])][:10],  # Max 10 tags
+            "tags": [clean_input(tag, '', 50) for tag in tags][:10],
             "metadata": {
                 "created_at": datetime.datetime.utcnow(),
                 "updated_at": datetime.datetime.utcnow(),
                 "version": 1,
                 "question_count": 0,
-                "estimated_time": 0  # in minutes
+                "estimated_time": 0
             },
             "settings": {
                 "max_questions": data.get('max_questions', 20),
                 "allow_shuffle": data.get('allow_shuffle', True),
                 "show_hints": data.get('show_hints', True),
-                "time_limit": data.get('time_limit', 60)  # minutes
+                "time_limit": data.get('time_limit', 60)
             },
             "questions": []
         }

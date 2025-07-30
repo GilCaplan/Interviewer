@@ -16,59 +16,44 @@ users_collection = db.users
 sessions_collection = db.sessions
 
 
-# Helper function to get the current user from JWT token
+# Get the current user from JWT token
 def get_current_user(request):
     token = None
 
-    # Get token from header
-    if 'Authorization' in request.headers:
-        auth_header = request.headers['Authorization']
-        if auth_header and auth_header.startswith('Bearer '):
-            try:
-                token = auth_header.split(' ')[1]
-            except IndexError:
-                return None
-
-    # Get token from cookies
-    if not token and 'session_token' in request.cookies:
-        token = request.cookies['session_token']
-
+    # Try header first, then cookies
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        try:
+            token = auth_header.split(' ')[1]
+        except IndexError:
+            pass
+    
     if not token:
-        return None
+        token = request.cookies.get('session_token')
 
-    # Validate token format
-    if not isinstance(token, str) or len(token) < 10:
+    if not token or not isinstance(token, str) or len(token) < 10:
         return None
 
     try:
-        # Verify the token
-        payload = jwt.decode(
-            token,
-            current_app.config.get('SECRET_KEY'),
-            algorithms=['HS256']
-        )
-
-        # Validate required fields
-        if not payload.get('username') or not payload.get('session_id'):
+        # Decode and validate token
+        payload = jwt.decode(token, current_app.config.get('SECRET_KEY'), algorithms=['HS256'])
+        
+        username = payload.get('username')
+        session_id = payload.get('session_id')
+        if not username or not session_id:
             return None
 
-        # Check if session exists and is valid
-        session = sessions_collection.find_one({'session_id': payload['session_id']})
-
+        # Check if session is still valid
+        session = sessions_collection.find_one({'session_id': session_id})
         if not session or session.get('is_revoked', False):
             return None
 
-        # Check if session is expired
+        # Check expiration
         if session.get('expires_at') and session['expires_at'] < datetime.datetime.utcnow():
             return None
 
-        user = users_collection.find_one({'username': payload['username']})
-        return user
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
-        return None
-    except Exception:
+        return users_collection.find_one({'username': username})
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, Exception):
         return None
 
 
@@ -86,31 +71,23 @@ def token_required(f):
     return decorated
 
 
-# Token verification function (for testing)
+# Verify JWT token (for testing)
 def verify_token(token):
     """Verify a JWT token and return payload or None"""
     if not token or not isinstance(token, str) or len(token) < 10:
         return None
     
     try:
-        payload = jwt.decode(
-            token,
-            current_app.config.get('SECRET_KEY', 'default_secret'),
-            algorithms=['HS256']
-        )
+        payload = jwt.decode(token, current_app.config.get('SECRET_KEY', 'default_secret'), algorithms=['HS256'])
         
-        # Check expiration
+        # Check if expired
         if 'exp' in payload:
             exp_time = datetime.datetime.fromtimestamp(payload['exp'])
             if exp_time < datetime.datetime.utcnow():
                 return None
         
         return payload
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
-        return None
-    except Exception:
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, Exception):
         return None
 
 
@@ -118,19 +95,11 @@ def verify_token(token):
 @auth.route('/api/auth/login', methods=['POST'])
 def login():
     try:
-        # Enhanced input validation
+        # Basic validation
         if not request.is_json:
             return jsonify({'message': 'Content-Type must be application/json'}), 400
             
         data = request.get_json()
-        if data is None:
-            return jsonify({'message': 'Invalid JSON payload'}), 400
-            
-        # Check for oversized payload
-        if isinstance(data, dict) and len(str(data)) > 10000:
-            return jsonify({'message': 'Request payload too large'}), 413
-            
-        # Validate username presence and type
         if not data or not data.get('username'):
             return jsonify({'message': 'Username is required'}), 400
             
@@ -138,11 +107,11 @@ def login():
         if not isinstance(username, str):
             return jsonify({'message': 'Username must be a string'}), 400
             
-        # Check for suspicious patterns in username
+        # Clean username
         import html
         username = html.escape(username.strip())
         
-        # Additional security: check for null bytes and control characters
+        # Check for bad characters
         if '\x00' in username or any(ord(c) < 32 and c not in '\t\n\r' for c in username):
             return jsonify({'message': 'Invalid characters in username'}), 400
             
@@ -160,9 +129,7 @@ def login():
     try:
         # Find or create user
         user = users_collection.find_one({'username': username})
-
         if not user:
-            # Create a new user
             user = {
                 'username': username,
                 'created_at': datetime.datetime.utcnow(),
@@ -171,7 +138,7 @@ def login():
             }
             users_collection.insert_one(user)
 
-        # Create a new session
+        # Create session
         session_id = str(uuid.uuid4())
         session = {
             'session_id': session_id,
@@ -182,33 +149,24 @@ def login():
         }
         sessions_collection.insert_one(session)
 
-        # Generate a JWT token
-        token = jwt.encode(
-            {
-                'username': username,
-                'session_id': session_id,
-                'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
-            },
-            current_app.config.get('SECRET_KEY'),
-            algorithm='HS256'
-        )
+        # Generate JWT token
+        token = jwt.encode({
+            'username': username,
+            'session_id': session_id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
+        }, current_app.config.get('SECRET_KEY'), algorithm='HS256')
 
-        # Create response
+        # Return response with secure cookie
         response = jsonify({
             'message': 'Login successful',
             'username': username,
-            'token': token
+            'token': token,
+            'user': {'username': username, 'user_id': user['user_id']}
         })
 
-        # Set secure cookie
-        response.set_cookie(
-            'session_token',
-            token,
-            httponly=True,
-            secure=not current_app.config.get('DEBUG', False),  # Secure in production
-            samesite='Lax',
-            max_age=60 * 60 * 24 * 7  # 7 days
-        )
+        response.set_cookie('session_token', token, httponly=True,
+                          secure=not current_app.config.get('DEBUG', False),
+                          samesite='Lax', max_age=60 * 60 * 24 * 7)
 
         return response, 200
 

@@ -117,82 +117,47 @@ def clean_session_for_response(session):
     return session
 
 
-def sanitize_text_input(text):
-    """Enhanced sanitize text input to prevent XSS, injection, and other attacks"""
-    if not isinstance(text, str):
-        text = str(text) if text is not None else ""
+def clean_user_input(text):
+    """Clean and secure user text input"""
+    if not text or not isinstance(text, str):
+        return ""
     
-    # Check for null bytes and other control characters
-    if '\x00' in text or any(ord(c) < 32 and c not in '\t\n\r' for c in text):
-        # Remove or replace dangerous control characters
-        text = ''.join(c for c in text if ord(c) >= 32 or c in '\t\n\r')
+    # Remove control chars (except basic whitespace)
+    text = ''.join(c for c in text if ord(c) >= 32 or c in '\t\n\r')
     
-    # Check for extremely long input (potential DoS)
-    if len(text) > 50000:
-        text = text[:50000]
+    # Prevent DoS with length limit
+    text = text[:10000] if len(text) > 10000 else text
     
-    # Remove SQL injection patterns
-    sql_patterns = [
-        r';\s*drop\s+table',
-        r';\s*delete\s+from',
-        r'union\s+select',
-        r';\s*exec\s*\(',
-        r'xp_cmdshell',
-        r'sp_executesql'
-    ]
-    
-    for pattern in sql_patterns:
-        text = re.sub(pattern, '', text, flags=re.IGNORECASE)
-    
-    # First encode HTML entities to prevent XSS
+    # Basic XSS protection
     text = html.escape(text, quote=True)
     
-    # Remove potentially dangerous script patterns
-    dangerous_patterns = [
-        r'<script[^>]*>.*?</script>',
-        r'<iframe[^>]*>.*?</iframe>',
-        r'<object[^>]*>.*?</object>',
-        r'<embed[^>]*>.*?</embed>',
-        r'javascript:',
-        r'vbscript:',
-        r'data:text/html',
-        r'on\w+\s*=',  # onclick, onerror, etc.
-        r'@import',
-        r'expression\s*\(',
-        r'url\s*\(',
+    # Remove common attack patterns
+    bad_patterns = [
+        r'<script.*?</script>', r'javascript:', r'vbscript:', 
+        r'on\w+\s*=', r'<iframe', r'<object', r'<embed',
+        r';\s*(drop|delete|exec)', r'union\s+select'
     ]
     
-    for pattern in dangerous_patterns:
+    for pattern in bad_patterns:
         text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
     
-    # Remove path traversal attempts
+    # Clean up path traversal and remaining tags
     text = re.sub(r'\.\.[\\/]', '', text)
-    text = re.sub(r'%2e%2e[\\/]', '', text, flags=re.IGNORECASE)
-    
-    # Remove any remaining HTML tags
     text = re.sub(r'<[^>]*>', '', text)
-    
-    # Limit final length
-    if len(text) > 10000:
-        text = text[:10000]
     
     return text.strip()
 
 
-def validate_session_code(session_code):
-    """Validate session code format"""
-    if not session_code or not isinstance(session_code, str):
-        return False
-    
-    # Must be 6 characters, alphanumeric only
-    return bool(re.match(r'^[A-Z0-9]{6}$', session_code.upper()))
+def is_valid_session_code(session_code):
+    """Check if session code is valid format"""
+    return (session_code and isinstance(session_code, str) and 
+            re.match(r'^[A-Z0-9]{6}$', session_code.upper()))
 
 
-def validate_question_id(question_id):
-    """Validate question ID format (UUID)"""
+def is_valid_uuid(question_id):
+    """Check if string is a valid UUID"""
     if not question_id or not isinstance(question_id, str):
         return False
-    
     try:
         uuid.UUID(question_id)
         return True
@@ -229,7 +194,7 @@ def validate_session_data(data):
         raise ValueError("Title too long")
     
     if title:
-        clean_data['title'] = sanitize_text_input(title)[:100]  # Max 100 chars
+        clean_data['title'] = clean_user_input(title)[:100]  # Max 100 chars
     else:
         clean_data['title'] = 'Untitled Session'
     
@@ -250,45 +215,36 @@ def validate_session_data(data):
     if len(description) > 5000:  # Reject extremely long descriptions
         raise ValueError("Description too long")
         
-    clean_data['description'] = sanitize_text_input(description)[:500]  # Max 500 chars
+    clean_data['description'] = clean_user_input(description)[:500]  # Max 500 chars
     
     # Settings validation with type safety
     settings = data.get('settings', {})
     if not isinstance(settings, dict):
         settings = {}
     
-    # Safe integer conversion with bounds checking
-    def safe_int(value, default, min_val, max_val):
+    # Helper functions for data conversion
+    def get_int(value, default, min_val, max_val):
         try:
-            if isinstance(value, (int, float)):
-                result = int(value)
-            elif isinstance(value, str) and value.isdigit():
-                result = int(value)
-            else:
-                result = default
-            return max(min_val, min(result, max_val))
-        except (ValueError, TypeError, OverflowError):
+            num = int(value) if isinstance(value, (int, float, str)) and str(value).isdigit() else default
+            return max(min_val, min(num, max_val))
+        except:
             return default
     
-    clean_data['max_participants'] = safe_int(settings.get('max_participants', 10), 10, 1, 50)
-    clean_data['max_questions'] = safe_int(settings.get('max_questions', 20), 20, 1, 100)
-    
-    # Safe boolean conversion
-    def safe_bool(value, default):
+    def get_bool(value, default):
         if isinstance(value, bool):
             return value
-        elif isinstance(value, str):
+        if isinstance(value, str):
             return value.lower() in ('true', '1', 'yes', 'on')
-        elif isinstance(value, (int, float)):
-            return bool(value)
-        else:
-            return default
+        return bool(value) if isinstance(value, (int, float)) else default
     
-    clean_data['allow_llm'] = safe_bool(settings.get('allow_llm', True), True)
-    clean_data['allow_user_questions'] = safe_bool(settings.get('allow_user_questions', True), True)
-    clean_data['auto_approve_questions'] = safe_bool(settings.get('auto_approve_questions', False), False)
-    clean_data['question_numbering'] = safe_bool(settings.get('question_numbering', True), True)
-    clean_data['template_mode'] = safe_bool(data.get('template_mode', False), False)
+    # Set limits and features
+    clean_data['max_participants'] = get_int(settings.get('max_participants', 10), 10, 1, 50)
+    clean_data['max_questions'] = get_int(settings.get('max_questions', 20), 20, 1, 100)
+    clean_data['allow_llm'] = get_bool(settings.get('allow_llm', True), True)
+    clean_data['allow_user_questions'] = get_bool(settings.get('allow_user_questions', True), True)
+    clean_data['auto_approve_questions'] = get_bool(settings.get('auto_approve_questions', False), False)
+    clean_data['question_numbering'] = get_bool(settings.get('question_numbering', True), True)
+    clean_data['template_mode'] = get_bool(data.get('template_mode', False), False)
     
     # Password validation (optional)
     password = data.get('password', '')
@@ -333,7 +289,7 @@ def validate_question_content(field_name, field_value, question_type):
     if field_name in ['question_text', 'explanation', 'sample_answer', 'starter_code', 'solution']:
         # Text fields
         if isinstance(field_value, str):
-            sanitized_value = sanitize_text_input(field_value)
+            sanitized_value = clean_user_input(field_value)
             if len(sanitized_value) > 5000:  # Max 5000 chars for text fields
                 return None, "Text content too long (max 5000 characters)"
             return sanitized_value, None
@@ -346,7 +302,7 @@ def validate_question_content(field_name, field_value, question_type):
             sanitized_array = []
             for item in field_value[:20]:  # Max 20 items
                 if isinstance(item, str):
-                    sanitized_item = sanitize_text_input(item)
+                    sanitized_item = clean_user_input(item)
                     if sanitized_item and len(sanitized_item) <= 200:  # Max 200 chars per item
                         sanitized_array.append(sanitized_item)
             return sanitized_array, None
@@ -358,9 +314,9 @@ def validate_question_content(field_name, field_value, question_type):
         if question_type == 'true_false':
             return bool(field_value), None
         elif question_type == 'multiple_choice' and isinstance(field_value, str):
-            return sanitize_text_input(field_value)[:200], None
+            return clean_user_input(field_value)[:200], None
         else:
-            return sanitize_text_input(str(field_value))[:200], None
+            return clean_user_input(str(field_value))[:200], None
     
     elif field_name in ['max_words', 'time_limit']:
         # Numeric fields
@@ -378,7 +334,7 @@ def validate_question_content(field_name, field_value, question_type):
     
     else:
         # Default string sanitization
-        return sanitize_text_input(str(field_value))[:1000], None
+        return clean_user_input(str(field_value))[:1000], None
 
 
 def mock_llm_generate_question(subject="general", context="", question_type="open_ended", question_number=1):
@@ -446,37 +402,28 @@ def mock_llm_generate_question(subject="general", context="", question_type="ope
 @token_required
 def create_session(user):
     try:
-        # Enhanced input validation and error handling
+        # Basic validation
         if not request.is_json:
             return jsonify({"error": "Content-Type must be application/json"}), 400
             
         data = request.get_json()
-        if data is None:
+        if not data:
             return jsonify({"error": "Invalid JSON payload"}), 400
             
-        # Check for potential attacks in JSON structure
-        if isinstance(data, str) and len(data) > 100000:
-            return jsonify({"error": "Request payload too large"}), 413
-            
-        # Validate and sanitize input data
+        # Clean and validate the input
         try:
             clean_data = validate_session_data(data)
-        except (ValueError, TypeError, AttributeError) as e:
-            current_app.logger.warning(f"Invalid session data from {user.get('username', 'unknown')}: {str(e)}")
-            return jsonify({"error": "Invalid session data format"}), 400
-        except Exception as e:
-            current_app.logger.error(f"Session validation error: {str(e)}")
-            return jsonify({"error": "Session validation failed"}), 400
+        except (ValueError, TypeError) as e:
+            current_app.logger.warning(f"Bad session data from {user.get('username', 'unknown')}: {str(e)}")
+            return jsonify({"error": "Invalid session data"}), 400
 
         # Generate unique session code
         session_code = generate_session_code()
         while sessions_collection.find_one({"session_code": session_code}):
             session_code = generate_session_code()
 
-        # Hash password if provided
-        password_hash = None
-        if clean_data['password']:
-            password_hash = hash_session_password(clean_data['password'])
+        # Handle password protection
+        password_hash = hash_session_password(clean_data['password']) if clean_data['password'] else None
 
         session_data = {
             "session_id": str(uuid.uuid4()),
@@ -508,14 +455,12 @@ def create_session(user):
             "is_password_protected": password_hash is not None
         }
 
-        result = sessions_collection.insert_one(session_data)
+        sessions_collection.insert_one(session_data)
 
-        # Clean session data for response (remove password hash)
-        clean_session_data = clean_session_for_response(session_data)
-
+        # Return clean session data (no password hash)
         return jsonify({
             "message": "Session created successfully",
-            "session": clean_session_data
+            "session": clean_session_for_response(session_data)
         }), 201
 
     except Exception as e:
@@ -955,7 +900,7 @@ def start_question_building(user, session_id, question_number):
 def update_question_content(user, session_id, question_id):
     try:
         # Validate inputs
-        if not validate_question_id(question_id):
+        if not is_valid_uuid(question_id):
             return jsonify({"error": "Invalid question ID format"}), 400
         
         session = sessions_collection.find_one({"session_id": session_id})
@@ -1175,7 +1120,7 @@ def add_collaboration_note(user, session_id, question_id):
 def finalize_question(user, session_id, question_id):
     try:
         # Validate inputs
-        if not validate_question_id(question_id):
+        if not is_valid_uuid(question_id):
             return jsonify({"error": "Invalid question ID format"}), 400
             
         session = sessions_collection.find_one({"session_id": session_id})
