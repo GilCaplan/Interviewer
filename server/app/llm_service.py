@@ -255,6 +255,13 @@ class LLMService:
             ]
         }
         
+        # Override subject from context if specific subjects are mentioned
+        context_lower = context.lower()
+        for subject_key in subject_questions.keys():
+            if subject_key in context_lower:
+                subject = subject_key
+                break
+        
         questions = subject_questions.get(subject.lower(), subject_questions["python"])
         base_question = random.choice(questions)
         
@@ -382,3 +389,25 @@ class LLMService:
                 "timestamp": datetime.utcnow().isoformat(),
                 "api_error": str(e)
             }
+    
+    @staticmethod
+    def generate_mock_response(subject="general", question_type="open_ended", context=""):
+        """Generate a mock response for testing purposes"""
+        return LLMService._mock_generate_question(subject, context, question_type, 1)["question_text"]
+    
+    @staticmethod
+    def generate_field_suggestion(field="question_text", question_type="open_ended", context=""):
+        """Generate field-specific suggestions for testing"""
+        suggestions = {
+            "question_text": "What is the main concept you want candidates to understand?",
+            "options": "Consider providing diverse and plausible options",
+            "hints": "Think about what clues would help without giving away the answer",
+            "explanation": "Explain why this answer is correct and others are not"
+        }
+        
+        base_suggestion = suggestions.get(field, "Consider the context and requirements")
+        
+        if context:
+            return f"For {question_type} questions: {base_suggestion}. Context: {context}"
+        else:
+            return f"For {question_type} questions: {base_suggestion}"

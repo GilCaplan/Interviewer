@@ -7,6 +7,8 @@ import secrets
 import string
 import uuid
 import random
+import re
+import html
 from .auth import token_required
 from .config import Config
 from .templates import QUESTION_TYPES, validate_question_data
@@ -58,6 +60,249 @@ MOCK_LLM_RESPONSES = {
 def generate_session_code():
     """Generate a 6-character session code"""
     return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+
+
+def sanitize_text_input(text):
+    """Enhanced sanitize text input to prevent XSS, injection, and other attacks"""
+    if not isinstance(text, str):
+        text = str(text) if text is not None else ""
+    
+    # Check for null bytes and other control characters
+    if '\x00' in text or any(ord(c) < 32 and c not in '\t\n\r' for c in text):
+        # Remove or replace dangerous control characters
+        text = ''.join(c for c in text if ord(c) >= 32 or c in '\t\n\r')
+    
+    # Check for extremely long input (potential DoS)
+    if len(text) > 50000:
+        text = text[:50000]
+    
+    # Remove SQL injection patterns
+    sql_patterns = [
+        r';\s*drop\s+table',
+        r';\s*delete\s+from',
+        r'union\s+select',
+        r';\s*exec\s*\(',
+        r'xp_cmdshell',
+        r'sp_executesql'
+    ]
+    
+    for pattern in sql_patterns:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE)
+    
+    # First encode HTML entities to prevent XSS
+    text = html.escape(text, quote=True)
+    
+    # Remove potentially dangerous script patterns
+    dangerous_patterns = [
+        r'<script[^>]*>.*?</script>',
+        r'<iframe[^>]*>.*?</iframe>',
+        r'<object[^>]*>.*?</object>',
+        r'<embed[^>]*>.*?</embed>',
+        r'javascript:',
+        r'vbscript:',
+        r'data:text/html',
+        r'on\w+\s*=',  # onclick, onerror, etc.
+        r'@import',
+        r'expression\s*\(',
+        r'url\s*\(',
+    ]
+    
+    for pattern in dangerous_patterns:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
+    
+    # Remove path traversal attempts
+    text = re.sub(r'\.\.[\\/]', '', text)
+    text = re.sub(r'%2e%2e[\\/]', '', text, flags=re.IGNORECASE)
+    
+    # Remove any remaining HTML tags
+    text = re.sub(r'<[^>]*>', '', text)
+    
+    # Limit final length
+    if len(text) > 10000:
+        text = text[:10000]
+    
+    return text.strip()
+
+
+def validate_session_code(session_code):
+    """Validate session code format"""
+    if not session_code or not isinstance(session_code, str):
+        return False
+    
+    # Must be 6 characters, alphanumeric only
+    return bool(re.match(r'^[A-Z0-9]{6}$', session_code.upper()))
+
+
+def validate_question_id(question_id):
+    """Validate question ID format (UUID)"""
+    if not question_id or not isinstance(question_id, str):
+        return False
+    
+    try:
+        uuid.UUID(question_id)
+        return True
+    except ValueError:
+        return False
+
+
+def validate_session_data(data):
+    """Validate and sanitize session creation data with enhanced security"""
+    if not isinstance(data, dict):
+        raise ValueError("Session data must be a dictionary")
+    
+    # Check for suspicious patterns
+    data_str = str(data).lower()
+    suspicious_patterns = [
+        'drop table', 'delete from', 'union select', 'exec ', 'xp_cmdshell',
+        'script>', '<img', 'javascript:', 'onerror=', 'onload=',
+        '../', '..\\', '%2e%2e', 'etc/passwd', 'system32'
+    ]
+    
+    for pattern in suspicious_patterns:
+        if pattern in data_str:
+            raise ValueError(f"Suspicious content detected: {pattern}")
+    
+    clean_data = {}
+    
+    # Title validation with enhanced security
+    title = data.get('title', '')
+    if not isinstance(title, str):
+        title = str(title) if title is not None else ''
+    title = title.strip()
+    
+    if len(title) > 1000:  # Reject extremely long titles
+        raise ValueError("Title too long")
+    
+    if title:
+        clean_data['title'] = sanitize_text_input(title)[:100]  # Max 100 chars
+    else:
+        clean_data['title'] = 'Untitled Session'
+    
+    # Subject validation with whitelist
+    valid_subjects = ['general', 'python', 'javascript', 'algorithms', 'system_design', 'java', 'react', 'databases']
+    subject = data.get('subject', 'general')
+    if not isinstance(subject, str):
+        subject = 'general'
+    subject = subject.lower().strip()
+    clean_data['subject'] = subject if subject in valid_subjects else 'general'
+    
+    # Description validation with enhanced sanitization
+    description = data.get('description', '')
+    if not isinstance(description, str):
+        description = str(description) if description is not None else ''
+    description = description.strip()
+    
+    if len(description) > 5000:  # Reject extremely long descriptions
+        raise ValueError("Description too long")
+        
+    clean_data['description'] = sanitize_text_input(description)[:500]  # Max 500 chars
+    
+    # Settings validation with type safety
+    settings = data.get('settings', {})
+    if not isinstance(settings, dict):
+        settings = {}
+    
+    # Safe integer conversion with bounds checking
+    def safe_int(value, default, min_val, max_val):
+        try:
+            if isinstance(value, (int, float)):
+                result = int(value)
+            elif isinstance(value, str) and value.isdigit():
+                result = int(value)
+            else:
+                result = default
+            return max(min_val, min(result, max_val))
+        except (ValueError, TypeError, OverflowError):
+            return default
+    
+    clean_data['max_participants'] = safe_int(settings.get('max_participants', 10), 10, 1, 50)
+    clean_data['max_questions'] = safe_int(settings.get('max_questions', 20), 20, 1, 100)
+    
+    # Safe boolean conversion
+    def safe_bool(value, default):
+        if isinstance(value, bool):
+            return value
+        elif isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        elif isinstance(value, (int, float)):
+            return bool(value)
+        else:
+            return default
+    
+    clean_data['allow_llm'] = safe_bool(settings.get('allow_llm', True), True)
+    clean_data['allow_user_questions'] = safe_bool(settings.get('allow_user_questions', True), True)
+    clean_data['auto_approve_questions'] = safe_bool(settings.get('auto_approve_questions', False), False)
+    clean_data['question_numbering'] = safe_bool(settings.get('question_numbering', True), True)
+    clean_data['template_mode'] = safe_bool(data.get('template_mode', False), False)
+    
+    return clean_data
+
+
+def validate_question_content(field_name, field_value, question_type):
+    """Validate and sanitize question content"""
+    if not isinstance(field_name, str) or not field_name.strip():
+        return None, "Invalid field name"
+    
+    # Get allowed fields for this question type
+    if question_type not in QUESTION_TYPES:
+        return None, f"Invalid question type: {question_type}"
+    
+    type_config = QUESTION_TYPES[question_type]
+    allowed_fields = type_config['required_fields'] + type_config['optional_fields']
+    
+    if field_name not in allowed_fields:
+        return None, f"Field '{field_name}' not allowed for question type '{question_type}'"
+    
+    # Sanitize based on field type
+    if field_name in ['question_text', 'explanation', 'sample_answer', 'starter_code', 'solution']:
+        # Text fields
+        if isinstance(field_value, str):
+            sanitized_value = sanitize_text_input(field_value)
+            if len(sanitized_value) > 5000:  # Max 5000 chars for text fields
+                return None, "Text content too long (max 5000 characters)"
+            return sanitized_value, None
+        else:
+            return "", None
+    
+    elif field_name in ['options', 'expected_keywords', 'grading_criteria']:
+        # Array fields
+        if isinstance(field_value, list):
+            sanitized_array = []
+            for item in field_value[:20]:  # Max 20 items
+                if isinstance(item, str):
+                    sanitized_item = sanitize_text_input(item)
+                    if sanitized_item and len(sanitized_item) <= 200:  # Max 200 chars per item
+                        sanitized_array.append(sanitized_item)
+            return sanitized_array, None
+        else:
+            return [], None
+    
+    elif field_name == 'correct_answer':
+        # Special handling for correct_answer based on question type
+        if question_type == 'true_false':
+            return bool(field_value), None
+        elif question_type == 'multiple_choice' and isinstance(field_value, str):
+            return sanitize_text_input(field_value)[:200], None
+        else:
+            return sanitize_text_input(str(field_value))[:200], None
+    
+    elif field_name in ['max_words', 'time_limit']:
+        # Numeric fields
+        try:
+            num_value = int(field_value)
+            return max(1, min(num_value, 10000)), None  # Between 1 and 10000
+        except (ValueError, TypeError):
+            return 1, None
+    
+    elif field_name == 'language':
+        # Programming language field
+        valid_languages = ['python', 'javascript', 'java', 'cpp', 'c', 'go', 'rust']
+        lang = str(field_value).lower().strip()
+        return lang if lang in valid_languages else 'python', None
+    
+    else:
+        # Default string sanitization
+        return sanitize_text_input(str(field_value))[:1000], None
 
 
 def mock_llm_generate_question(subject="general", context="", question_type="open_ended", question_number=1):
@@ -125,7 +370,27 @@ def mock_llm_generate_question(subject="general", context="", question_type="ope
 @token_required
 def create_session(user):
     try:
-        data = request.get_json() or {}
+        # Enhanced input validation and error handling
+        if not request.is_json:
+            return jsonify({"error": "Content-Type must be application/json"}), 400
+            
+        data = request.get_json()
+        if data is None:
+            return jsonify({"error": "Invalid JSON payload"}), 400
+            
+        # Check for potential attacks in JSON structure
+        if isinstance(data, str) and len(data) > 100000:
+            return jsonify({"error": "Request payload too large"}), 413
+            
+        # Validate and sanitize input data
+        try:
+            clean_data = validate_session_data(data)
+        except (ValueError, TypeError, AttributeError) as e:
+            current_app.logger.warning(f"Invalid session data from {user.get('username', 'unknown')}: {str(e)}")
+            return jsonify({"error": "Invalid session data format"}), 400
+        except Exception as e:
+            current_app.logger.error(f"Session validation error: {str(e)}")
+            return jsonify({"error": "Session validation failed"}), 400
 
         # Generate unique session code
         session_code = generate_session_code()
@@ -135,28 +400,28 @@ def create_session(user):
         session_data = {
             "session_id": str(uuid.uuid4()),
             "session_code": session_code,
-            "title": data.get('title', f"Question Session {session_code}"),
-            "subject": data.get('subject', 'general'),
-            "description": data.get('description', ''),
+            "title": clean_data['title'],
+            "subject": clean_data['subject'],
+            "description": clean_data['description'],
             "host_id": user["user_id"],
             "host_username": user["username"],
             "participants": [user["username"]],
             "created_at": datetime.datetime.utcnow(),
             "updated_at": datetime.datetime.utcnow(),
             "status": "active",
-            "template_mode": data.get('template_mode', False),  # NEW: Flag for template building
+            "template_mode": clean_data['template_mode'],
             "settings": {
-                "max_participants": data.get('max_participants', 10),
-                "max_questions": data.get('max_questions', 20),  # NEW: Question limit for template
-                "allow_llm": data.get('allow_llm', True),
-                "allow_user_questions": data.get('allow_user_questions', True),
-                "auto_approve_questions": data.get('auto_approve_questions', False),
-                "question_numbering": data.get('question_numbering', True)  # NEW: Sequential numbering
+                "max_participants": clean_data['max_participants'],
+                "max_questions": clean_data['max_questions'],
+                "allow_llm": clean_data['allow_llm'],
+                "allow_user_questions": clean_data['allow_user_questions'],
+                "auto_approve_questions": clean_data['auto_approve_questions'],
+                "question_numbering": clean_data['question_numbering']
             },
-            "template_data": {  # NEW: Template building data
+            "template_data": {
                 "current_question_number": 0,
-                "questions_queue": [],  # Questions being built
-                "ready_questions": []   # Finalized questions
+                "questions_queue": [],
+                "ready_questions": []
             }
         }
 
@@ -472,7 +737,8 @@ def approve_question(user, session_id, question_id):
         return jsonify({"error": "Failed to approve question"}), 500
 
 
-# List all active sessions
+# List all active sessions (both /api/sessions and /api/sessions/list for compatibility)
+@sessions_bp.route('/api/sessions', methods=['GET'])
 @sessions_bp.route('/api/sessions/list', methods=['GET'])
 @token_required
 def list_sessions(user):
@@ -586,6 +852,10 @@ def start_question_building(user, session_id, question_number):
 @token_required
 def update_question_content(user, session_id, question_id):
     try:
+        # Validate inputs
+        if not validate_question_id(question_id):
+            return jsonify({"error": "Invalid question ID format"}), 400
+        
         session = sessions_collection.find_one({"session_id": session_id})
         
         if not session:
@@ -611,43 +881,45 @@ def update_question_content(user, session_id, question_id):
                 break
         
         if question_index is None:
+            current_app.logger.error(f"Question {question_id} not found in queue. Available: {[q['question_id'] for q in questions_queue]}")
             return jsonify({"error": "Question not found in building queue"}), 404
         
         current_question = questions_queue[question_index]
         
-        # Validate field for question type
-        type_config = QUESTION_TYPES[current_question["type"]]
-        allowed_fields = type_config['required_fields'] + type_config['optional_fields']
+        # Validate and sanitize the field content
+        sanitized_value, error_msg = validate_question_content(field_name, field_value, current_question["type"])
         
-        if field_name not in allowed_fields:
-            return jsonify({"error": f"Field '{field_name}' not allowed for question type '{current_question['type']}'"}), 400
+        if error_msg:
+            return jsonify({"error": error_msg}), 400
         
-        # Update the field
+        # Update the field with sanitized value
         update_path = f"template_data.questions_queue.{question_index}.user_content.{field_name}"
         sessions_collection.update_one(
             {"session_id": session_id},
             {
                 "$set": {
-                    update_path: field_value,
+                    update_path: sanitized_value,
                     f"template_data.questions_queue.{question_index}.updated_at": datetime.datetime.utcnow(),
                     "updated_at": datetime.datetime.utcnow()
                 }
             }
         )
         
+        current_app.logger.info(f"Updated question {question_id} field '{field_name}' with value: {sanitized_value}")
+        
         # Broadcast update to all participants
         emit('question_content_updated', {
             'question_id': question_id,
             'question_number': current_question["question_number"],
             'field': field_name,
-            'value': field_value,
+            'value': sanitized_value,
             'updated_by': user["username"]
         }, room=session_id, namespace='/')
         
         return jsonify({
             "message": "Question content updated",
             "field": field_name,
-            "value": field_value
+            "value": sanitized_value
         }), 200
         
     except Exception as e:
@@ -800,6 +1072,10 @@ def add_collaboration_note(user, session_id, question_id):
 @token_required
 def finalize_question(user, session_id, question_id):
     try:
+        # Validate inputs
+        if not validate_question_id(question_id):
+            return jsonify({"error": "Invalid question ID format"}), 400
+            
         session = sessions_collection.find_one({"session_id": session_id})
         
         if not session:
@@ -809,40 +1085,59 @@ def finalize_question(user, session_id, question_id):
         if session["host_username"] != user["username"]:
             return jsonify({"error": "Only the host can finalize questions"}), 403
         
+        # Get fresh session data to ensure we have latest state
+        fresh_session = sessions_collection.find_one({"session_id": session_id})
+        if not fresh_session:
+            return jsonify({"error": "Session not found"}), 404
+            
         # Find and remove question from queue
-        questions_queue = session.get("template_data", {}).get("questions_queue", [])
-        ready_questions = session.get("template_data", {}).get("ready_questions", [])
+        questions_queue = fresh_session.get("template_data", {}).get("questions_queue", [])
+        ready_questions = fresh_session.get("template_data", {}).get("ready_questions", [])
         
         # Debug logging
         current_app.logger.info(f"Finalize attempt - Question ID: {question_id}")
-        current_app.logger.info(f"Questions in queue: {[q['question_id'] for q in questions_queue]}")
-        current_app.logger.info(f"Questions already ready: {[q['question_id'] for q in ready_questions]}")
+        current_app.logger.info(f"Questions in queue: {[q.get('question_id') for q in questions_queue]}")
+        current_app.logger.info(f"Questions already ready: {[q.get('question_id') for q in ready_questions]}")
         
         question_to_finalize = None
         updated_queue = []
         
         for q in questions_queue:
-            if q["question_id"] == question_id:
+            if q.get("question_id") == question_id:
                 question_to_finalize = q
-                current_app.logger.info(f"Found question to finalize: {q['question_number']}")
+                current_app.logger.info(f"Found question to finalize: Q{q.get('question_number')}")
             else:
                 updated_queue.append(q)
         
         if not question_to_finalize:
             # Check if it's already finalized
             for q in ready_questions:
-                if q["question_id"] == question_id:
+                if q.get("question_id") == question_id:
                     return jsonify({"error": "Question is already finalized"}), 400
             
-            return jsonify({"error": f"Question not found in building queue. Available questions: {[q['question_id'] for q in questions_queue]}"}), 404
+            current_app.logger.error(f"Question {question_id} not found. Available IDs: {[q.get('question_id') for q in questions_queue]}")
+            return jsonify({"error": f"Question not found in building queue. Available questions: {[q.get('question_id') for q in questions_queue]}"}), 404
         
-        # Validate question completeness
-        question_type = question_to_finalize["type"]
+        # Validate question completeness with basic checks
+        question_type = question_to_finalize.get("type")
         user_content = question_to_finalize.get("user_content", {})
         
-        is_valid, validation_message = validate_question_data(question_type, user_content)
-        if not is_valid:
-            return jsonify({"error": f"Question validation failed: {validation_message}"}), 400
+        # Basic validation - at least question_text should exist
+        if not user_content.get("question_text", "").strip():
+            return jsonify({"error": "Question text is required before finalizing"}), 400
+        
+        # Type-specific validation
+        if question_type == "multiple_choice":
+            options = user_content.get("options", [])
+            correct_answer = user_content.get("correct_answer", "")
+            if not options or len([opt for opt in options if opt.strip()]) < 2:
+                return jsonify({"error": "Multiple choice questions need at least 2 options"}), 400
+            if not correct_answer.strip():
+                return jsonify({"error": "Multiple choice questions need a correct answer"}), 400
+        elif question_type == "true_false":
+            correct_answer = user_content.get("correct_answer")
+            if correct_answer is None:
+                return jsonify({"error": "True/false questions need a correct answer"}), 400
         
         # Prepare finalized question
         finalized_question = {
@@ -854,11 +1149,18 @@ def finalize_question(user, session_id, question_id):
             "finalized_by": user["username"],
             "created_at": question_to_finalize["created_at"],
             "finalized_at": datetime.datetime.utcnow(),
-            **user_content  # Include all the question content
+            "user_content": user_content  # Preserve structure
         }
         
+        # Copy all user content fields to top level for easier access
+        for field, value in user_content.items():
+            if field not in finalized_question:
+                finalized_question[field] = value
+        
+        current_app.logger.info(f"Finalizing question {question_id} with content: {user_content}")
+        
         # Update session: remove from queue, add to ready questions
-        sessions_collection.update_one(
+        update_result = sessions_collection.update_one(
             {"session_id": session_id},
             {
                 "$set": {
@@ -868,6 +1170,12 @@ def finalize_question(user, session_id, question_id):
                 "$push": {"template_data.ready_questions": finalized_question}
             }
         )
+        
+        if update_result.modified_count == 0:
+            current_app.logger.error(f"Failed to update session during finalization")
+            return jsonify({"error": "Failed to update session"}), 500
+        
+        current_app.logger.info(f"Successfully finalized question {question_id}")
         
         # Broadcast to participants
         emit('question_finalized', {
@@ -1175,3 +1483,229 @@ def get_chat_history(user, session_id):
     except Exception as e:
         current_app.logger.error(f"Error getting chat history: {str(e)}")
         return jsonify({"error": "Failed to get chat history"}), 500
+
+
+# DELETE SESSION AND CLEANUP ENDPOINTS
+
+# Delete entire session (host only)
+@sessions_bp.route('/api/sessions/<session_id>', methods=['DELETE'])
+@token_required
+def delete_session(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can delete session
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can delete the session"}), 403
+        
+        # Delete session and all related data
+        sessions_collection.delete_one({"session_id": session_id})
+        
+        # Clean up related data
+        messages_collection.delete_many({"session_id": session_id})
+        questions_collection.delete_many({"session_id": session_id})
+        
+        current_app.logger.info(f"Session {session_id} deleted by host {user['username']}")
+        
+        return jsonify({"message": "Session deleted successfully"}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error deleting session: {str(e)}")
+        return jsonify({"error": "Failed to delete session"}), 500
+
+
+# Remove question from session (host only)
+@sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>', methods=['DELETE'])
+@token_required
+def remove_question_from_session(user, session_id, question_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can remove questions
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can remove questions"}), 403
+        
+        template_data = session.get("template_data", {})
+        questions_queue = template_data.get("questions_queue", [])
+        ready_questions = template_data.get("ready_questions", [])
+        
+        # Remove from queue
+        updated_queue = [q for q in questions_queue if q["question_id"] != question_id]
+        
+        # Remove from ready questions
+        updated_ready = [q for q in ready_questions if q["question_id"] != question_id]
+        
+        # Check if question was found and removed
+        if len(updated_queue) == len(questions_queue) and len(updated_ready) == len(ready_questions):
+            return jsonify({"error": "Question not found"}), 404
+        
+        # Update session
+        sessions_collection.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    "template_data.questions_queue": updated_queue,
+                    "template_data.ready_questions": updated_ready,
+                    "updated_at": datetime.datetime.utcnow()
+                }
+            }
+        )
+        
+        # Also remove from questions collection if it exists there
+        questions_collection.delete_one({"question_id": question_id})
+        
+        current_app.logger.info(f"Question {question_id} removed from session {session_id} by {user['username']}")
+        
+        # Broadcast removal to all participants
+        emit('question_removed', {
+            'question_id': question_id,
+            'removed_by': user["username"],
+            'session_id': session_id
+        }, room=session_id, namespace='/')
+        
+        return jsonify({"message": "Question removed successfully"}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error removing question: {str(e)}")
+        return jsonify({"error": "Failed to remove question"}), 500
+
+
+# Clear all questions from session (host only)
+@sessions_bp.route('/api/sessions/<session_id>/questions/clear', methods=['DELETE'])
+@token_required
+def clear_all_questions(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can clear questions
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can clear all questions"}), 403
+        
+        # Clear all questions from session template data
+        sessions_collection.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    "template_data.questions_queue": [],
+                    "template_data.ready_questions": [],
+                    "template_data.current_question_number": 0,
+                    "updated_at": datetime.datetime.utcnow()
+                }
+            }
+        )
+        
+        # Also clear from questions collection
+        questions_collection.delete_many({"session_id": session_id})
+        
+        current_app.logger.info(f"All questions cleared from session {session_id} by {user['username']}")
+        
+        # Broadcast clear to all participants
+        emit('all_questions_cleared', {
+            'cleared_by': user["username"],
+            'session_id': session_id
+        }, room=session_id, namespace='/')
+        
+        return jsonify({"message": "All questions cleared successfully"}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error clearing all questions: {str(e)}")
+        return jsonify({"error": "Failed to clear all questions"}), 500
+
+
+# Delete all user sessions (cleanup for fresh start)
+@sessions_bp.route('/api/sessions/cleanup-user', methods=['DELETE']) 
+@token_required
+def cleanup_user_sessions(user):
+    try:
+        # Get all sessions where user is host or participant
+        user_sessions = list(sessions_collection.find({
+            "$or": [
+                {"host_username": user["username"]},
+                {"participants": user["username"]}
+            ]
+        }))
+        
+        session_ids = [s["session_id"] for s in user_sessions]
+        
+        # Delete all user's sessions
+        sessions_collection.delete_many({
+            "$or": [
+                {"host_username": user["username"]},
+                {"participants": user["username"]}
+            ]
+        })
+        
+        # Clean up related data
+        if session_ids:
+            messages_collection.delete_many({"session_id": {"$in": session_ids}})
+            questions_collection.delete_many({"session_id": {"$in": session_ids}})
+        
+        current_app.logger.info(f"User {user['username']} cleaned up {len(user_sessions)} sessions")
+        
+        return jsonify({
+            "message": f"Cleaned up {len(user_sessions)} sessions",
+            "deleted_sessions": len(user_sessions)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error during user cleanup: {str(e)}")
+        return jsonify({"error": "Failed to cleanup user sessions"}), 500
+
+
+# Reset session to fresh state (clear all template data)
+@sessions_bp.route('/api/sessions/<session_id>/reset', methods=['POST'])
+@token_required
+def reset_session(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can reset session
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can reset the session"}), 403
+        
+        # Reset template data to fresh state
+        fresh_template_data = {
+            "current_question_number": 0,
+            "questions_queue": [],
+            "ready_questions": []
+        }
+        
+        sessions_collection.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    "template_data": fresh_template_data,
+                    "updated_at": datetime.datetime.utcnow()
+                }
+            }
+        )
+        
+        # Clear related data
+        messages_collection.delete_many({"session_id": session_id})
+        questions_collection.delete_many({"session_id": session_id})
+        
+        current_app.logger.info(f"Session {session_id} reset to fresh state by {user['username']}")
+        
+        # Broadcast reset to all participants
+        emit('session_reset', {
+            'reset_by': user["username"],
+            'session_id': session_id
+        }, room=session_id, namespace='/')
+        
+        return jsonify({"message": "Session reset to fresh state successfully"}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error resetting session: {str(e)}")
+        return jsonify({"error": "Failed to reset session"}), 500

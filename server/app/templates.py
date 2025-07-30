@@ -83,18 +83,29 @@ SUBJECTS = [
 ]
 
 
-def validate_question_data(question_type, question_data, is_update=False):
+def validate_question_data(question_data, is_update=False):
     """Validate question data against its type schema"""
-    if question_type not in QUESTION_TYPES:
-        return False, f"Invalid question type: {question_type}"
+    # Handle both old and new call signatures
+    if isinstance(question_data, str):
+        # Old signature: validate_question_data(question_type, question_data, is_update)
+        question_type = question_data
+        question_data = is_update if isinstance(is_update, dict) else {}
+        is_update = False
+    else:
+        # New signature: validate_question_data(question_data, is_update)
+        question_type = question_data.get('type')
+    
+    if not question_type or question_type not in QUESTION_TYPES:
+        return False, [f"Invalid question type: {question_type}"]
     
     type_config = QUESTION_TYPES[question_type]
+    errors = []
     
     # Check required fields (only for new questions, not updates)
     if not is_update:
         for field in type_config['required_fields']:
             if field not in question_data:
-                return False, f"Missing required field: {field}"
+                errors.append(f"Missing required field: {field}")
     
     # Validate specific field types for multiple choice
     if question_type == 'multiple_choice':
@@ -103,13 +114,25 @@ def validate_question_data(question_type, question_data, is_update=False):
         
         # Only validate if these fields are present
         if options is not None:
-            if len(options) < 2:
-                return False, "Multiple choice questions must have at least 2 options"
+            if not isinstance(options, list) or len(options) < 2:
+                errors.append("Multiple choice questions must have at least 2 options")
             
             if correct_answer is not None and correct_answer not in options:
-                return False, "Correct answer must be one of the provided options"
+                errors.append("Correct answer must be one of the provided options")
     
-    return True, "Valid"
+    # Validate coding questions
+    if question_type == 'coding':
+        language = question_data.get('language')
+        if language and not isinstance(language, str):
+            errors.append("Language must be a string")
+    
+    # Validate true/false questions
+    if question_type == 'true_false':
+        correct_answer = question_data.get('correct_answer')
+        if correct_answer is not None and not isinstance(correct_answer, bool):
+            errors.append("True/false correct answer must be a boolean")
+    
+    return len(errors) == 0, errors
 
 
 # Create a new template
@@ -117,19 +140,40 @@ def validate_question_data(question_type, question_data, is_update=False):
 @token_required
 def create_template(user):
     try:
-        data = request.get_json() or {}
+        # Enhanced input validation
+        if not request.is_json:
+            return jsonify({"error": "Content-Type must be application/json"}), 400
+            
+        data = request.get_json()
+        if data is None:
+            return jsonify({"error": "Invalid JSON payload"}), 400
+            
+        # Check for oversized payload
+        if isinstance(data, dict) and len(str(data)) > 100000:
+            return jsonify({"error": "Request payload too large"}), 413
+        
+        # Sanitize input fields
+        def safe_str(value, default, max_len=None):
+            if not isinstance(value, str):
+                value = str(value) if value is not None else default
+            # Basic sanitization
+            import html
+            value = html.escape(value.strip())
+            if max_len and len(value) > max_len:
+                value = value[:max_len]
+            return value
         
         template_data = {
             "template_id": str(uuid.uuid4()),
-            "template_name": data.get('template_name', 'Untitled Template'),
-            "description": data.get('description', ''),
-            "subject": data.get('subject', 'general'),
-            "sub_subject": data.get('sub_subject', ''),
-            "difficulty": data.get('difficulty', 'medium'),
+            "template_name": safe_str(data.get('template_name', 'Untitled Template'), 'Untitled Template', 100),
+            "description": safe_str(data.get('description', ''), '', 1000),
+            "subject": data.get('subject', 'general') if data.get('subject') in SUBJECTS else 'general',
+            "sub_subject": safe_str(data.get('sub_subject', ''), '', 50),
+            "difficulty": data.get('difficulty', 'medium') if data.get('difficulty') in DIFFICULTY_LEVELS else 'medium',
             "created_by": user["username"],
             "created_by_id": user["user_id"],
-            "is_public": data.get('is_public', False),
-            "tags": data.get('tags', []),
+            "is_public": bool(data.get('is_public', False)),
+            "tags": [safe_str(tag, '', 50) for tag in (data.get('tags', []) if isinstance(data.get('tags', []), list) else [])][:10],  # Max 10 tags
             "metadata": {
                 "created_at": datetime.datetime.utcnow(),
                 "updated_at": datetime.datetime.utcnow(),
@@ -152,6 +196,33 @@ def create_template(user):
         
         if template_data['subject'] not in SUBJECTS:
             return jsonify({"error": "Invalid subject"}), 400
+        
+        # Process initial questions if provided
+        initial_questions = data.get('questions', [])
+        if initial_questions:
+            validated_questions = []
+            for i, question_data in enumerate(initial_questions):
+                # Validate each question
+                is_valid, validation_errors = validate_question_data(question_data)
+                if is_valid:
+                    # Add question metadata
+                    question_data.update({
+                        "question_id": str(uuid.uuid4()),
+                        "question_number": i + 1,
+                        "points": question_data.get('points', 1),
+                        "created_at": datetime.datetime.utcnow(),
+                        "created_by": user["username"],
+                        "source": "user"
+                    })
+                    validated_questions.append(question_data)
+                else:
+                    # Log validation errors but continue with other questions
+                    print(f"DEBUG: Question {i+1} validation failed: {validation_errors}")
+                    print(f"DEBUG: Question data: {question_data}")
+                    current_app.logger.warning(f"Question {i+1} validation failed: {validation_errors}")
+            
+            template_data["questions"] = validated_questions
+            template_data["metadata"]["question_count"] = len(validated_questions)
         
         result = templates_collection.insert_one(template_data)
         template_data.pop('_id', None)

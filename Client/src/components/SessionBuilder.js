@@ -479,6 +479,75 @@ const SessionBuilder = () => {
     }
   };
 
+  const cleanupAllUserSessions = async () => {
+    if (!window.confirm('This will delete ALL your sessions permanently. Are you sure you want to proceed?')) {
+      return;
+    }
+
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      
+      // Get token with fallback
+      let authToken = localStorage.getItem('token');
+      if (!authToken && user?.sessionToken) {
+        authToken = user.sessionToken;
+      }
+      
+      const response = await fetch(`${apiUrl}/api/sessions/cleanup-user`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`Successfully cleaned up ${data.deleted_sessions} sessions. Redirecting to home...`);
+        navigate('/');
+      } else {
+        const errorData = await response.text();
+        alert('Failed to cleanup sessions: ' + errorData);
+      }
+    } catch (err) {
+      console.error('Error cleaning up sessions:', err);
+      alert('Failed to cleanup sessions: ' + err.message);
+    }
+  };
+
+  const deleteCurrentSession = async () => {
+    if (!window.confirm('This will permanently delete this session and all its data. Are you sure?')) {
+      return;
+    }
+
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      
+      // Get token with fallback
+      let authToken = localStorage.getItem('token');
+      if (!authToken && user?.sessionToken) {
+        authToken = user.sessionToken;
+      }
+      
+      const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+
+      if (response.ok) {
+        alert('Session deleted successfully. Redirecting to home...');
+        navigate('/');
+      } else {
+        const errorData = await response.text();
+        alert('Failed to delete session: ' + errorData);
+      }
+    } catch (err) {
+      console.error('Error deleting session:', err);
+      alert('Failed to delete session: ' + err.message);
+    }
+  };
+
   if (loading) {
     return <div className="session-loading">Loading session...</div>;
   }
@@ -532,6 +601,38 @@ const SessionBuilder = () => {
 
         <div className="session-actions">
           <button onClick={() => navigate('/')}>Leave Session</button>
+          {isHost && (
+            <>
+              <button 
+                onClick={deleteCurrentSession}
+                style={{ 
+                  backgroundColor: '#dc3545', 
+                  color: 'white',
+                  marginLeft: '10px',
+                  padding: '8px 12px',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                🗑️ Delete Session
+              </button>
+              <button 
+                onClick={cleanupAllUserSessions}
+                style={{ 
+                  backgroundColor: '#6c757d', 
+                  color: 'white',
+                  marginLeft: '5px',
+                  padding: '8px 12px',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                🧹 Cleanup All Sessions
+              </button>
+            </>
+          )}
         </div>
       </div>
 

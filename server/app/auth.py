@@ -23,14 +23,21 @@ def get_current_user(request):
     # Get token from header
     if 'Authorization' in request.headers:
         auth_header = request.headers['Authorization']
-        if auth_header.startswith('Bearer '):
-            token = auth_header.split(' ')[1]
+        if auth_header and auth_header.startswith('Bearer '):
+            try:
+                token = auth_header.split(' ')[1]
+            except IndexError:
+                return None
 
     # Get token from cookies
     if not token and 'session_token' in request.cookies:
         token = request.cookies['session_token']
 
     if not token:
+        return None
+
+    # Validate token format
+    if not isinstance(token, str) or len(token) < 10:
         return None
 
     try:
@@ -41,15 +48,27 @@ def get_current_user(request):
             algorithms=['HS256']
         )
 
+        # Validate required fields
+        if not payload.get('username') or not payload.get('session_id'):
+            return None
+
         # Check if session exists and is valid
         session = sessions_collection.find_one({'session_id': payload['session_id']})
 
         if not session or session.get('is_revoked', False):
             return None
 
+        # Check if session is expired
+        if session.get('expires_at') and session['expires_at'] < datetime.datetime.utcnow():
+            return None
+
         user = users_collection.find_one({'username': payload['username']})
         return user
-    except:
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+    except Exception:
         return None
 
 
@@ -67,15 +86,65 @@ def token_required(f):
     return decorated
 
 
+# Token verification function (for testing)
+def verify_token(token):
+    """Verify a JWT token and return payload or None"""
+    if not token or not isinstance(token, str) or len(token) < 10:
+        return None
+    
+    try:
+        payload = jwt.decode(
+            token,
+            current_app.config.get('SECRET_KEY', 'default_secret'),
+            algorithms=['HS256']
+        )
+        
+        # Check expiration
+        if 'exp' in payload:
+            exp_time = datetime.datetime.fromtimestamp(payload['exp'])
+            if exp_time < datetime.datetime.utcnow():
+                return None
+        
+        return payload
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+    except Exception:
+        return None
+
+
 # Login route
 @auth.route('/api/auth/login', methods=['POST'])
 def login():
-    data = request.get_json()
-
-    if not data or not data.get('username'):
-        return jsonify({'message': 'Username is required'}), 400
-
-    username = data.get('username').strip()
+    try:
+        # Enhanced input validation
+        if not request.is_json:
+            return jsonify({'message': 'Content-Type must be application/json'}), 400
+            
+        data = request.get_json()
+        if data is None:
+            return jsonify({'message': 'Invalid JSON payload'}), 400
+            
+        # Check for oversized payload
+        if isinstance(data, dict) and len(str(data)) > 10000:
+            return jsonify({'message': 'Request payload too large'}), 413
+            
+        # Validate username presence and type
+        if not data or not data.get('username'):
+            return jsonify({'message': 'Username is required'}), 400
+            
+        username = data.get('username')
+        if not isinstance(username, str):
+            return jsonify({'message': 'Username must be a string'}), 400
+            
+        # Check for suspicious patterns in username
+        import html
+        username = html.escape(username.strip())
+        
+        # Additional security: check for null bytes and control characters
+        if '\x00' in username or any(ord(c) < 32 and c not in '\t\n\r' for c in username):
+            return jsonify({'message': 'Invalid characters in username'}), 400
 
     # Validate username
     if not username or len(username) < 3 or len(username) > 30:
@@ -138,6 +207,11 @@ def login():
     )
 
     return response, 200
+
+    except Exception as e:
+        # Log the error for debugging but don't expose internal details
+        current_app.logger.error(f"Login error: {str(e)}")
+        return jsonify({'message': 'Authentication failed'}), 500
 
 
 # Logout route

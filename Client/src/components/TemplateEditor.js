@@ -17,6 +17,8 @@ const TemplateEditor = ({
   const [localQuestions, setLocalQuestions] = useState({});
   const [unsavedChanges, setUnsavedChanges] = useState({});
   const [savingQuestions, setSavingQuestions] = useState({});
+  const [convertingTemplate, setConvertingTemplate] = useState(false);
+  const [showNextSteps, setShowNextSteps] = useState(false);
 
   const questionTypes = [
     { value: 'multiple_choice', label: 'Multiple Choice' },
@@ -107,6 +109,187 @@ const TemplateEditor = ({
         delete newState[questionId];
         return newState;
       });
+    }
+  };
+
+  const removeQuestion = async (questionId) => {
+    if (!window.confirm('Are you sure you want to remove this question?')) {
+      return;
+    }
+
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      let token = localStorage.getItem('token');
+      if (!token) {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const userData = JSON.parse(storedUser);
+          token = userData.sessionToken;
+        }
+      }
+
+      const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/questions/${questionId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        alert('Question removed successfully');
+        // The UI will update automatically via WebSocket
+      } else {
+        const errorData = await response.text();
+        alert('Failed to remove question: ' + errorData);
+      }
+    } catch (error) {
+      console.error('Error removing question:', error);
+      alert('Failed to remove question: ' + error.message);
+    }
+  };
+
+  const clearAllQuestions = async () => {
+    if (!window.confirm('Are you sure you want to clear ALL questions? This cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      let token = localStorage.getItem('token');
+      if (!token) {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const userData = JSON.parse(storedUser);
+          token = userData.sessionToken;
+        }
+      }
+
+      const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/questions/clear`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        alert('All questions cleared successfully');
+        // The UI will update automatically via WebSocket
+      } else {
+        const errorData = await response.text();
+        alert('Failed to clear questions: ' + errorData);
+      }
+    } catch (error) {
+      console.error('Error clearing questions:', error);
+      alert('Failed to clear questions: ' + error.message);
+    }
+  };
+
+  const resetSession = async () => {
+    if (!window.confirm('Are you sure you want to reset this session to a fresh state? This will clear all questions and data.')) {
+      return;
+    }
+
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      let token = localStorage.getItem('token');
+      if (!token) {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const userData = JSON.parse(storedUser);
+          token = userData.sessionToken;
+        }
+      }
+
+      const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/reset`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        alert('Session reset successfully');
+        // The UI will update automatically via WebSocket
+      } else {
+        const errorData = await response.text();
+        alert('Failed to reset session: ' + errorData);
+      }
+    } catch (error) {
+      console.error('Error resetting session:', error);
+      alert('Failed to reset session: ' + error.message);
+    }
+  };
+
+  const handleConvertToTemplate = async () => {
+    const finalizedQuestions = questions.filter(q => q.status === 'finalized');
+    
+    if (finalizedQuestions.length === 0) {
+      alert('No finalized questions available to convert to template.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Convert ${finalizedQuestions.length} finalized questions into a reusable template?\n\n` +
+      'This will create a new template that can be used for future interview sessions.'
+    );
+
+    if (!confirmed) return;
+
+    setConvertingTemplate(true);
+
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      let token = localStorage.getItem('token');
+      if (!token) {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const userData = JSON.parse(storedUser);
+          token = userData.sessionToken;
+        }
+      }
+
+      const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/convert-to-template`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          template_name: `${session.title} Template`,
+          description: `Template created from session: ${session.title}`,
+          subject: session.subject || 'general',
+          difficulty: 'medium',
+          is_public: false
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const templateId = result.template?.template_id;
+        
+        console.log('Template conversion successful:', result);
+        
+        // Show success message and next steps
+        setShowNextSteps(true);
+        
+        // Scroll to the next steps section
+        setTimeout(() => {
+          const nextStepsElement = document.getElementById('next-steps-section');
+          if (nextStepsElement) {
+            nextStepsElement.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 100);
+        
+      } else {
+        const errorData = await response.text();
+        let errorMessage = 'Failed to convert to template';
+        try {
+          const errorJson = JSON.parse(errorData);
+          errorMessage = errorJson.error || errorData;
+        } catch (parseError) {
+          errorMessage = errorData;
+        }
+        alert('Failed to convert to template: ' + errorMessage);
+      }
+    } catch (error) {
+      console.error('Error converting to template:', error);
+      alert('Failed to convert to template: ' + error.message);
+    } finally {
+      setConvertingTemplate(false);
     }
   };
 
@@ -476,6 +659,19 @@ const TemplateEditor = ({
                       Finalize
                     </button>
                   )}
+                  {isHost && (
+                    <button
+                      onClick={() => removeQuestion(question.question_id)}
+                      className="remove-btn"
+                      style={{ 
+                        backgroundColor: '#f44336',
+                        color: 'white',
+                        marginLeft: '5px' 
+                      }}
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -540,13 +736,175 @@ const TemplateEditor = ({
         </div>
       )}
 
+      {/* Session Management (Host Only) */}
+      {isHost && (
+        <div className="session-management" style={{ marginTop: '20px', padding: '15px', backgroundColor: '#fff3cd', borderRadius: '5px', border: '1px solid #ffeaa7' }}>
+          <h3>Session Management</h3>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            {questions.length > 0 && (
+              <button 
+                onClick={clearAllQuestions}
+                style={{ 
+                  backgroundColor: '#ffc107', 
+                  color: 'black', 
+                  padding: '8px 15px', 
+                  border: 'none', 
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                🗑️ Clear All Questions
+              </button>
+            )}
+            <button 
+              onClick={resetSession}
+              style={{ 
+                backgroundColor: '#dc3545', 
+                color: 'white', 
+                padding: '8px 15px', 
+                border: 'none', 
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              🔄 Reset Session
+            </button>
+          </div>
+          <p style={{ fontSize: '12px', color: '#856404', marginTop: '10px' }}>
+            Use these options to start fresh or clean up unwanted questions.
+          </p>
+        </div>
+      )}
+
       {/* Template Actions (Host Only) */}
-      {isHost && questions.filter(q => q.status === 'finalized').length > 0 && (
-        <div className="template-actions">
-          <h3>Template Actions</h3>
-          <button className="convert-btn">
-            Convert to Template ({questions.filter(q => q.status === 'finalized').length} questions)
+      {isHost && questions.filter(q => q.status === 'finalized').length > 0 && !showNextSteps && (
+        <div className="template-actions" style={{ marginTop: '20px', padding: '20px', backgroundColor: '#e8f5e8', borderRadius: '8px', border: '2px solid #4CAF50' }}>
+          <h3 style={{ color: '#2e7d32', marginBottom: '15px' }}>🎯 Template Ready!</h3>
+          <p style={{ color: '#2e7d32', marginBottom: '15px' }}>
+            You have {questions.filter(q => q.status === 'finalized').length} finalized questions ready to convert into a reusable template.
+          </p>
+          <button 
+            className="convert-btn"
+            onClick={handleConvertToTemplate}
+            disabled={convertingTemplate}
+            style={{
+              backgroundColor: convertingTemplate ? '#ccc' : '#4CAF50',
+              color: 'white',
+              padding: '12px 24px',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              cursor: convertingTemplate ? 'not-allowed' : 'pointer',
+              opacity: convertingTemplate ? 0.6 : 1
+            }}
+          >
+            {convertingTemplate ? '🔄 Converting...' : `🔄 Convert to Template (${questions.filter(q => q.status === 'finalized').length} questions)`}
           </button>
+        </div>
+      )}
+
+      {/* Next Steps Section */}
+      {showNextSteps && (
+        <div id="next-steps-section" style={{ marginTop: '20px', padding: '25px', backgroundColor: '#f0f8ff', borderRadius: '10px', border: '3px solid #2196F3' }}>
+          <h2 style={{ color: '#1976d2', marginBottom: '20px', textAlign: 'center' }}>🎉 Template Created Successfully!</h2>
+          <p style={{ color: '#1976d2', marginBottom: '25px', textAlign: 'center', fontSize: '16px' }}>
+            Your template has been saved and is now available for future interview sessions.
+          </p>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', alignItems: 'center' }}>
+            <h3 style={{ color: '#1976d2', marginBottom: '10px' }}>What would you like to do next?</h3>
+            
+            <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button 
+                onClick={() => {
+                  if (window.confirm('Close this session? You can always create new sessions from your templates.')) {
+                    window.location.href = '/dashboard';
+                  }
+                }}
+                style={{
+                  backgroundColor: '#2196F3',
+                  color: 'white',
+                  padding: '12px 20px',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                🏠 Go to Dashboard
+              </button>
+              
+              <button 
+                onClick={() => {
+                  window.location.href = '/templates';
+                }}
+                style={{
+                  backgroundColor: '#FF9800',
+                  color: 'white',
+                  padding: '12px 20px',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                📚 View Templates Gallery
+              </button>
+              
+              <button 
+                onClick={resetSession}
+                style={{
+                  backgroundColor: '#4CAF50',
+                  color: 'white',
+                  padding: '12px 20px',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                ➕ Create New Template
+              </button>
+              
+              <button 
+                onClick={() => {
+                  window.location.href = '/sessions/simulate';
+                }}
+                style={{
+                  backgroundColor: '#9C27B0',
+                  color: 'white',
+                  padding: '12px 20px',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                🎭 Start Mock Interview
+              </button>
+            </div>
+            
+            <button 
+              onClick={() => setShowNextSteps(false)}
+              style={{
+                backgroundColor: '#757575',
+                color: 'white',
+                padding: '8px 16px',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '12px',
+                cursor: 'pointer',
+                marginTop: '10px'
+              }}
+            >
+              ✕ Continue Working on Session
+            </button>
+          </div>
         </div>
       )}
     </div>

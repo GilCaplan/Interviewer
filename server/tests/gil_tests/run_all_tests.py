@@ -49,6 +49,8 @@ def update_test_files_port(server_url):
     test_files = [
         "test_basic_functionality.py",
         "test_template_building.py", 
+        "test_session_management.py",
+        "test_scaling_and_concurrent_users.py",
         "test_session_collaboration.py",
         "test_llm_mock_integration.py"
     ]
@@ -155,9 +157,10 @@ def extract_test_results(output):
 def main():
     print(f"\n{Colors.BOLD}{Colors.CYAN}")
     print("╔══════════════════════════════════════════════════════════╗")
-    print("║         COMPREHENSIVE TEMPLATE BUILDING TEST RUNNER      ║")
+    print("║         COMPREHENSIVE INTERVIEW PLATFORM TEST RUNNER     ║")
     print("║                                                          ║")
-    print("║  Runs all test suites for the template building system   ║")
+    print("║  Runs ALL test categories: Unit, Integration, System,    ║")
+    print("║  Security, Stress, E2E - Complete Test Coverage          ║")
     print("╚══════════════════════════════════════════════════════════╝")
     print(f"{Colors.END}\n")
     
@@ -181,12 +184,19 @@ def main():
     log("🔧 Updating test configurations...", Colors.BLUE)
     update_test_files_port(server_url)
     
-    # List of test files to run
+    # List of test files to run - comprehensive coverage
     test_files = [
+        ("test_environment_setup.py", "Test environment setup and configuration"),
+        ("test_unit_comprehensive.py", "Unit tests (individual components)"),
         ("test_basic_functionality.py", "Basic functionality and connectivity"),
         ("test_template_building.py", "Template CRUD operations"),
+        ("test_session_management.py", "Session management and cleanup"),
+        ("test_session_collaboration.py", "Multi-user collaboration"),
+        ("test_scaling_and_concurrent_users.py", "Scaling and concurrent user operations"),
         ("test_llm_mock_integration.py", "Mock LLM integration"),
-        ("test_session_collaboration.py", "Multi-user collaboration")
+        ("test_security_comprehensive.py", "Security tests (auth, XSS, injection)"),
+        ("test_system_end_to_end.py", "System/End-to-End tests (complete workflows)"),
+        ("test_stress_and_chaos.py", "Stress and chaos tests (resilience)")
     ]
     
     # Run all tests

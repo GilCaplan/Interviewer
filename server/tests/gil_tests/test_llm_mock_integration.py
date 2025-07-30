@@ -76,7 +76,7 @@ class LLMTestSuite:
             "template_mode": True,
             "settings": {
                 "max_participants": 5,
-                "max_questions": 10,
+                "max_questions": 25,
                 "allow_llm": True,
                 "allow_user_questions": True
             }
@@ -103,9 +103,9 @@ class LLMTestSuite:
         subjects_to_test = ["python", "javascript", "algorithms", "system_design"]
         successful_generations = 0
         
-        for subject in subjects_to_test:
-            # Start a question for this subject
-            response = requests.post(f"{API_URL}/api/sessions/{self.test_session_id}/questions/1/start",
+        for i, subject in enumerate(subjects_to_test, 1):
+            # Start a unique question for this subject
+            response = requests.post(f"{API_URL}/api/sessions/{self.test_session_id}/questions/{i}/start",
                                    json={"type": "open_ended"},
                                    headers=self.test_user["headers"])
             
@@ -154,7 +154,7 @@ class LLMTestSuite:
         
         for i, type_config in enumerate(question_types):
             question_type = type_config["type"]
-            question_number = i + 2  # Start from question 2
+            question_number = i + 10  # Start from question 10 to avoid conflicts
             
             # Start building a question of this type
             response = requests.post(f"{API_URL}/api/sessions/{self.test_session_id}/questions/{question_number}/start",
@@ -248,7 +248,7 @@ class LLMTestSuite:
         log("-" * 40, Colors.YELLOW)
         
         # Create a multiple choice question to test field suggestions
-        response = requests.post(f"{API_URL}/api/sessions/{self.test_session_id}/questions/6/start",
+        response = requests.post(f"{API_URL}/api/sessions/{self.test_session_id}/questions/20/start",
                                json={"type": "multiple_choice"},
                                headers=self.test_user["headers"])
         
