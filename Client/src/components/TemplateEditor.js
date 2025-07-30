@@ -27,6 +27,8 @@ const TemplateEditor = ({
   const [suggestionQuestionId, setSuggestionQuestionId] = useState(null);
   const [showNotesFor, setShowNotesFor] = useState({});
   const [fieldSuggestions, setFieldSuggestions] = useState({}); // Store pending suggestions by question ID
+  const [showSuggestionHistory, setShowSuggestionHistory] = useState(false);
+  const [suggestionHistory, setSuggestionHistory] = useState([]);
 
   const questionTypes = [
     { value: 'multiple_choice', label: 'Multiple Choice' },
@@ -331,6 +333,37 @@ const TemplateEditor = ({
     }
   };
 
+  const fetchSuggestionHistory = async () => {
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      let token = localStorage.getItem('token');
+      if (!token) {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const userData = JSON.parse(storedUser);
+          token = userData.sessionToken;
+        }
+      }
+
+      const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/suggestions/history`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSuggestionHistory(data.suggestion_history || []);
+        setShowSuggestionHistory(true);
+      } else {
+        const errorData = await response.text();
+        alert('Failed to load suggestion history: ' + errorData);
+      }
+    } catch (error) {
+      console.error('Error fetching suggestion history:', error);
+      alert('Failed to load suggestion history: ' + error.message);
+    }
+  };
+
   const handleConvertToTemplate = async () => {
     const finalizedQuestions = questions.filter(q => q.status === 'finalized');
     
@@ -421,7 +454,7 @@ const TemplateEditor = ({
 
     // Helper function to render field with suggestion button for non-hosts
     const renderFieldGroup = (label, fieldName, inputElement) => {
-      // Get pending suggestions for this field
+      // Get pending suggestions for this field (only show pending ones in active display)
       const fieldSuggestions = (question.collaboration_notes || [])
         .filter(note => note.type === 'field_suggestion' && 
                        note.suggestion_data?.field === fieldName &&
@@ -979,6 +1012,19 @@ const TemplateEditor = ({
             >
               🔄 Reset Session
             </button>
+            <button 
+              onClick={fetchSuggestionHistory}
+              style={{ 
+                backgroundColor: '#17a2b8', 
+                color: 'white', 
+                padding: '8px 15px', 
+                border: 'none', 
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              📜 View Suggestion History
+            </button>
           </div>
           <p style={{ fontSize: '12px', color: '#856404', marginTop: '10px' }}>
             Use these options to start fresh or clean up unwanted questions.
@@ -1158,6 +1204,68 @@ const TemplateEditor = ({
                 disabled={!suggestionText.trim()}
               >
                 Submit Suggestion
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suggestion History Modal */}
+      {showSuggestionHistory && (
+        <div className="modal-overlay" onClick={() => setShowSuggestionHistory(false)}>
+          <div className="suggestion-history-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>📜 Suggestion History</h3>
+              <button 
+                className="close-btn"
+                onClick={() => setShowSuggestionHistory(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              {suggestionHistory.length === 0 ? (
+                <p>No suggestion history found.</p>
+              ) : (
+                <div className="suggestion-history-list">
+                  <p style={{ marginBottom: '15px', fontWeight: 'bold' }}>
+                    Total suggestions handled: {suggestionHistory.length}
+                  </p>
+                  {suggestionHistory.map((suggestion, index) => (
+                    <div key={suggestion.suggestion_id} className="history-item">
+                      <div className="history-header">
+                        <span className="question-number">Q{suggestion.question_number}</span>
+                        <span className={`status-badge ${suggestion.status}`}>
+                          {suggestion.status === 'accepted' ? '✅ Accepted' : '❌ Rejected'}
+                        </span>
+                        <span className="history-date">
+                          {new Date(suggestion.handled_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="history-details">
+                        <div><strong>Field:</strong> {suggestion.field}</div>
+                        <div><strong>Suggested by:</strong> {suggestion.author}</div>
+                        <div><strong>Handled by:</strong> {suggestion.handled_by}</div>
+                        <div><strong>Suggested value:</strong></div>
+                        <div className="suggested-value">{suggestion.suggested_value}</div>
+                        {suggestion.current_value && (
+                          <>
+                            <div><strong>Previous value:</strong></div>
+                            <div className="previous-value">{suggestion.current_value}</div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="close-btn"
+                onClick={() => setShowSuggestionHistory(false)}
+              >
+                Close
               </button>
             </div>
           </div>

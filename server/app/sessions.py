@@ -1314,6 +1314,64 @@ def handle_field_suggestion(user, session_id, question_id, suggestion_id):
         return jsonify({"error": "Failed to handle field suggestion"}), 500
 
 
+# Get suggestion history for a session (host only)
+@sessions_bp.route('/api/sessions/<session_id>/suggestions/history', methods=['GET'])
+@token_required
+def get_suggestion_history(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can view suggestion history
+        if user["username"] != session["host_username"]:
+            return jsonify({"error": "Only the session host can view suggestion history"}), 403
+        
+        # Collect all suggestions from all questions
+        suggestion_history = []
+        questions_queue = session.get("template_data", {}).get("questions_queue", [])
+        ready_questions = session.get("template_data", {}).get("ready_questions", [])
+        
+        # Process both queue and ready questions
+        all_questions = questions_queue + ready_questions
+        
+        for question in all_questions:
+            question_number = question.get("question_number", "Unknown")
+            question_id = question.get("question_id")
+            
+            for note in question.get("collaboration_notes", []):
+                if note.get("type") == "field_suggestion":
+                    suggestion_data = note.get("suggestion_data", {})
+                    # Only include suggestions that have been handled (accepted or rejected)
+                    if suggestion_data.get("status") in ["accepted", "rejected"]:
+                        suggestion_history.append({
+                            "question_number": question_number,
+                            "question_id": question_id,
+                            "suggestion_id": suggestion_data.get("suggestion_id"),
+                            "field": suggestion_data.get("field"),
+                            "suggested_value": suggestion_data.get("suggested_value"),
+                            "current_value": suggestion_data.get("current_value"),
+                            "author": suggestion_data.get("author"),
+                            "status": suggestion_data.get("status"),
+                            "handled_by": suggestion_data.get("handled_by"),
+                            "timestamp": suggestion_data.get("timestamp"),
+                            "handled_at": suggestion_data.get("handled_at")
+                        })
+        
+        # Sort by handled_at timestamp (most recent first)
+        suggestion_history.sort(key=lambda x: x.get("handled_at", x.get("timestamp", "")), reverse=True)
+        
+        return jsonify({
+            "suggestion_history": suggestion_history,
+            "total_suggestions": len(suggestion_history)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting suggestion history: {str(e)}")
+        return jsonify({"error": "Failed to get suggestion history"}), 500
+
+
 # Finalize question (move from queue to ready questions)
 @sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/finalize', methods=['POST'])
 @token_required
