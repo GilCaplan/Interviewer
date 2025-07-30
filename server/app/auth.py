@@ -145,6 +145,9 @@ def login():
         # Additional security: check for null bytes and control characters
         if '\x00' in username or any(ord(c) < 32 and c not in '\t\n\r' for c in username):
             return jsonify({'message': 'Invalid characters in username'}), 400
+            
+    except Exception:
+        return jsonify({'message': 'Invalid request format'}), 400
 
     # Validate username
     if not username or len(username) < 3 or len(username) > 30:
