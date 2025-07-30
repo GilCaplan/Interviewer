@@ -1235,8 +1235,8 @@ const TemplateEditor = ({
                     <div key={suggestion.suggestion_id} className="history-item">
                       <div className="history-header">
                         <span className="question-number">Q{suggestion.question_number}</span>
-                        <span className={`status-badge ${suggestion.status}`}>
-                          {suggestion.status === 'accepted' ? '✅ Accepted' : '❌ Rejected'}
+                        <span className={`status-badge ${suggestion.status === 'accept' ? 'accepted' : 'rejected'}`}>
+                          {suggestion.status === 'accept' ? '✅ Accepted' : '❌ Rejected'}
                         </span>
                         <span className="history-date">
                           {new Date(suggestion.handled_at).toLocaleString()}
