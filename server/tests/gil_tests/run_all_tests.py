@@ -8,6 +8,12 @@ Usage:
 2. Run tests: python run_all_tests.py
 """
 
+import os
+# Set testing environment variables before any imports to ensure proper testing mode
+os.environ['TESTING'] = 'true'
+os.environ['TEST_MODE'] = '1'
+os.environ['FLASK_ENV'] = 'testing'
+
 import subprocess
 import time
 import requests

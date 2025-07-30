@@ -6,6 +6,12 @@ Tests the mock LLM functionality for question generation and suggestions
 Run with: python test_llm_mock_integration.py
 """
 
+import os
+# Set testing environment variables
+os.environ['TESTING'] = 'true'
+os.environ['TEST_MODE'] = '1'
+os.environ['FLASK_ENV'] = 'testing'
+
 import requests
 import json
 import time

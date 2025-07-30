@@ -7,6 +7,12 @@ and system behavior under realistic collaborative workloads.
 Run with: python test_scaling_and_concurrent_users.py
 """
 
+import os
+# Set testing environment variables
+os.environ['TESTING'] = 'true'
+os.environ['TEST_MODE'] = '1'
+os.environ['FLASK_ENV'] = 'testing'
+
 import requests
 import json
 import time

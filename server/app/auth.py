@@ -6,6 +6,7 @@ import uuid
 from functools import wraps
 from pymongo import MongoClient
 from .config import Config
+from .rate_limiter import rate_limit
 
 auth = Blueprint('auth', __name__)
 
@@ -91,8 +92,9 @@ def verify_token(token):
         return None
 
 
-# Login route
+# Login route with rate limiting
 @auth.route('/api/auth/login', methods=['POST'])
+@rate_limit('auth', 10, 900, per_user=False)  # 10 attempts per 15 minutes per client
 def login():
     try:
         # Basic validation

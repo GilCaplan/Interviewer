@@ -14,6 +14,7 @@ from .auth import token_required
 from .config import Config
 from .templates import QUESTION_TYPES, validate_question_data
 from .llm_service import LLMService
+from .rate_limiter import rate_limit
 
 sessions_bp = Blueprint('sessions', __name__)
 
@@ -61,6 +62,42 @@ MOCK_LLM_RESPONSES = {
 def generate_session_code():
     """Generate a 6-character session code"""
     return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+
+
+def sanitize_text_input(text, max_length=1000):
+    """Sanitize text input to prevent XSS and injection attacks"""
+    if not isinstance(text, str):
+        return str(text) if text is not None else ""
+    
+    # Remove null bytes and control characters
+    cleaned = ''.join(c for c in text if ord(c) >= 32 or c in '\t\n\r')
+    
+    # HTML escape to prevent XSS
+    cleaned = html.escape(cleaned, quote=True)
+    
+    # Truncate if too long
+    if len(cleaned) > max_length:
+        cleaned = cleaned[:max_length]
+    
+    return cleaned
+
+
+def validate_session_code(code):
+    """Validate session code format (6 alphanumeric characters)"""
+    if not isinstance(code, str):
+        return False
+    return len(code) == 6 and code.isalnum()
+
+
+def validate_question_id(question_id):
+    """Validate question ID format (UUID)"""
+    if not isinstance(question_id, str):
+        return False
+    try:
+        uuid.UUID(question_id)
+        return True
+    except ValueError:
+        return False
 
 
 def hash_session_password(password):
@@ -397,8 +434,9 @@ def mock_llm_generate_question(subject="general", context="", question_type="ope
     return question_data
 
 
-# Create a new session
+# Create a new session with rate limiting
 @sessions_bp.route('/api/sessions/create', methods=['POST'])
+@rate_limit('session_create', 50, 3600, per_user=True)  # 50 sessions per hour per user
 @token_required
 def create_session(user):
     try:

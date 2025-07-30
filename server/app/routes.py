@@ -1,6 +1,9 @@
 from flask import Blueprint, jsonify
 from pymongo import MongoClient
 from .config import Config
+from .availability import availability_manager
+from .security import security_manager
+from .async_handler import task_manager
 import os
 
 main = Blueprint('main', __name__)
@@ -8,7 +11,27 @@ main = Blueprint('main', __name__)
 
 @main.route('/api/health', methods=['GET'])
 def health_check():
-    return jsonify({"status": "ok", "message": "Interview Assistant API is running"})
+    """Enhanced health check with system status"""
+    try:
+        # Check database connectivity
+        client = MongoClient(Config.MONGO_URI, serverSelectionTimeoutMS=5000)
+        client.admin.command('ping')
+        db_status = True
+    except:
+        db_status = False
+    
+    # Get system status
+    system_status = availability_manager.get_system_status()
+    system_status['database_connection'] = db_status
+    
+    overall_health = db_status and system_status['overall_health']
+    
+    return jsonify({
+        "status": "ok" if overall_health else "degraded",
+        "message": "Interview Assistant API is running",
+        "system_status": system_status,
+        "timestamp": availability_manager.last_health_check.isoformat()
+    }), 200 if overall_health else 503
 
 
 @main.route('/api/info', methods=['GET'])
@@ -34,8 +57,28 @@ def info():
             "Interview questions",
             "Behavioral questions",
             "And more coming soon!"
-        ]
+        ],
+        "system_metrics": {
+            "async_tasks": task_manager.get_system_metrics(),
+            "security_status": security_manager.get_security_report()
+        }
     })
 
+
+# System monitoring and security endpoints
+@main.route('/api/system/status', methods=['GET'])
+def system_status():
+    """Comprehensive system status for monitoring"""
+    return jsonify({
+        "availability": availability_manager.get_system_status(),
+        "security": security_manager.get_security_report(),
+        "performance": task_manager.get_system_metrics(),
+        "timestamp": availability_manager.last_health_check.isoformat()
+    })
+
+@main.route('/api/system/security-report', methods=['GET'])
+def security_report():
+    """Detailed security status report"""
+    return jsonify(security_manager.get_security_report())
 
 # Template routes moved to templates.py module

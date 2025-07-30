@@ -10,6 +10,7 @@ from .sessions import sessions_bp
 from .templates import templates_bp
 from .coding_challenges import coding_challenges
 from .websocket_handlers import init_simple_websockets  # Only import the function
+from .async_handler import init_async_manager, shutdown_async_manager
 
 
 def create_app(config_class=Config):
@@ -50,6 +51,14 @@ def create_app(config_class=Config):
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
         response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
         return response
+
+    # Initialize async task manager
+    init_async_manager()
+
+    # Register shutdown handler
+    @app.teardown_appcontext
+    def shutdown_async_on_teardown(exception):
+        shutdown_async_manager()
 
     return app, socketio
 

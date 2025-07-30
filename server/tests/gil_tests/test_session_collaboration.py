@@ -6,6 +6,12 @@ Tests concurrent users building templates together, session limits, and real-tim
 Run with: python test_session_collaboration.py
 """
 
+import os
+# Set testing environment variables
+os.environ['TESTING'] = 'true'
+os.environ['TEST_MODE'] = '1'
+os.environ['FLASK_ENV'] = 'testing'
+
 import requests
 import json
 import time

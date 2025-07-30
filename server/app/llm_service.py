@@ -5,6 +5,7 @@ import random
 import time
 from datetime import datetime, timedelta
 from .config import Config
+from .rate_limiter import rate_limit
 
 # Rate limiting for free tier
 class RateLimiter:
