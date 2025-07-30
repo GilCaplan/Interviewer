@@ -23,6 +23,8 @@ const SessionBuilder = () => {
   // UI state
   const [activeScreen, setActiveScreen] = useState('template'); // 'template', 'llm', 'participants'
   const [isHost, setIsHost] = useState(false);
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
   
   // Screen data
   const [questions, setQuestions] = useState([]);
@@ -75,7 +77,17 @@ const SessionBuilder = () => {
           body: JSON.stringify({})
         });
 
-        // If joining failed, create new session and redirect to new session code
+        // If joining failed due to password requirement, show password prompt
+        if (response.status === 401) {
+          const errorData = await response.json();
+          if (errorData.error?.includes('password')) {
+            setShowPasswordPrompt(true);
+            setLoading(false);
+            return;
+          }
+        }
+
+        // If joining failed for other reasons, create new session and redirect to new session code
         if (!response.ok) {
           const createResponse = await fetch(`${apiUrl}/api/sessions/create`, {
             method: 'POST',
@@ -479,6 +491,69 @@ const SessionBuilder = () => {
     }
   };
 
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!passwordInput.trim()) {
+      setError('Please enter a password');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const token = localStorage.getItem('token') || user?.sessionToken;
+
+      const response = await fetch(`${apiUrl}/api/sessions/join/${sessionCode}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ password: passwordInput.trim() })
+      });
+
+      if (response.ok) {
+        // Password correct, continue with session setup
+        const data = await response.json();
+        setSession(data.session);
+        
+        const username = user?.username || JSON.parse(localStorage.getItem('user') || '{}').username;
+        const isHostUser = data.session.host_username === username;
+        setIsHost(isHostUser);
+        
+        const templateData = data.session.template_data || {};
+        setQuestions([
+          ...(templateData.questions_queue || []),
+          ...(templateData.ready_questions || [])
+        ]);
+
+        // Initialize WebSocket
+        const socketToken = token || user?.sessionToken;
+        const newSocket = io(apiUrl, {
+          auth: { token: socketToken }
+        });
+        newSocket.emit('join_session', data.session.session_id);
+        setupSocketListeners(newSocket);
+        setSocket(newSocket);
+
+        loadParticipants(data.session.session_id);
+        setShowPasswordPrompt(false);
+        setPasswordInput('');
+      } else if (response.status === 401) {
+        setError('Incorrect password');
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to join session');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const cleanupAllUserSessions = async () => {
     if (!window.confirm('This will delete ALL your sessions permanently. Are you sure you want to proceed?')) {
       return;
@@ -552,6 +627,42 @@ const SessionBuilder = () => {
     return <div className="session-loading">Loading session...</div>;
   }
 
+  if (showPasswordPrompt) {
+    return (
+      <div className="session-password-prompt">
+        <div className="password-prompt-container">
+          <h2>🔒 Password Required</h2>
+          <p>This session is password-protected. Please enter the password to join.</p>
+          
+          {error && <div className="error-message">{error}</div>}
+          
+          <form onSubmit={handlePasswordSubmit} className="password-form">
+            <div className="password-input-group">
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder="Enter session password..."
+                maxLength="50"
+                required
+                autoFocus
+              />
+              <button type="submit" disabled={loading}>
+                {loading ? 'Joining...' : 'Join Session'}
+              </button>
+            </div>
+          </form>
+          
+          <div className="password-prompt-actions">
+            <button onClick={() => navigate('/sessions')} className="back-button">
+              ← Back to Session Management
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="session-error">
@@ -574,7 +685,10 @@ const SessionBuilder = () => {
           <h1>{session.title}</h1>
           <p>Session Code: <strong>{session.session_code}</strong></p>
           <p>Subject: {session.subject}</p>
-          {isHost && <span className="host-badge">HOST</span>}
+          <div className="session-badges">
+            {isHost && <span className="host-badge">HOST</span>}
+            {session.is_password_protected && <span className="password-badge">🔒 Protected</span>}
+          </div>
         </div>
         
         {/* Screen Navigation */}

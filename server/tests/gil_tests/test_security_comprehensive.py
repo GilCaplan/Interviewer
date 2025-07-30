@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Comprehensive Security Test Suite
-Tests authentication, authorization, input validation, XSS, SQL injection, and other security vulnerabilities.
+Tests authentication, authorization, input validation, password security, XSS, SQL injection, and other security vulnerabilities.
 
 Run with: python test_security_comprehensive.py
 """
@@ -549,6 +549,183 @@ class SecurityTestSuite:
         
         log(f"Cleaned up {cleanup_count}/{len(self.test_users)} test users", Colors.WHITE)
     
+    def test_password_security(self):
+        """Test session password security mechanisms"""
+        log("\n🔑 Testing Password Security Mechanisms", Colors.BOLD + Colors.YELLOW)
+        log("-" * 60, Colors.YELLOW)
+        
+        user = self.create_test_user("password_security")
+        if not user:
+            self.assert_test(False, "User Creation for Password Tests", "Failed to create test user")
+            return
+        
+        # Test 1: Password hashing verification
+        test_password = "secure_test_password_123"
+        session_response = requests.post(f"{API_URL}/api/sessions/create",
+                                       json={
+                                           "title": "Password Security Test",
+                                           "subject": "security",
+                                           "password": test_password
+                                       },
+                                       headers=user["headers"],
+                                       timeout=10)
+        
+        if session_response.status_code == 201:
+            session_data = session_response.json().get("session", {})
+            session_id = session_data.get("session_id")
+            session_code = session_data.get("session_code")
+            
+            # Verify password is not stored in plaintext
+            session_get_response = requests.get(f"{API_URL}/api/sessions/{session_id}",
+                                              headers=user["headers"],
+                                              timeout=5)
+            
+            if session_get_response.status_code == 200:
+                session_details = session_get_response.json().get("session", {})
+                
+                # Check that plaintext password is not exposed
+                password_not_exposed = (
+                    test_password not in str(session_details) and
+                    "password" not in session_details and
+                    "password_hash" not in session_details
+                )
+                
+                self.assert_test(password_not_exposed, "Password Plaintext Protection",
+                                "Password not exposed in API responses")
+                
+                # Verify password_protected flag is set
+                is_protected = session_details.get("is_password_protected", False)
+                self.assert_test(is_protected, "Password Protection Flag",
+                                f"Session marked as password protected: {is_protected}")
+            
+            # Test 2: Brute force protection simulation
+            guest_user = self.create_test_user("brute_force_test")
+            if guest_user:
+                failed_attempts = 0
+                
+                # Try multiple wrong passwords rapidly
+                wrong_passwords = [
+                    "wrong1", "wrong2", "wrong3", "password", "123456",
+                    "admin", "test", "wrong4", "wrong5", "wrong6"
+                ]
+                
+                for wrong_pass in wrong_passwords:
+                    try:
+                        response = requests.post(f"{API_URL}/api/sessions/join/{session_code}",
+                                               json={"password": wrong_pass},
+                                               headers=guest_user["headers"],
+                                               timeout=2)
+                        
+                        if response.status_code == 401:
+                            failed_attempts += 1
+                        
+                        # Add small delay to avoid overwhelming the server
+                        time.sleep(0.1)
+                        
+                    except:
+                        pass
+                
+                # System should consistently reject wrong passwords
+                brute_force_blocked = failed_attempts >= len(wrong_passwords) * 0.8
+                self.assert_test(brute_force_blocked, "Brute Force Resistance",
+                                f"{failed_attempts}/{len(wrong_passwords)} wrong passwords rejected")
+                
+                # Test 3: Correct password should still work after failed attempts
+                try:
+                    correct_response = requests.post(f"{API_URL}/api/sessions/join/{session_code}",
+                                                   json={"password": test_password},
+                                                   headers=guest_user["headers"],
+                                                   timeout=5)
+                    
+                    correct_access = correct_response.status_code == 200
+                    self.assert_test(correct_access, "Correct Password Access After Failed Attempts",
+                                    f"Correct password works: {correct_response.status_code}")
+                    
+                except Exception as e:
+                    self.assert_test(False, "Post-Brute-Force Access", f"Error: {e}")
+        
+        # Test 4: Password strength and character handling
+        special_passwords = [
+            "test@#$%^&*()_+-={}[]|\\:;\"'<>?",  # Special characters
+            "emoji_test_🔒🔑💻",  # Unicode characters
+            "   padded_password   ",  # Whitespace padding
+            "UPPER_lower_123_MiXeD",  # Mixed case and numbers
+        ]
+        
+        for i, special_pass in enumerate(special_passwords):
+            try:
+                session_response = requests.post(f"{API_URL}/api/sessions/create",
+                                               json={
+                                                   "title": f"Special Password Test {i}",
+                                                   "subject": "security",
+                                                   "password": special_pass
+                                               },
+                                               headers=user["headers"],
+                                               timeout=5)
+                
+                if session_response.status_code == 201:
+                    session_data = session_response.json().get("session", {})
+                    special_session_code = session_data.get("session_code")
+                    
+                    # Test if special password works for joining
+                    join_response = requests.post(f"{API_URL}/api/sessions/join/{special_session_code}",
+                                                json={"password": special_pass},
+                                                headers=guest_user["headers"],
+                                                timeout=5)
+                    
+                    special_char_success = join_response.status_code == 200
+                    test_name = f"Special Characters Password {i+1}"
+                    self.assert_test(special_char_success, test_name,
+                                    f"Password with special chars works: {join_response.status_code}")
+                
+            except Exception as e:
+                self.assert_test(False, f"Special Password Test {i+1}", f"Error: {e}")
+        
+        # Test 5: Password validation edge cases
+        edge_case_passwords = [
+            "",  # Empty password
+            " ",  # Single space
+            "a" * 51,  # Too long password (over 50 chars)
+            "ab",  # Too short password (under 4 chars)
+        ]
+        
+        valid_password_rejected = 0
+        
+        for edge_pass in edge_case_passwords:
+            try:
+                response = requests.post(f"{API_URL}/api/sessions/create",
+                                       json={
+                                           "title": "Edge Case Password Test",
+                                           "subject": "security",
+                                           "password": edge_pass
+                                       },
+                                       headers=user["headers"],
+                                       timeout=5)
+                
+                # These should either be rejected or handled gracefully
+                if response.status_code in [400, 422]:  # Validation errors
+                    valid_password_rejected += 1
+                elif response.status_code == 201:
+                    # If accepted, it should work properly
+                    session_data = response.json().get("session", {})
+                    edge_session_code = session_data.get("session_code")
+                    
+                    if edge_session_code and edge_pass.strip():  # Only test non-empty passwords
+                        join_response = requests.post(f"{API_URL}/api/sessions/join/{edge_session_code}",
+                                                    json={"password": edge_pass},
+                                                    headers=guest_user["headers"],
+                                                    timeout=5)
+                        
+                        if join_response.status_code == 200:
+                            valid_password_rejected += 1  # Counts as handled properly
+                
+            except:
+                pass
+        
+        edge_cases_handled = valid_password_rejected >= len(edge_case_passwords) * 0.5
+        self.assert_test(edge_cases_handled, "Password Edge Case Validation",
+                        f"{valid_password_rejected}/{len(edge_case_passwords)} edge cases handled properly")
+    
     def run_all_tests(self):
         log("🚀 STARTING COMPREHENSIVE SECURITY TEST SUITE", Colors.BOLD + Colors.CYAN)
         log("=" * 80, Colors.CYAN)
@@ -561,6 +738,7 @@ class SecurityTestSuite:
             self.test_authorization_controls()
             self.test_input_validation_security()
             self.test_session_security()
+            self.test_password_security()
             self.test_data_exposure_prevention()
             
         except Exception as e:
@@ -604,8 +782,8 @@ if __name__ == "__main__":
     print("╔════════════════════════════════════════════════════════════════════════╗")
     print("║                   COMPREHENSIVE SECURITY TEST SUITE                   ║")
     print("║                                                                        ║")
-    print("║  Tests: Auth, Authorization, Input Validation, Session Security       ║")
-    print("║  🔒 Focus: XSS, SQL Injection, Access Control, Data Exposure          ║")
+    print("║  Tests: Auth, Authorization, Input Validation, Password Security      ║")
+    print("║  🔒 Focus: XSS, SQL Injection, Access Control, Password Hashing       ║")
     print("╚════════════════════════════════════════════════════════════════════════╝")
     print(f"{Colors.END}\n")
     

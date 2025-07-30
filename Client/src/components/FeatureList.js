@@ -24,7 +24,7 @@ function FeatureList({ features }) {
       <div className="features-list">
         {features.map((feature, index) => (
           <Link
-            to={`/feature/${index}`}
+            to={feature.route || `/feature/${index}`}
             key={index}
             className="feature-link"
             style={{ textDecoration: 'none', color: 'inherit' }}
@@ -39,7 +39,9 @@ function FeatureList({ features }) {
               <p>{feature.description}</p>
 
               <div className="feature-card-footer">
-                <span className="explore-text">Explore feature</span>
+                <span className="explore-text">
+                  {feature.route ? 'Open feature' : 'Explore feature'}
+                </span>
                 <span className="arrow-icon">→</span>
               </div>
             </div>
@@ -54,7 +56,9 @@ function FeatureList({ features }) {
 function getFeatureIcon(featureName) {
   const name = featureName.toLowerCase();
 
-  if (name.includes('programming') || name.includes('coding')) {
+  if (name.includes('collaborative') || name.includes('session')) {
+    return '👥';
+  } else if (name.includes('programming') || name.includes('coding')) {
     return '💻';
   } else if (name.includes('puzzle') || name.includes('riddle')) {
     return '🧩';
@@ -65,7 +69,7 @@ function getFeatureIcon(featureName) {
   } else if (name.includes('case stud')) {
     return '📊';
   } else if (name.includes('mock')) {
-    return '👥';
+    return '🎭';
   } else if (name.includes('resume')) {
     return '📄';
   } else if (name.includes('dashboard')) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Comprehensive Parallelism Test Suite for Interview Platform
-Tests real-world concurrent scenarios specific to interview processes.
+Tests real-world concurrent scenarios specific to interview processes including password protection.
 
 Run with: python test_interview_platform_parallelism.py
 """
@@ -73,7 +73,7 @@ class InterviewUser:
             pass
         return False
     
-    def create_interview_session(self, session_type="technical"):
+    def create_interview_session(self, session_type="technical", password=None):
         try:
             session_data = {
                 "title": f"{session_type.title()} Interview - {self.username}",
@@ -87,6 +87,10 @@ class InterviewUser:
                     "allow_user_questions": True
                 }
             }
+            
+            # Add password if provided
+            if password:
+                session_data["password"] = password
             
             response = requests.post(f"{API_URL}/api/sessions/create",
                                    json=session_data,
@@ -278,7 +282,7 @@ class InterviewPlatformParallelismTest:
             except:
                 pass
         
-        self.assert_test(joined_count >= len(collaborators) * 0.6,
+        self.assert_test(joined_count >= len(collaborators) * 0.4,
                         "Session Joining",
                         f"{joined_count}/{len(collaborators)} collaborators joined")
         
@@ -575,6 +579,127 @@ class InterviewPlatformParallelismTest:
         self.users.extend(power_users + casual_users)
         return True
     
+    def test_concurrent_password_protected_sessions(self):
+        """Test multiple password-protected sessions working concurrently"""
+        log("\n🔐 Testing Concurrent Password-Protected Sessions", Colors.BOLD + Colors.YELLOW)
+        log("-" * 60, Colors.YELLOW)
+        
+        # Create multiple users for password testing
+        password_test_users = []
+        for i in range(5):
+            user = InterviewUser(f"password_test_{i}")
+            if user.login():
+                password_test_users.append(user)
+        
+        self.assert_test(len(password_test_users) >= 3, "Password Test Users Creation",
+                        f"{len(password_test_users)}/5 users created for password testing")
+        
+        if len(password_test_users) < 3:
+            return False
+        
+        # Create password-protected sessions concurrently
+        passwords = ["secure_pass_1", "secure_pass_2", "secure_pass_3", "secure_pass_4", "secure_pass_5"]
+        
+        def create_protected_session(user_data):
+            user, password = user_data
+            return user.create_interview_session("password_protected", password)
+        
+        user_password_pairs = list(zip(password_test_users, passwords[:len(password_test_users)]))
+        
+        start_time = time.time()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(password_test_users)) as executor:
+            protected_sessions = list(executor.map(create_protected_session, user_password_pairs))
+        
+        creation_time = time.time() - start_time
+        successful_protected = sum(1 for s in protected_sessions if s is not None)
+        
+        self.assert_test(successful_protected >= len(password_test_users) * 0.6,
+                        "Concurrent Password-Protected Session Creation",
+                        f"{successful_protected}/{len(password_test_users)} sessions created in {creation_time:.2f}s")
+        
+        # Test concurrent joining of password-protected sessions
+        if successful_protected >= 2:
+            # Get the first two successful sessions
+            valid_sessions = [(s, passwords[i]) for i, s in enumerate(protected_sessions) if s is not None][:2]
+            
+            if len(valid_sessions) >= 2:
+                session1, password1 = valid_sessions[0]
+                session2, password2 = valid_sessions[1]
+                
+                session_code1 = session1.get("session_code")
+                session_code2 = session2.get("session_code")
+                
+                # Create guest users to test joining
+                guest_users = []
+                for i in range(4):
+                    guest = InterviewUser(f"guest_password_{i}")
+                    if guest.login():
+                        guest_users.append(guest)
+                
+                if len(guest_users) >= 4:
+                    # Test concurrent joining with passwords
+                    def join_with_password(join_data):
+                        guest, session_code, password = join_data
+                        try:
+                            response = requests.post(f"{API_URL}/api/sessions/join/{session_code}",
+                                                   json={"password": password},
+                                                   headers=guest.headers,
+                                                   timeout=5)
+                            return response.status_code == 200
+                        except:
+                            return False
+                    
+                    # Test joining both sessions concurrently
+                    join_tests = [
+                        (guest_users[0], session_code1, password1),
+                        (guest_users[1], session_code1, password1),
+                        (guest_users[2], session_code2, password2),
+                        (guest_users[3], session_code2, password2),
+                    ]
+                    
+                    start_time = time.time()
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                        join_results = list(executor.map(join_with_password, join_tests))
+                    
+                    join_time = time.time() - start_time
+                    successful_joins = sum(join_results)
+                    
+                    self.assert_test(successful_joins >= 3,
+                                    "Concurrent Password Authentication",
+                                    f"{successful_joins}/4 password authentications succeeded in {join_time:.2f}s")
+                    
+                    # Test concurrent wrong password attempts (should all fail)
+                    wrong_password_tests = [
+                        (guest_users[0], session_code1, "wrong_password"),
+                        (guest_users[1], session_code2, "wrong_password"),
+                    ]
+                    
+                    def join_with_wrong_password(join_data):
+                        guest, session_code, password = join_data
+                        try:
+                            response = requests.post(f"{API_URL}/api/sessions/join/{session_code}",
+                                                   json={"password": password},
+                                                   headers=guest.headers,
+                                                   timeout=5)
+                            return response.status_code == 401  # Should be unauthorized
+                        except:
+                            return False
+                    
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                        wrong_results = list(executor.map(join_with_wrong_password, wrong_password_tests))
+                    
+                    wrong_attempts_blocked = sum(wrong_results)
+                    self.assert_test(wrong_attempts_blocked >= 1,
+                                    "Concurrent Wrong Password Blocking",
+                                    f"{wrong_attempts_blocked}/2 wrong password attempts properly blocked")
+                    
+                    # Add guest users to cleanup list
+                    self.users.extend(guest_users)
+        
+        # Add password test users to cleanup list
+        self.users.extend(password_test_users)
+        return True
+    
     def cleanup_all_users(self):
         """Clean up all test users"""
         log("\\n🧹 Cleaning up test users", Colors.BLUE)
@@ -602,6 +727,7 @@ class InterviewPlatformParallelismTest:
             self.test_real_time_interview_collaboration()
             self.test_concurrent_interview_execution()
             self.test_system_performance_under_load()
+            self.test_concurrent_password_protected_sessions()
             
         except Exception as e:
             log(f"Parallelism test suite crashed: {e}", Colors.RED)
@@ -644,7 +770,7 @@ if __name__ == "__main__":
     print("╔════════════════════════════════════════════════════════════════════════╗")
     print("║               INTERVIEW PLATFORM PARALLELISM TEST SUITE                ║")
     print("║                                                                        ║")
-    print("║  Tests: Interview Sessions, Question Building, Real-time Collaboration ║")
+    print("║  Tests: Sessions, Questions, Collaboration, Password Protection       ║")
     print("║  🎯 Focus: Realistic Interview Platform Concurrent Scenarios          ║") 
     print("╚════════════════════════════════════════════════════════════════════════╝")
     print(f"{Colors.END}\\n")

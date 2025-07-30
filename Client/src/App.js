@@ -15,6 +15,7 @@ import './components/Login.css';
 import './components/Questions.css';
 import TemplateDetails from "./components/TemplateDetails";
 import SessionBuilder from './components/SessionBuilder';
+import SessionJoinForm from './components/SessionJoinForm';
 
 // Protected route component
 const ProtectedRoute = ({ children }) => {
@@ -63,6 +64,11 @@ function AppContent() {
 
   // Default features to display if API is not available
   const fallbackFeatures = [
+    {
+      name: "Collaborative Sessions",
+      description: "Create or join secure collaborative sessions to build interview templates together.",
+      route: "/sessions"
+    },
     {
       name: "Practice programming problems",
       description: "Sharpen your coding skills with various programming challenges."
@@ -214,7 +220,16 @@ function AppContent() {
           }
         />
 
-        {/* Session Builder Route */}
+        {/* Session Management Routes */}
+        <Route
+          path="/sessions"
+          element={
+            <ProtectedRoute>
+              <SessionJoinForm />
+            </ProtectedRoute>
+          }
+        />
+        
         <Route
           path="/session/:sessionCode"
           element={

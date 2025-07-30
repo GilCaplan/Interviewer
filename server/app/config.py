@@ -24,4 +24,4 @@ class Config:
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         handler.setFormatter(formatter)
         app.logger.addHandler(handler)
-    app.logger.setLevel(Config.LOG_LEVEL)
+        app.logger.setLevel(Config.LOG_LEVEL)

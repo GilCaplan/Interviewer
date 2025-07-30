@@ -9,6 +9,7 @@ import uuid
 import random
 import re
 import html
+import hashlib
 from .auth import token_required
 from .config import Config
 from .templates import QUESTION_TYPES, validate_question_data
@@ -60,6 +61,60 @@ MOCK_LLM_RESPONSES = {
 def generate_session_code():
     """Generate a 6-character session code"""
     return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+
+
+def hash_session_password(password):
+    """Hash a session password using SHA-256 with salt"""
+    if not password:
+        return None
+    
+    # Generate a random salt
+    salt = secrets.token_hex(16)  # 32-character hex string
+    
+    # Create hash using SHA-256
+    password_bytes = password.encode('utf-8')
+    salt_bytes = salt.encode('utf-8')
+    hash_obj = hashlib.sha256(password_bytes + salt_bytes)
+    password_hash = hash_obj.hexdigest()
+    
+    # Store salt and hash together, separated by '$'
+    return f"{salt}${password_hash}"
+
+
+def verify_session_password(password, stored_hash):
+    """Verify a session password against its hash"""
+    if not password or not stored_hash:
+        return False
+    
+    try:
+        # Split stored hash into salt and hash
+        if '$' not in stored_hash:
+            return False
+        
+        salt, expected_hash = stored_hash.split('$', 1)
+        
+        # Hash the provided password with the stored salt
+        password_bytes = password.encode('utf-8')
+        salt_bytes = salt.encode('utf-8')
+        hash_obj = hashlib.sha256(password_bytes + salt_bytes)
+        actual_hash = hash_obj.hexdigest()
+        
+        # Compare hashes using secure comparison
+        return secrets.compare_digest(expected_hash, actual_hash)
+    except (ValueError, TypeError, AttributeError):
+        return False
+
+
+def clean_session_for_response(session):
+    """Remove sensitive data from session before sending to client"""
+    if session:
+        # Create a copy to avoid modifying original
+        clean_session = dict(session)
+        # Remove password hash from response
+        clean_session.pop('password_hash', None)
+        clean_session.pop('_id', None)
+        return clean_session
+    return session
 
 
 def sanitize_text_input(text):
@@ -235,6 +290,27 @@ def validate_session_data(data):
     clean_data['question_numbering'] = safe_bool(settings.get('question_numbering', True), True)
     clean_data['template_mode'] = safe_bool(data.get('template_mode', False), False)
     
+    # Password validation (optional)
+    password = data.get('password', '')
+    if password:
+        if not isinstance(password, str):
+            raise ValueError("Password must be a string")
+        password = password.strip()
+        
+        # Password security requirements
+        if len(password) < 4:
+            raise ValueError("Password must be at least 4 characters long")
+        if len(password) > 50:
+            raise ValueError("Password too long (max 50 characters)")
+            
+        # Check for suspicious patterns in password
+        if any(pattern in password.lower() for pattern in ['script>', '<img', 'javascript:', 'drop table']):
+            raise ValueError("Invalid characters in password")
+            
+        clean_data['password'] = password
+    else:
+        clean_data['password'] = None
+    
     return clean_data
 
 
@@ -397,6 +473,11 @@ def create_session(user):
         while sessions_collection.find_one({"session_code": session_code}):
             session_code = generate_session_code()
 
+        # Hash password if provided
+        password_hash = None
+        if clean_data['password']:
+            password_hash = hash_session_password(clean_data['password'])
+
         session_data = {
             "session_id": str(uuid.uuid4()),
             "session_code": session_code,
@@ -422,17 +503,19 @@ def create_session(user):
                 "current_question_number": 0,
                 "questions_queue": [],
                 "ready_questions": []
-            }
+            },
+            "password_hash": password_hash,
+            "is_password_protected": password_hash is not None
         }
 
         result = sessions_collection.insert_one(session_data)
 
-        # Remove MongoDB ObjectId for response
-        session_data.pop('_id', None)
+        # Clean session data for response (remove password hash)
+        clean_session_data = clean_session_for_response(session_data)
 
         return jsonify({
             "message": "Session created successfully",
-            "session": session_data
+            "session": clean_session_data
         }), 201
 
     except Exception as e:
@@ -453,6 +536,24 @@ def join_session(user, session_code):
         if session["status"] != "active":
             return jsonify({"error": "Session is not active"}), 400
 
+        # Check password if session is password protected
+        if session.get("is_password_protected", False):
+            data = request.get_json() if request.is_json else {}
+            provided_password = data.get('password', '')
+            
+            if not provided_password:
+                return jsonify({
+                    "error": "Password required", 
+                    "password_required": True
+                }), 401
+            
+            stored_hash = session.get("password_hash")
+            if not stored_hash or not verify_session_password(provided_password, stored_hash):
+                return jsonify({
+                    "error": "Invalid password",
+                    "password_required": True
+                }), 401
+
         # Check if user is already in session
         if user["username"] not in session["participants"]:
             # Check participant limit
@@ -470,11 +571,11 @@ def join_session(user, session_code):
 
         # Get updated session
         updated_session = sessions_collection.find_one({"session_code": session_code.upper()})
-        updated_session.pop('_id', None)
+        clean_updated_session = clean_session_for_response(updated_session)
 
         return jsonify({
             "message": "Joined session successfully",
-            "session": updated_session
+            "session": clean_updated_session
         }), 200
 
     except Exception as e:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Session Management Test Suite
-Tests session cleanup, question removal, validation, and security features
+Tests session cleanup, question removal, validation, password protection, and security features
 
 Run with: python test_session_management.py
 """
@@ -94,7 +94,7 @@ class SessionManagementTestSuite:
             log(f"Error creating test user: {e}", Colors.RED)
             return False
     
-    def create_test_session(self, title_suffix=""):
+    def create_test_session(self, title_suffix="", password=None):
         """Helper to create a test session"""
         session_data = {
             "title": f"Session Management Test {title_suffix}",
@@ -108,6 +108,10 @@ class SessionManagementTestSuite:
                 "allow_user_questions": True
             }
         }
+        
+        # Add password if provided
+        if password:
+            session_data["password"] = password
         
         try:
             response = requests.post(f"{API_URL}/api/sessions/create",
@@ -183,6 +187,7 @@ class SessionManagementTestSuite:
                                    timeout=10)
             
             if response.status_code == 201:
+                # If malicious input is accepted, check sanitization
                 session_info = response.json().get("session", {})
                 title = session_info.get("title", "")
                 subject = session_info.get("subject", "")
@@ -193,18 +198,19 @@ class SessionManagementTestSuite:
                 sql_injection_handled = "DROP TABLE" not in subject
                 img_tag_escaped = "&lt;img" in description and "onerror" not in description
                 
-                self.assert_test(script_escaped, "XSS Protection in Title", 
-                                f"Sanitized title: {title[:50]}")
-                self.assert_test(sql_injection_handled, "SQL Injection Protection", 
-                                f"Sanitized subject: {subject}")
-                self.assert_test(img_tag_escaped, "HTML Tag Removal", 
-                                f"Sanitized description: {description[:50]}")
+                malicious_input_sanitized = script_escaped and sql_injection_handled and img_tag_escaped
+                self.assert_test(malicious_input_sanitized, "Malicious Input Handling", 
+                                f"Input accepted and properly sanitized: {response.status_code}")
                 
                 # Clean up
                 session_id = session_info.get("session_id")
                 if session_id:
                     self.test_sessions.append(session_id)
                 
+            elif response.status_code == 400:
+                # If malicious input is rejected, that's also good security
+                self.assert_test(True, "Malicious Input Handling", 
+                                f"Malicious input properly rejected: {response.status_code}")
             else:
                 self.assert_test(False, "Malicious Input Handling", 
                                 f"Unexpected status: {response.status_code}")
@@ -637,6 +643,186 @@ class SessionManagementTestSuite:
         
         return True
     
+    def test_password_protection(self):
+        """Test session password protection functionality"""
+        log("\n🔐 Testing Session Password Protection", Colors.BOLD + Colors.YELLOW)
+        log("-" * 50, Colors.YELLOW)
+        
+        if not self.test_user:
+            log("No test user available", Colors.RED)
+            return False
+        
+        # Test 1: Create password-protected session
+        test_password = "test_password_123"
+        session_id, session_info = self.create_test_session("Password Protected", test_password)
+        
+        self.assert_test(session_id is not None, "Password-Protected Session Creation",
+                        f"Session created with password protection")
+        
+        if not session_id:
+            return False
+        
+        # Test 2: Verify session shows as password protected
+        session_code = session_info.get("session_code")
+        if session_code:
+            try:
+                response = requests.get(f"{API_URL}/api/sessions/{session_id}",
+                                      headers=self.test_user["headers"],
+                                      timeout=10)
+                
+                if response.status_code == 200:
+                    session_data = response.json().get("session", {})
+                    is_password_protected = session_data.get("is_password_protected", False)
+                    
+                    self.assert_test(is_password_protected, "Password Protection Flag",
+                                    f"Session marked as password protected: {is_password_protected}")
+                    
+                    # Verify password hash is not exposed
+                    password_hash_hidden = "password" not in session_data and "password_hash" not in session_data
+                    self.assert_test(password_hash_hidden, "Password Hash Security",
+                                    "Password hash not exposed in API response")
+                
+            except Exception as e:
+                self.assert_test(False, "Session Data Verification", f"Error: {e}")
+        
+        # Test 3: Create guest user to test password access
+        guest_username = f"password_test_guest_{uuid.uuid4().hex[:6]}"
+        try:
+            response = requests.post(f"{API_URL}/api/auth/login",
+                                   json={"username": guest_username},
+                                   timeout=5)
+            
+            if response.status_code == 200:
+                guest_token = response.json().get("token")
+                guest_headers = {"Authorization": f"Bearer {guest_token}"}
+                
+                # Test 4: Join without password should fail
+                response = requests.post(f"{API_URL}/api/sessions/join/{session_code}",
+                                       json={},
+                                       headers=guest_headers,
+                                       timeout=10)
+                
+                join_blocked = response.status_code == 401
+                self.assert_test(join_blocked, "Password Required Check",
+                                f"Join without password blocked: {response.status_code}")
+                
+                if join_blocked:
+                    error_data = response.json()
+                    password_error = "password" in error_data.get("error", "").lower()
+                    self.assert_test(password_error, "Password Error Message",
+                                    "Error message indicates password required")
+                
+                # Test 5: Join with wrong password should fail
+                response = requests.post(f"{API_URL}/api/sessions/join/{session_code}",
+                                       json={"password": "wrong_password"},
+                                       headers=guest_headers,
+                                       timeout=10)
+                
+                wrong_password_blocked = response.status_code == 401
+                self.assert_test(wrong_password_blocked, "Wrong Password Blocked",
+                                f"Wrong password blocked: {response.status_code}")
+                
+                # Test 6: Join with correct password should succeed
+                response = requests.post(f"{API_URL}/api/sessions/join/{session_code}",
+                                       json={"password": test_password},
+                                       headers=guest_headers,
+                                       timeout=10)
+                
+                correct_password_success = response.status_code == 200
+                self.assert_test(correct_password_success, "Correct Password Access",
+                                f"Correct password allows access: {response.status_code}")
+                
+                if correct_password_success:
+                    join_data = response.json()
+                    session_returned = "session" in join_data
+                    self.assert_test(session_returned, "Session Data Returned",
+                                    "Session data provided after successful password verification")
+                
+            else:
+                self.assert_test(False, "Guest User Creation", "Failed to create guest user for password testing")
+                
+        except Exception as e:
+            self.assert_test(False, "Password Protection Tests", f"Error: {e}")
+        
+        # Test 7: Password validation edge cases
+        # Test empty password
+        try:
+            response = requests.post(f"{API_URL}/api/sessions/join/{session_code}",
+                                   json={"password": ""},
+                                   headers=guest_headers,
+                                   timeout=10)
+            
+            empty_password_blocked = response.status_code == 401
+            self.assert_test(empty_password_blocked, "Empty Password Blocked",
+                            f"Empty password blocked: {response.status_code}")
+            
+        except Exception as e:
+            self.assert_test(False, "Empty Password Test", f"Error: {e}")
+        
+        # Test 8: Password with special characters
+        special_password = "test@#$%^&*()_+-={}[]|\\:;\"'<>?,./"
+        session_id_special, session_info_special = self.create_test_session("Special Chars", special_password)
+        
+        if session_id_special:
+            session_code_special = session_info_special.get("session_code")
+            try:
+                response = requests.post(f"{API_URL}/api/sessions/join/{session_code_special}",
+                                       json={"password": special_password},
+                                       headers=guest_headers,
+                                       timeout=10)
+                
+                special_chars_success = response.status_code == 200
+                self.assert_test(special_chars_success, "Special Characters Password",
+                                f"Special characters in password work: {response.status_code}")
+                
+            except Exception as e:
+                self.assert_test(False, "Special Characters Test", f"Error: {e}")
+        
+        # Test 9: Long password handling
+        long_password = "a" * 49  # Just under the 50 character limit
+        session_id_long, session_info_long = self.create_test_session("Long Password", long_password)
+        
+        if session_id_long:
+            session_code_long = session_info_long.get("session_code")
+            try:
+                response = requests.post(f"{API_URL}/api/sessions/join/{session_code_long}",
+                                       json={"password": long_password},
+                                       headers=guest_headers,
+                                       timeout=10)
+                
+                long_password_success = response.status_code == 200
+                self.assert_test(long_password_success, "Long Password Support",
+                                f"Long password (49 chars) works: {response.status_code}")
+                
+            except Exception as e:
+                self.assert_test(False, "Long Password Test", f"Error: {e}")
+        
+        # Test 10: Non-password protected session still works
+        session_id_public, session_info_public = self.create_test_session("Public Session")
+        
+        if session_id_public:
+            session_code_public = session_info_public.get("session_code")
+            try:
+                response = requests.post(f"{API_URL}/api/sessions/join/{session_code_public}",
+                                       json={},
+                                       headers=guest_headers,
+                                       timeout=10)
+                
+                public_access_success = response.status_code == 200
+                self.assert_test(public_access_success, "Public Session Access",
+                                f"Public session accessible without password: {response.status_code}")
+                
+                if public_access_success:
+                    session_data = response.json().get("session", {})
+                    not_password_protected = not session_data.get("is_password_protected", True)
+                    self.assert_test(not_password_protected, "Public Session Flag",
+                                    "Public session not marked as password protected")
+                
+            except Exception as e:
+                self.assert_test(False, "Public Session Test", f"Error: {e}")
+        
+        return True
+    
     def cleanup_test_data(self):
         """Clean up any remaining test sessions"""
         log("\n🧽 Cleaning up test data", Colors.BLUE)
@@ -679,6 +865,7 @@ class SessionManagementTestSuite:
             self.test_session_cleanup_operations()
             self.test_user_session_cleanup()
             self.test_permissions_and_security()
+            self.test_password_protection()
             self.test_debug_functionality()
             
         except Exception as e:
@@ -719,7 +906,7 @@ if __name__ == "__main__":
     print("╔══════════════════════════════════════════════════════════════════╗")
     print("║                   SESSION MANAGEMENT TEST SUITE                  ║")
     print("║                                                                  ║")
-    print("║  Tests: Validation, Questions, Cleanup, Security, Debug         ║")
+    print("║  Tests: Validation, Questions, Cleanup, Security, Passwords     ║")
     print("╚══════════════════════════════════════════════════════════════════╝")
     print(f"{Colors.END}\n")
     

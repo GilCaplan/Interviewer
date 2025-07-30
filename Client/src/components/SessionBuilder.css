@@ -24,6 +24,13 @@
   color: #6c7b7f;
 }
 
+.session-badges {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
 .host-badge {
   background: #e74c3c;
   color: white;
@@ -31,7 +38,17 @@
   border-radius: 20px;
   font-size: 0.8rem;
   font-weight: bold;
-  margin-left: 10px;
+  display: inline-block;
+}
+
+.password-badge {
+  background: #f39c12;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  display: inline-block;
 }
 
 .screen-navigation {
@@ -114,6 +131,118 @@
   transform: translateY(-2px);
 }
 
+/* Password Prompt Styles */
+.session-password-prompt {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+}
+
+.password-prompt-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  padding: 40px;
+  max-width: 450px;
+  width: 100%;
+  text-align: center;
+}
+
+.password-prompt-container h2 {
+  color: #2c3e50;
+  margin-bottom: 15px;
+  font-size: 24px;
+}
+
+.password-prompt-container p {
+  color: #666;
+  margin-bottom: 25px;
+  line-height: 1.5;
+}
+
+.password-form {
+  margin-bottom: 25px;
+}
+
+.password-input-group {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.password-input-group input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: border-color 0.3s ease;
+}
+
+.password-input-group input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.password-input-group button {
+  background: #3498db;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.password-input-group button:hover:not(:disabled) {
+  background: #2980b9;
+  transform: translateY(-2px);
+}
+
+.password-input-group button:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.password-prompt-actions {
+  border-top: 1px solid #ecf0f1;
+  padding-top: 20px;
+}
+
+.back-button {
+  background: none;
+  border: none;
+  color: #3498db;
+  cursor: pointer;
+  font-size: 14px;
+  text-decoration: underline;
+  padding: 8px 16px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.back-button:hover {
+  background: #f8f9fa;
+  text-decoration: none;
+}
+
+.error-message {
+  background: #fff5f5;
+  border: 1px solid #fed7d7;
+  color: #c53030;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .session-header {
@@ -134,5 +263,18 @@
   
   .session-actions {
     text-align: center;
+  }
+  
+  .password-prompt-container {
+    padding: 30px 20px;
+  }
+  
+  .password-input-group {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .password-input-group button {
+    padding: 14px 20px;
   }
 }
