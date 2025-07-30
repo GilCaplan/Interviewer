@@ -539,7 +539,7 @@ def join_session(user, session_code):
         # Check password if session is password protected
         if session.get("is_password_protected", False):
             data = request.get_json() if request.is_json else {}
-            provided_password = data.get('password', '')
+            provided_password = data.get('password', '').strip()
             
             if not provided_password:
                 return jsonify({
@@ -790,10 +790,11 @@ def get_session_data(user, session_id):
         ).sort("timestamp", -1).limit(50))
         messages.reverse()  # Show chronologically
 
-        session.pop('_id', None)
+        # Clean session data for response (remove password hash)
+        clean_session = clean_session_for_response(session)
 
         return jsonify({
-            "session": session,
+            "session": clean_session,
             "questions": questions,
             "messages": messages
         }), 200

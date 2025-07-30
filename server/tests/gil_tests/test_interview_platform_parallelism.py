@@ -51,7 +51,9 @@ def find_running_server():
 
 class InterviewUser:
     def __init__(self, username_suffix=""):
-        self.username = f"parallel_{username_suffix}_{uuid.uuid4().hex[:6]}"
+        # Keep username under 30 characters limit
+        suffix = username_suffix[:8] if username_suffix else ""
+        self.username = f"par_{suffix}_{uuid.uuid4().hex[:8]}"
         self.token = None
         self.headers = {}
         self.sessions = []

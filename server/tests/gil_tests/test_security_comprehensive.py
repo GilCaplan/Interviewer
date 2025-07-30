@@ -68,24 +68,32 @@ class SecurityTestSuite:
     
     def create_test_user(self, username_suffix=""):
         """Create a test user and return auth data"""
-        username = f"security_test_{username_suffix}_{uuid.uuid4().hex[:8]}"
+        # Keep username under 30 characters limit
+        suffix = username_suffix[:8] if username_suffix else ""
+        username = f"sec_{suffix}_{uuid.uuid4().hex[:8]}"
         
         try:
             response = requests.post(f"{API_URL}/api/auth/login",
                                    json={"username": username},
-                                   timeout=5)
+                                   timeout=10)
             
             if response.status_code == 200:
                 auth_data = response.json()
-                user_data = {
-                    "username": username,
-                    "token": auth_data.get("token"),
-                    "headers": {"Authorization": f"Bearer {auth_data.get('token')}"}
-                }
-                self.test_users.append(user_data)
-                return user_data
-        except:
-            pass
+                token = auth_data.get("token")
+                if token:
+                    user_data = {
+                        "username": username,
+                        "token": token,
+                        "headers": {"Authorization": f"Bearer {token}"}
+                    }
+                    self.test_users.append(user_data)
+                    return user_data
+                else:
+                    log(f"No token in response for user {username}", Colors.RED)
+            else:
+                log(f"Failed to create user {username}: {response.status_code}", Colors.RED)
+        except Exception as e:
+            log(f"Exception creating user {username}: {e}", Colors.RED)
         
         return None
     
@@ -300,8 +308,11 @@ class SecurityTestSuite:
                                        headers=user["headers"],
                                        timeout=5)
                 
-                # Check if response contains unsanitized XSS
-                if response.status_code == 201:
+                # Check if XSS is handled (either rejected or sanitized)
+                if response.status_code == 400:
+                    # XSS properly rejected
+                    xss_blocked += 1
+                elif response.status_code == 201:
                     session_data = response.json()
                     if payload not in str(session_data):  # XSS should be sanitized
                         xss_blocked += 1

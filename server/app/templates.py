@@ -159,13 +159,16 @@ def create_template(user):
             # Basic sanitization
             import html
             value = html.escape(value.strip())
+            # Use default if value is empty after sanitization
+            if not value:
+                value = default
             if max_len and len(value) > max_len:
                 value = value[:max_len]
             return value
         
         template_data = {
             "template_id": str(uuid.uuid4()),
-            "template_name": safe_str(data.get('template_name', 'Untitled Template'), 'Untitled Template', 100),
+            "template_name": safe_str(data.get('template_name') or 'Untitled Template', 'Untitled Template', 100),
             "description": safe_str(data.get('description', ''), '', 1000),
             "subject": data.get('subject', 'general') if data.get('subject') in SUBJECTS else 'general',
             "sub_subject": safe_str(data.get('sub_subject', ''), '', 50),

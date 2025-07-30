@@ -678,9 +678,19 @@ class SessionManagementTestSuite:
                                     f"Session marked as password protected: {is_password_protected}")
                     
                     # Verify password hash is not exposed
-                    password_hash_hidden = "password" not in session_data and "password_hash" not in session_data
-                    self.assert_test(password_hash_hidden, "Password Hash Security",
-                                    "Password hash not exposed in API response")
+                    password_not_exposed = "password" not in session_data
+                    password_hash_not_exposed = "password_hash" not in session_data
+                    
+                    # Also check that the actual test password is not in any field values
+                    test_password_not_exposed = True
+                    for key, value in session_data.items():
+                        if isinstance(value, str) and test_password in value:
+                            test_password_not_exposed = False
+                            break
+                    
+                    password_security_good = password_not_exposed and password_hash_not_exposed and test_password_not_exposed
+                    self.assert_test(password_security_good, "Password Hash Security",
+                                    f"Password data not exposed: password={password_not_exposed}, hash={password_hash_not_exposed}, plaintext={test_password_not_exposed}")
                 
             except Exception as e:
                 self.assert_test(False, "Session Data Verification", f"Error: {e}")

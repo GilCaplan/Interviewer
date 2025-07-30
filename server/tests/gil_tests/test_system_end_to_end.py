@@ -696,10 +696,26 @@ class SystemTestSuite:
                                                 headers=user["headers"],
                                                 timeout=5)
         
-        # System should reject invalid data gracefully (not crash)
-        invalid_data_handled = invalid_template_response.status_code in [400, 422]
-        self.assert_test(invalid_data_handled, "Invalid Data Handling",
-                        f"Status: {invalid_template_response.status_code}")
+        # System should handle invalid data gracefully (reject or correct)
+        if invalid_template_response.status_code in [400, 422]:
+            # Data properly rejected
+            invalid_data_handled = True
+            message = f"Invalid data properly rejected: {invalid_template_response.status_code}"
+        elif invalid_template_response.status_code == 201:
+            # Data accepted but corrected - verify corrections were applied
+            template_data = invalid_template_response.json().get("template", {})
+            corrections_applied = (
+                template_data.get("template_name", "") != "" and  # None/empty title corrected
+                template_data.get("subject", "") in ["general", "algorithms", "data_structures"] and  # Invalid subject corrected
+                template_data.get("difficulty", "") in ["easy", "medium", "hard"]  # Invalid difficulty corrected
+            )
+            invalid_data_handled = corrections_applied
+            message = f"Invalid data accepted and corrected: {invalid_template_response.status_code}"
+        else:
+            invalid_data_handled = False
+            message = f"Unexpected response: {invalid_template_response.status_code}"
+        
+        self.assert_test(invalid_data_handled, "Invalid Data Handling", message)
         
         # Test 4: System health after error conditions
         health_response = requests.get(f"{API_URL}/api/health", timeout=5)

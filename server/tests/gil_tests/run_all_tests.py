@@ -52,7 +52,9 @@ def update_test_files_port(server_url):
         "test_session_management.py",
         "test_scaling_and_concurrent_users.py",
         "test_session_collaboration.py",
-        "test_llm_mock_integration.py"
+        "test_llm_mock_integration.py",
+        "test_interview_platform_parallelism.py",
+        "test_system_end_to_end.py"
     ]
     
     port = server_url.split(":")[-1]
@@ -195,6 +197,7 @@ def main():
         ("test_scaling_and_concurrent_users.py", "Scaling and concurrent user operations"),
         ("test_llm_mock_integration.py", "Mock LLM integration"),
         ("test_security_comprehensive.py", "Security tests (auth, XSS, injection)"),
+        ("test_interview_platform_parallelism.py", "Interview platform parallelism tests"),
         ("test_system_end_to_end.py", "System/End-to-End tests (complete workflows)"),
         ("test_stress_and_chaos.py", "Stress and chaos tests (resilience)")
     ]
