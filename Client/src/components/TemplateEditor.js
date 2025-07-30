@@ -19,6 +19,14 @@ const TemplateEditor = ({
   const [savingQuestions, setSavingQuestions] = useState({});
   const [convertingTemplate, setConvertingTemplate] = useState(false);
   const [showNextSteps, setShowNextSteps] = useState(false);
+  
+  // Collaborative editing states
+  const [showSuggestionModal, setShowSuggestionModal] = useState(false);
+  const [suggestionField, setSuggestionField] = useState(null);
+  const [suggestionText, setSuggestionText] = useState('');
+  const [suggestionQuestionId, setSuggestionQuestionId] = useState(null);
+  const [showNotesFor, setShowNotesFor] = useState({});
+  const [fieldSuggestions, setFieldSuggestions] = useState({}); // Store pending suggestions by question ID
 
   const questionTypes = [
     { value: 'multiple_choice', label: 'Multiple Choice' },
@@ -144,6 +152,115 @@ const TemplateEditor = ({
       console.error('Error removing question:', error);
       alert('Failed to remove question: ' + error.message);
     }
+  };
+
+  // Collaborative editing functions
+  const handleSuggestEdit = (questionId, fieldName, currentValue) => {
+    setSuggestionQuestionId(questionId);
+    setSuggestionField(fieldName);
+    setSuggestionText(currentValue || '');
+    setShowSuggestionModal(true);
+  };
+
+  const submitSuggestion = async () => {
+    if (!suggestionText.trim() || !suggestionField || !suggestionQuestionId) return;
+
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      let token = localStorage.getItem('token');
+      if (!token) {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const userData = JSON.parse(storedUser);
+          token = userData.sessionToken;
+        }
+      }
+
+      const currentValue = getFieldValue(suggestionField, suggestionQuestionId);
+
+      const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/questions/${suggestionQuestionId}/suggest`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          field: suggestionField,
+          suggested_value: suggestionText,
+          current_value: currentValue
+        })
+      });
+
+      if (response.ok) {
+        setShowSuggestionModal(false);
+        setSuggestionText('');
+        setSuggestionField(null);
+        setSuggestionQuestionId(null);
+        alert('Suggestion submitted successfully!');
+      } else {
+        const errorData = await response.json();
+        alert('Failed to submit suggestion: ' + (errorData.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error submitting suggestion:', error);
+      alert('Failed to submit suggestion: ' + error.message);
+    }
+  };
+
+  const toggleNotesDisplay = (questionId) => {
+    setShowNotesFor(prev => ({
+      ...prev,
+      [questionId]: !prev[questionId]
+    }));
+  };
+
+  const handleSuggestion = async (questionId, suggestionId, action) => {
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      let token = localStorage.getItem('token');
+      if (!token) {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const userData = JSON.parse(storedUser);
+          token = userData.sessionToken;
+        }
+      }
+
+      const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/questions/${questionId}/suggestions/${suggestionId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action })
+      });
+
+      if (response.ok) {
+        alert(`Suggestion ${action}ed successfully!`);
+        // The UI will update automatically via WebSocket
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to ${action} suggestion: ` + (errorData.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing suggestion:`, error);
+      alert(`Failed to ${action} suggestion: ` + error.message);
+    }
+  };
+
+  // Helper function to get field value (local state takes precedence)
+  const getFieldValue = (field, questionId) => {
+    if (!questionId && suggestionQuestionId) {
+      questionId = suggestionQuestionId;
+    }
+    if (!questionId) return '';
+    
+    const localKey = `${questionId}-${field}`;
+    // Find the question data
+    const question = questions.find(q => q.question_id === questionId);
+    const userContent = question?.user_content || {};
+    
+    return localQuestions[localKey] !== undefined ? localQuestions[localKey] : (userContent[field] || '');
   };
 
   const clearAllQuestions = async () => {
@@ -297,11 +414,72 @@ const TemplateEditor = ({
     const userContent = question.user_content || {};
     const isFinalized = question.status === 'finalized';
     const canEdit = isHost && !isFinalized;
+    const canSuggest = !isHost && !isFinalized;
     
-    // Helper function to get field value (local state takes precedence)
-    const getFieldValue = (field) => {
-      const localKey = `${question.question_id}-${field}`;
-      return localQuestions[localKey] !== undefined ? localQuestions[localKey] : (userContent[field] || '');
+    // Helper function to get field value for this specific question
+    const getFieldValueLocal = (field) => getFieldValue(field, question.question_id);
+
+    // Helper function to render field with suggestion button for non-hosts
+    const renderFieldGroup = (label, fieldName, inputElement) => {
+      // Get pending suggestions for this field
+      const fieldSuggestions = (question.collaboration_notes || [])
+        .filter(note => note.type === 'field_suggestion' && 
+                       note.suggestion_data?.field === fieldName &&
+                       note.suggestion_data?.status === 'pending');
+
+      return (
+        <div className="field-group">
+          <div className="field-header">
+            <label>{label}:</label>
+            {canSuggest && (
+              <button 
+                className="suggest-btn"
+                onClick={() => handleSuggestEdit(question.question_id, fieldName, getFieldValueLocal(fieldName))}
+                title="Suggest an edit for this field"
+              >
+                💡 Suggest
+              </button>
+            )}
+          </div>
+          {inputElement}
+          
+          {/* Display pending suggestions for this field */}
+          {fieldSuggestions.length > 0 && (
+            <div className="field-suggestions">
+              <h5>💡 Pending Suggestions ({fieldSuggestions.length}):</h5>
+              {fieldSuggestions.map(note => (
+                <div key={note.suggestion_data.suggestion_id} className="field-suggestion">
+                  <div className="suggestion-header">
+                    <span className="suggestion-author">{note.suggestion_data.author}</span>
+                    <span className="suggestion-time">{new Date(note.suggestion_data.timestamp).toLocaleString()}</span>
+                  </div>
+                  <div className="suggestion-content">
+                    <strong>Suggested value:</strong> {note.suggestion_data.suggested_value}
+                  </div>
+                  {isHost && (
+                    <div className="suggestion-actions">
+                      <button 
+                        className="accept-btn"
+                        onClick={() => handleSuggestion(question.question_id, note.suggestion_data.suggestion_id, 'accept')}
+                        title="Accept this suggestion"
+                      >
+                        ✅ Accept
+                      </button>
+                      <button 
+                        className="reject-btn"
+                        onClick={() => handleSuggestion(question.question_id, note.suggestion_data.suggestion_id, 'reject')}
+                        title="Reject this suggestion"
+                      >
+                        ❌ Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
     };
     
     // Debug logging
@@ -310,6 +488,7 @@ const TemplateEditor = ({
       isHost,
       isFinalized,
       canEdit,
+      canSuggest,
       userContent
     });
 
@@ -317,29 +496,45 @@ const TemplateEditor = ({
       case 'multiple_choice':
         return (
           <div className="question-fields">
-            <div className="field-group">
-              <label>Question Text:</label>
+            {renderFieldGroup(
+              "Question Text",
+              "question_text",
               <textarea
-                value={getFieldValue('question_text')}
+                value={getFieldValueLocal('question_text')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'question_text', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Enter your multiple choice question..."
               />
-            </div>
+            )}
             
             <div className="field-group">
-              <label>Options:</label>
+              <div className="field-header">
+                <label>Options:</label>
+                {canSuggest && (
+                  <button 
+                    className="suggest-btn"
+                    onClick={() => {
+                      const currentOptions = getFieldValueLocal('options');
+                      const optionsText = Array.isArray(currentOptions) ? currentOptions.join('\n') : '';
+                      handleSuggestEdit(question.question_id, 'options', optionsText);
+                    }}
+                    title="Suggest changes to all options"
+                  >
+                    💡 Suggest
+                  </button>
+                )}
+              </div>
               {['A', 'B', 'C', 'D'].map((letter, index) => (
                 <div key={letter} className="option-input">
                   <span>{letter}.</span>
                   <input
                     type="text"
                     value={(() => {
-                      const options = getFieldValue('options');
+                      const options = getFieldValueLocal('options');
                       return Array.isArray(options) ? (options[index] || '') : '';
                     })()}
                     onChange={(e) => {
-                      const currentOptions = getFieldValue('options');
+                      const currentOptions = getFieldValueLocal('options');
                       const newOptions = Array.isArray(currentOptions) 
                         ? [...currentOptions] 
                         : ['', '', '', ''];
@@ -353,53 +548,57 @@ const TemplateEditor = ({
               ))}
             </div>
 
-            <div className="field-group">
-              <label>Correct Answer:</label>
+            {renderFieldGroup(
+              "Correct Answer",
+              "correct_answer",
               <select
-                value={getFieldValue('correct_answer')}
+                value={getFieldValueLocal('correct_answer')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'correct_answer', e.target.value)}
                 disabled={!canEdit}
               >
                 <option value="">Select correct answer</option>
                 {(() => {
-                  const options = getFieldValue('options');
+                  const options = getFieldValueLocal('options');
                   return Array.isArray(options) ? options.map((option, index) => (
                     <option key={index} value={option}>{['A', 'B', 'C', 'D'][index]}. {option}</option>
                   )) : [];
                 })()}
               </select>
-            </div>
+            )}
 
-            <div className="field-group">
-              <label>Explanation:</label>
+            {renderFieldGroup(
+              "Explanation",
+              "explanation",
               <textarea
-                value={getFieldValue('explanation')}
+                value={getFieldValueLocal('explanation')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'explanation', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Explain why this is the correct answer..."
               />
-            </div>
+            )}
           </div>
         );
 
       case 'coding':
         return (
           <div className="question-fields">
-            <div className="field-group">
-              <label>Problem Description:</label>
+            {renderFieldGroup(
+              "Problem Description",
+              "question_text",
               <textarea
-                value={getFieldValue('question_text')}
+                value={getFieldValueLocal('question_text')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'question_text', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Describe the coding problem..."
                 rows={4}
               />
-            </div>
+            )}
 
-            <div className="field-group">
-              <label>Programming Language:</label>
+            {renderFieldGroup(
+              "Programming Language",
+              "language",
               <select
-                value={getFieldValue('language') || 'python'}
+                value={getFieldValueLocal('language') || 'python'}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'language', e.target.value)}
                 disabled={!canEdit}
               >
@@ -408,51 +607,55 @@ const TemplateEditor = ({
                 <option value="java">Java</option>
                 <option value="cpp">C++</option>
               </select>
-            </div>
+            )}
 
-            <div className="field-group">
-              <label>Starter Code:</label>
+            {renderFieldGroup(
+              "Starter Code",
+              "starter_code",
               <textarea
-                value={getFieldValue('starter_code')}
+                value={getFieldValueLocal('starter_code')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'starter_code', e.target.value)}
                 disabled={!canEdit}
                 placeholder="def solution():\n    # Write your code here\n    pass"
                 rows={6}
                 className="code-textarea"
               />
-            </div>
+            )}
 
-            <div className="field-group">
-              <label>Solution (Optional):</label>
+            {renderFieldGroup(
+              "Solution (Optional)",
+              "solution",
               <textarea
-                value={getFieldValue('solution')}
+                value={getFieldValueLocal('solution')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'solution', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Complete solution code..."
                 rows={6}
                 className="code-textarea"
               />
-            </div>
+            )}
           </div>
         );
 
       case 'true_false':
         return (
           <div className="question-fields">
-            <div className="field-group">
-              <label>Statement:</label>
+            {renderFieldGroup(
+              "Statement",
+              "question_text",
               <textarea
-                value={getFieldValue('question_text')}
+                value={getFieldValueLocal('question_text')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'question_text', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Enter the true/false statement..."
               />
-            </div>
+            )}
 
-            <div className="field-group">
-              <label>Correct Answer:</label>
+            {renderFieldGroup(
+              "Correct Answer",
+              "correct_answer",
               <select
-                value={getFieldValue('correct_answer') === true ? 'true' : getFieldValue('correct_answer') === false ? 'false' : ''}
+                value={getFieldValueLocal('correct_answer') === true ? 'true' : getFieldValueLocal('correct_answer') === false ? 'false' : ''}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'correct_answer', e.target.value === 'true')}
                 disabled={!canEdit}
               >
@@ -460,38 +663,41 @@ const TemplateEditor = ({
                 <option value="true">True</option>
                 <option value="false">False</option>
               </select>
-            </div>
+            )}
 
-            <div className="field-group">
-              <label>Explanation:</label>
+            {renderFieldGroup(
+              "Explanation",
+              "explanation",
               <textarea
-                value={getFieldValue('explanation')}
+                value={getFieldValueLocal('explanation')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'explanation', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Explain why this statement is true or false..."
               />
-            </div>
+            )}
           </div>
         );
 
       case 'short_answer':
         return (
           <div className="question-fields">
-            <div className="field-group">
-              <label>Question:</label>
+            {renderFieldGroup(
+              "Question",
+              "question_text",
               <textarea
-                value={getFieldValue('question_text')}
+                value={getFieldValueLocal('question_text')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'question_text', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Enter your short answer question..."
               />
-            </div>
+            )}
 
-            <div className="field-group">
-              <label>Expected Keywords (one per line):</label>
+            {renderFieldGroup(
+              "Expected Keywords (one per line)",
+              "expected_keywords",
               <textarea
                 value={(() => {
-                  const keywords = getFieldValue('expected_keywords');
+                  const keywords = getFieldValueLocal('expected_keywords');
                   return Array.isArray(keywords) ? keywords.join('\n') : '';
                 })()}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'expected_keywords', e.target.value.split('\n').filter(k => k.trim()))}
@@ -499,52 +705,56 @@ const TemplateEditor = ({
                 placeholder="keyword1\nkeyword2\nkeyword3"
                 rows={3}
               />
-            </div>
+            )}
 
-            <div className="field-group">
-              <label>Max Words:</label>
+            {renderFieldGroup(
+              "Max Words",
+              "max_words",
               <input
                 type="number"
-                value={getFieldValue('max_words') || 50}
+                value={getFieldValueLocal('max_words') || 50}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'max_words', parseInt(e.target.value))}
                 disabled={!canEdit}
                 min="10"
                 max="200"
               />
-            </div>
+            )}
           </div>
         );
 
       default: // open_ended
         return (
           <div className="question-fields">
-            <div className="field-group">
-              <label>Question:</label>
+            {renderFieldGroup(
+              "Question",
+              "question_text",
               <textarea
-                value={getFieldValue('question_text')}
+                value={getFieldValueLocal('question_text')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'question_text', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Enter your open-ended question..."
                 rows={3}
               />
-            </div>
+            )}
 
-            <div className="field-group">
-              <label>Sample Answer:</label>
+            {renderFieldGroup(
+              "Sample Answer",
+              "sample_answer",
               <textarea
-                value={getFieldValue('sample_answer')}
+                value={getFieldValueLocal('sample_answer')}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'sample_answer', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Provide a sample answer or key points..."
                 rows={4}
               />
-            </div>
+            )}
 
-            <div className="field-group">
-              <label>Grading Criteria (one per line):</label>
+            {renderFieldGroup(
+              "Grading Criteria (one per line)",
+              "grading_criteria",
               <textarea
                 value={(() => {
-                  const criteria = getFieldValue('grading_criteria');
+                  const criteria = getFieldValueLocal('grading_criteria');
                   return Array.isArray(criteria) ? criteria.join('\n') : '';
                 })()}
                 onChange={(e) => handleFieldUpdate(question.question_id, 'grading_criteria', e.target.value.split('\n').filter(c => c.trim()))}
@@ -552,7 +762,7 @@ const TemplateEditor = ({
                 placeholder="Demonstrates understanding of concepts\nProvides practical examples\nShows analytical thinking"
                 rows={3}
               />
-            </div>
+            )}
           </div>
         );
     }
@@ -907,6 +1117,111 @@ const TemplateEditor = ({
           </div>
         </div>
       )}
+
+      {/* Collaborative Suggestion Modal */}
+      {showSuggestionModal && (
+        <div className="modal-overlay" onClick={() => setShowSuggestionModal(false)}>
+          <div className="suggestion-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>💡 Suggest Edit for {suggestionField}</h3>
+              <button 
+                className="close-btn"
+                onClick={() => setShowSuggestionModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>Current value:</p>
+              <div className="current-value">
+                {getFieldValue(suggestionField, suggestionQuestionId) || '<empty>'}
+              </div>
+              <p>Your suggestion:</p>
+              <textarea
+                value={suggestionText}
+                onChange={(e) => setSuggestionText(e.target.value)}
+                placeholder="Enter your suggested change..."
+                rows={4}
+                className="suggestion-textarea"
+              />
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="cancel-btn"
+                onClick={() => setShowSuggestionModal(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="submit-suggestion-btn"
+                onClick={submitSuggestion}
+                disabled={!suggestionText.trim()}
+              >
+                Submit Suggestion
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Display Notes and Suggestions for each question */}
+      {questions.map(question => {
+        const hasNotes = question.collaboration_notes && question.collaboration_notes.length > 0;
+        const hasLLMSuggestions = question.llm_suggestions && question.llm_suggestions.length > 0;
+        
+        if (!hasNotes && !hasLLMSuggestions) return null;
+        
+        return (
+          <div key={`notes-${question.question_id}`} className="question-collaboration">
+            <div className="collaboration-header">
+              <h4>Q{question.question_number} - Collaboration & Suggestions</h4>
+              <button 
+                className="toggle-notes-btn"
+                onClick={() => toggleNotesDisplay(question.question_id)}
+              >
+                {showNotesFor[question.question_id] ? 'Hide' : 'Show'} ({hasNotes ? question.collaboration_notes.length : 0} notes, {hasLLMSuggestions ? question.llm_suggestions.length : 0} AI suggestions)
+              </button>
+            </div>
+            
+            {showNotesFor[question.question_id] && (
+              <div className="collaboration-content">
+                {hasNotes && (
+                  <div className="collaboration-notes">
+                    <h5>💬 User Suggestions & Notes</h5>
+                    {question.collaboration_notes.map(note => (
+                      <div key={note.note_id} className="collaboration-note">
+                        <div className="note-header">
+                          <span className="note-author">{note.author}</span>
+                          <span className="note-time">{new Date(note.timestamp).toLocaleString()}</span>
+                          {note.field_reference && (
+                            <span className="note-field">Field: {note.field_reference}</span>
+                          )}
+                        </div>
+                        <div className="note-content">{note.note}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {hasLLMSuggestions && (
+                  <div className="llm-suggestions">
+                    <h5>🤖 AI Suggestions</h5>
+                    {question.llm_suggestions.map(suggestion => (
+                      <div key={suggestion.suggestion_id} className="llm-suggestion">
+                        <div className="suggestion-header">
+                          <span className="suggestion-field">Field: {suggestion.field}</span>
+                          <span className="suggestion-time">{new Date(suggestion.timestamp).toLocaleString()}</span>
+                        </div>
+                        <div className="suggestion-content">{suggestion.suggestion}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 };
