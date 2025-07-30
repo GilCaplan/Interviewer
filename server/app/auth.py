@@ -157,59 +157,60 @@ def login():
     if not all(c.isalnum() or c == '_' for c in username):
         return jsonify({'message': 'Username can only contain letters, numbers, and underscores'}), 400
 
-    # Find or create user
-    user = users_collection.find_one({'username': username})
+    try:
+        # Find or create user
+        user = users_collection.find_one({'username': username})
 
-    if not user:
-        # Create a new user
-        user = {
+        if not user:
+            # Create a new user
+            user = {
+                'username': username,
+                'created_at': datetime.datetime.utcnow(),
+                'user_id': str(uuid.uuid4()),
+                'is_guest': username.startswith('Guest_')
+            }
+            users_collection.insert_one(user)
+
+        # Create a new session
+        session_id = str(uuid.uuid4())
+        session = {
+            'session_id': session_id,
             'username': username,
             'created_at': datetime.datetime.utcnow(),
-            'user_id': str(uuid.uuid4()),
-            'is_guest': username.startswith('Guest_')
+            'expires_at': datetime.datetime.utcnow() + datetime.timedelta(days=7),
+            'is_revoked': False
         }
-        users_collection.insert_one(user)
+        sessions_collection.insert_one(session)
 
-    # Create a new session
-    session_id = str(uuid.uuid4())
-    session = {
-        'session_id': session_id,
-        'username': username,
-        'created_at': datetime.datetime.utcnow(),
-        'expires_at': datetime.datetime.utcnow() + datetime.timedelta(days=7),
-        'is_revoked': False
-    }
-    sessions_collection.insert_one(session)
+        # Generate a JWT token
+        token = jwt.encode(
+            {
+                'username': username,
+                'session_id': session_id,
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
+            },
+            current_app.config.get('SECRET_KEY'),
+            algorithm='HS256'
+        )
 
-    # Generate a JWT token
-    token = jwt.encode(
-        {
+        # Create response
+        response = jsonify({
+            'message': 'Login successful',
             'username': username,
-            'session_id': session_id,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
-        },
-        current_app.config.get('SECRET_KEY'),
-        algorithm='HS256'
-    )
+            'token': token
+        })
 
-    # Create response
-    response = jsonify({
-        'message': 'Login successful',
-        'username': username,
-        'token': token
-    })
+        # Set secure cookie
+        response.set_cookie(
+            'session_token',
+            token,
+            httponly=True,
+            secure=not current_app.config.get('DEBUG', False),  # Secure in production
+            samesite='Lax',
+            max_age=60 * 60 * 24 * 7  # 7 days
+        )
 
-    # Set secure cookie
-    response.set_cookie(
-        'session_token',
-        token,
-        httponly=True,
-        secure=not current_app.config.get('DEBUG', False),  # Secure in production
-        samesite='Lax',
-        max_age=60 * 60 * 24 * 7  # 7 days
-    )
-
-    return response, 200
+        return response, 200
 
     except Exception as e:
         # Log the error for debugging but don't expose internal details
