@@ -446,7 +446,7 @@ This is a university project. For development:
    ```bash
    cd server/tests/gil_tests && python run_all_tests.py
    ```
-4. **Documentation**: Update `CLAUDE.md` for technical details, `README.md` for user instructions
+4. **Documentation**: `README.md` for user instructions
 5. **Quality Gates**: All new features must include comprehensive tests
 
 ## 📄 License
