@@ -1214,55 +1214,97 @@ const TemplateEditor = ({
       {showSuggestionHistory && (
         <div className="modal-overlay" onClick={() => setShowSuggestionHistory(false)}>
           <div className="suggestion-history-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>📜 Suggestion History</h3>
+            <div className="suggestion-history-header">
+              <div className="modal-title-section">
+                <h3>📜 Suggestion History</h3>
+                <p className="modal-subtitle">Review all collaboration suggestions and their status</p>
+              </div>
               <button 
-                className="close-btn"
+                className="modal-close-btn"
                 onClick={() => setShowSuggestionHistory(false)}
+                title="Close modal"
               >
                 ✕
               </button>
             </div>
-            <div className="modal-body">
+            
+            <div className="suggestion-history-content">
               {suggestionHistory.length === 0 ? (
-                <p>No suggestion history found.</p>
-              ) : (
-                <div className="suggestion-history-list">
-                  <p style={{ marginBottom: '15px', fontWeight: 'bold' }}>
-                    Total suggestions handled: {suggestionHistory.length}
-                  </p>
-                  {suggestionHistory.map((suggestion, index) => (
-                    <div key={suggestion.suggestion_id} className="history-item">
-                      <div className="history-header">
-                        <span className="question-number">Q{suggestion.question_number}</span>
-                        <span className={`status-badge ${suggestion.status === 'accept' ? 'accepted' : 'rejected'}`}>
-                          {suggestion.status === 'accept' ? '✅ Accepted' : '❌ Rejected'}
-                        </span>
-                        <span className="history-date">
-                          {new Date(suggestion.handled_at).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="history-details">
-                        <div><strong>Field:</strong> {suggestion.field}</div>
-                        <div><strong>Suggested by:</strong> {suggestion.author}</div>
-                        <div><strong>Handled by:</strong> {suggestion.handled_by}</div>
-                        <div><strong>Suggested value:</strong></div>
-                        <div className="suggested-value">{suggestion.suggested_value}</div>
-                        {suggestion.current_value && (
-                          <>
-                            <div><strong>Previous value:</strong></div>
-                            <div className="previous-value">{suggestion.current_value}</div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                <div className="empty-state">
+                  <div className="empty-icon">📝</div>
+                  <h4>No suggestion history found</h4>
+                  <p>Suggestions will appear here as team members collaborate on questions</p>
                 </div>
+              ) : (
+                <>
+                  <div className="suggestion-summary">
+                    <div className="summary-card">
+                      <div className="summary-number">{suggestionHistory.length}</div>
+                      <div className="summary-label">Total Suggestions</div>
+                    </div>
+                    <div className="summary-card accepted">
+                      <div className="summary-number">{suggestionHistory.filter(s => s.status === 'accept').length}</div>
+                      <div className="summary-label">Accepted</div>
+                    </div>
+                    <div className="summary-card rejected">
+                      <div className="summary-number">{suggestionHistory.filter(s => s.status === 'reject').length}</div>
+                      <div className="summary-label">Rejected</div>
+                    </div>
+                  </div>
+                  
+                  <div className="suggestion-history-list">
+                    {suggestionHistory.map((suggestion, index) => (
+                      <div key={suggestion.suggestion_id} className="history-item">
+                        <div className="history-item-header">
+                          <div className="question-info">
+                            <span className="question-number">Q{suggestion.question_number}</span>
+                            <span className="field-name">{suggestion.field}</span>
+                          </div>
+                          <div className="status-and-date">
+                            <span className={`status-badge ${suggestion.status === 'accept' ? 'accepted' : 'rejected'}`}>
+                              {suggestion.status === 'accept' ? '✅ Accepted' : '❌ Rejected'}
+                            </span>
+                            <span className="history-date">
+                              {new Date(suggestion.handled_at).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className="history-item-content">
+                          <div className="suggestion-details">
+                            <div className="detail-row">
+                              <span className="detail-label">Suggested by:</span>
+                              <span className="detail-value">{suggestion.author}</span>
+                            </div>
+                            <div className="detail-row">
+                              <span className="detail-label">Handled by:</span>
+                              <span className="detail-value">{suggestion.handled_by}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="value-comparison">
+                            <div className="suggested-section">
+                              <div className="value-label">Suggested Value:</div>
+                              <div className="value-content suggested">{suggestion.suggested_value}</div>
+                            </div>
+                            {suggestion.current_value && (
+                              <div className="previous-section">
+                                <div className="value-label">Previous Value:</div>
+                                <div className="value-content previous">{suggestion.current_value}</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
-            <div className="modal-footer">
+            
+            <div className="suggestion-history-footer">
               <button 
-                className="close-btn"
+                className="footer-close-btn"
                 onClick={() => setShowSuggestionHistory(false)}
               >
                 Close
