@@ -157,7 +157,7 @@ function SessionControls() {
                         className="join-btn"
                         onClick={() => joinSessionById(session.session_code)}
                       >
-                        Join Session
+                        Join
                       </button>
                     </div>
                   </div>

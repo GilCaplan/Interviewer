@@ -61,11 +61,55 @@ function FeaturePage({ features }) {
           </ul>
           <div className="feature-actions">
             <Link to="/user-questions" className="feature-action-btn">
-              My Questions
+              📝 My Questions
             </Link>
             <Link to="/llm-questions" className="feature-action-btn ai-btn">
-              Generate AI Questions
+              🤖 Generate AI Questions
             </Link>
+            <button
+              onClick={async () => {
+                try {
+                  const token = localStorage.getItem('token');
+                  if (!token) {
+                    alert('Please login first');
+                    return;
+                  }
+
+                  const dummyTemplate = {
+                    template_name: "Sample Interview Template",
+                    description: "A sample template with common interview questions",
+                    subject: "general",
+                    difficulty: "medium",
+                    is_public: true,
+                    tags: ["sample", "interview", "general"]
+                  };
+
+                  const response = await fetch("http://localhost:5001/api/templates", {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(dummyTemplate)
+                  });
+
+                  if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.error || "Failed to create template");
+                  }
+
+                  const data = await response.json();
+                  alert(`✅ Template created successfully! ID: ${data.template.template_id}`);
+                } catch (error) {
+                  console.error("❌ Error creating template:", error);
+                  alert(`Failed to create template: ${error.message}`);
+                }
+              }}
+              className="feature-action-btn"
+              style={{ backgroundColor: "#4CAF50" }}
+            >
+              ➕ Create Sample Template
+            </button>
           </div>
           <p>Coming soon: AI-powered feedback on your answers.</p>
         </>
@@ -125,70 +169,8 @@ function FeaturePage({ features }) {
 
       <div className="navigation-buttons">
         <Link to="/" className="back-button">Back to Features</Link>
-        {isInterviewQuestions && (
-          <>
-            <Link to="/user-questions" className="llm-button">My Questions</Link>
-            <Link to="/llm-questions" className="llm-button">AI Questions</Link>
-          </>
-        )}
       </div>
 
-      {/* Template Creation Button */}
-      {isInterviewQuestions && (
-        <div style={{ marginTop: "20px" }}>
-          <button
-            onClick={async () => {
-              try {
-                const token = localStorage.getItem('token');
-                if (!token) {
-                  alert('Please login first');
-                  return;
-                }
-
-                const dummyTemplate = {
-                  template_name: "Sample Interview Template",
-                  description: "A sample template with common interview questions",
-                  subject: "general",
-                  difficulty: "medium",
-                  is_public: true,
-                  tags: ["sample", "interview", "general"]
-                };
-
-                const response = await fetch("http://localhost:5001/api/templates", {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                  },
-                  body: JSON.stringify(dummyTemplate)
-                });
-
-                if (!response.ok) {
-                  const error = await response.json().catch(() => ({}));
-                  throw new Error(error.error || "Failed to create template");
-                }
-
-                const data = await response.json();
-                alert(`✅ Template created successfully! ID: ${data.template.template_id}`);
-              } catch (error) {
-                console.error("❌ Error creating template:", error);
-                alert(`Failed to create template: ${error.message}`);
-              }
-            }}
-            style={{
-              padding: "10px 20px",
-              fontSize: "16px",
-              backgroundColor: "#4CAF50",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer"
-            }}
-          >
-            ➕ Create Sample Template
-          </button>
-        </div>
-      )}
 
     </div>
   );

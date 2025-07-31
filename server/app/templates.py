@@ -583,3 +583,144 @@ def delete_template(user, template_id):
     except Exception as e:
         current_app.logger.error(f"Error deleting template: {str(e)}")
         return jsonify({"error": "Failed to delete template"}), 500
+
+
+# Find and remove duplicate templates
+@templates_bp.route('/api/templates/cleanup-duplicates', methods=['POST'])
+@token_required
+def cleanup_duplicate_templates(user):
+    try:
+        data = request.get_json() or {}
+        dry_run = data.get('dry_run', True)  # Default to dry run for safety
+        user_only = data.get('user_only', True)  # Only cleanup user's own templates by default
+        
+        # Build query filter
+        query = {}
+        if user_only:
+            query['created_by_id'] = user["user_id"]
+        
+        # Find all templates
+        all_templates = list(templates_collection.find(query))
+        
+        # Group templates by name and created_by to identify duplicates
+        template_groups = {}
+        for template in all_templates:
+            # Create a key based on template name and creator
+            key = f"{template['created_by_id']}_{template['template_name'].lower().strip()}"
+            
+            if key not in template_groups:
+                template_groups[key] = []
+            template_groups[key].append(template)
+        
+        # Find duplicates (groups with more than one template)
+        duplicate_groups = {k: v for k, v in template_groups.items() if len(v) > 1}
+        
+        cleanup_plan = []
+        templates_to_remove = []
+        
+        for group_key, templates in duplicate_groups.items():
+            # Sort by creation date (newest first) and version (highest first)
+            sorted_templates = sorted(templates, key=lambda t: (
+                t.get('metadata', {}).get('version', 1),
+                t.get('metadata', {}).get('updated_at', t.get('metadata', {}).get('created_at'))
+            ), reverse=True)
+            
+            # Keep the first one (newest/highest version), mark others for removal
+            keep_template = sorted_templates[0]
+            remove_templates = sorted_templates[1:]
+            
+            cleanup_plan.append({
+                "group": group_key,
+                "template_name": keep_template['template_name'],
+                "keep": {
+                    "template_id": keep_template['template_id'],
+                    "version": keep_template.get('metadata', {}).get('version', 1),
+                    "created_at": keep_template.get('metadata', {}).get('created_at'),
+                    "question_count": keep_template.get('metadata', {}).get('question_count', 0)
+                },
+                "remove": [
+                    {
+                        "template_id": t['template_id'],
+                        "version": t.get('metadata', {}).get('version', 1),
+                        "created_at": t.get('metadata', {}).get('created_at'),
+                        "question_count": t.get('metadata', {}).get('question_count', 0)
+                    }
+                    for t in remove_templates
+                ]
+            })
+            
+            templates_to_remove.extend([t['template_id'] for t in remove_templates])
+        
+        result = {
+            "dry_run": dry_run,
+            "user_only": user_only,
+            "total_templates": len(all_templates),
+            "duplicate_groups": len(duplicate_groups),
+            "templates_to_remove": len(templates_to_remove),
+            "cleanup_plan": cleanup_plan
+        }
+        
+        # Actually remove duplicates if not dry run
+        if not dry_run and templates_to_remove:
+            delete_result = templates_collection.delete_many({
+                "template_id": {"$in": templates_to_remove}
+            })
+            result["removed_count"] = delete_result.deleted_count
+            result["message"] = f"Successfully removed {delete_result.deleted_count} duplicate templates"
+        else:
+            result["message"] = f"Found {len(templates_to_remove)} duplicate templates to remove (dry run mode)"
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error cleaning up duplicate templates: {str(e)}")
+        return jsonify({"error": "Failed to cleanup duplicate templates"}), 500
+
+
+# Get template cleanup preview
+@templates_bp.route('/api/templates/cleanup-preview', methods=['GET'])
+@token_required
+def get_cleanup_preview(user):
+    try:
+        user_only = request.args.get('user_only', 'true').lower() == 'true'
+        
+        # Build query filter
+        query = {}
+        if user_only:
+            query['created_by_id'] = user["user_id"]
+        
+        # Find all templates
+        all_templates = list(templates_collection.find(query, {
+            '_id': 0,
+            'template_id': 1,
+            'template_name': 1,
+            'created_by': 1,
+            'created_by_id': 1,
+            'metadata': 1,
+            'is_public': 1
+        }))
+        
+        # Group templates by name and creator to identify duplicates
+        template_groups = {}
+        for template in all_templates:
+            # Create a key based on template name and creator
+            key = f"{template['created_by_id']}_{template['template_name'].lower().strip()}"
+            
+            if key not in template_groups:
+                template_groups[key] = []
+            template_groups[key].append(template)
+        
+        # Find duplicates (groups with more than one template)
+        duplicate_groups = {k: v for k, v in template_groups.items() if len(v) > 1}
+        
+        return jsonify({
+            "total_templates": len(all_templates),
+            "unique_templates": len(template_groups),
+            "duplicate_groups": len(duplicate_groups),
+            "duplicates_found": sum(len(templates) - 1 for templates in duplicate_groups.values()),
+            "groups": duplicate_groups
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting cleanup preview: {str(e)}")
+        return jsonify({"error": "Failed to get cleanup preview"}), 500

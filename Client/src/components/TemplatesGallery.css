@@ -47,3 +47,69 @@
   font-size: 16px;
 }
 
+/* Loading and error states */
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-size: 1.1rem;
+}
+
+.error-message {
+  background: #fff5f5;
+  border: 1px solid #fed7d7;
+  color: #c53030;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin: 20px 0;
+  text-align: center;
+}
+
+/* Template stats */
+.template-stats {
+  margin: 10px 0;
+  color: #666;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* No templates message */
+.no-templates {
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+  grid-column: 1 / -1;
+}
+
+.no-templates p {
+  margin: 10px 0;
+  font-size: 1.1rem;
+}
+
+/* Template description */
+.template-description {
+  color: #555;
+  font-style: italic;
+  font-size: 0.9rem;
+  margin-top: 10px;
+  border-top: 1px solid #eee;
+  padding-top: 10px;
+}
+
+/* Public badge */
+.public-badge {
+  background: #4CAF50;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.template-card {
+  position: relative;
+}
+

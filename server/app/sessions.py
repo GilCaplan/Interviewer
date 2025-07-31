@@ -1539,11 +1539,30 @@ def convert_session_to_template(user, session_id):
         
         # Import templates collection
         from .templates import templates_collection
+        import re
+        
+        template_name = data.get('template_name', session.get('title', 'Converted Template'))
+        
+        # Create template slug for unique identification
+        template_slug = re.sub(r'[^a-zA-Z0-9]+', '-', template_name.lower()).strip('-')
+        template_key = f"{user['user_id']}_{template_slug}"
+        
+        # Check if user wants to replace existing template or create new one
+        replace_existing = data.get('replace_existing', False)
+        existing_template = None
+        
+        if replace_existing:
+            # Look for existing template by same user with same key
+            existing_template = templates_collection.find_one({
+                "created_by_id": user["user_id"],
+                "template_key": template_key
+            })
         
         # Create template data
         template_data = {
-            "template_id": str(uuid.uuid4()),
-            "template_name": data.get('template_name', session.get('title', 'Converted Template')),
+            "template_id": existing_template["template_id"] if existing_template else str(uuid.uuid4()),
+            "template_key": template_key,
+            "template_name": template_name,
             "description": data.get('description', f"Converted from session {session['session_code']}"),
             "subject": session.get('subject', 'general'),
             "sub_subject": data.get('sub_subject', ''),
@@ -1553,12 +1572,14 @@ def convert_session_to_template(user, session_id):
             "is_public": data.get('is_public', False),
             "tags": data.get('tags', []),
             "metadata": {
-                "created_at": datetime.datetime.utcnow(),
+                "created_at": existing_template["metadata"]["created_at"] if existing_template else datetime.datetime.utcnow(),
                 "updated_at": datetime.datetime.utcnow(),
-                "version": 1,
+                "version": existing_template["metadata"]["version"] + 1 if existing_template else 1,
                 "question_count": len(ready_questions),
                 "estimated_time": len(ready_questions) * 3,  # 3 minutes per question estimate
-                "converted_from_session": session_id
+                "converted_from_session": session_id,
+                "previous_versions": existing_template["metadata"].get("previous_versions", []) + 
+                                   [existing_template["template_id"]] if existing_template else []
             },
             "settings": {
                 "max_questions": len(ready_questions),
@@ -1569,8 +1590,19 @@ def convert_session_to_template(user, session_id):
             "questions": ready_questions
         }
         
-        # Save template
-        result = templates_collection.insert_one(template_data)
+        # Save template (replace existing or create new)
+        if existing_template and replace_existing:
+            # Update existing template
+            templates_collection.replace_one(
+                {"template_id": existing_template["template_id"]},
+                template_data
+            )
+            action = "updated"
+        else:
+            # Create new template
+            result = templates_collection.insert_one(template_data)
+            action = "created"
+        
         template_data.pop('_id', None)
         
         # Update session to mark as converted
@@ -1586,13 +1618,66 @@ def convert_session_to_template(user, session_id):
         )
         
         return jsonify({
-            "message": "Session converted to template successfully",
-            "template": template_data
+            "message": f"Template {action} successfully",
+            "template": template_data,
+            "action": action
         }), 201
         
     except Exception as e:
         current_app.logger.error(f"Error converting session to template: {str(e)}")
         return jsonify({"error": "Failed to convert session to template"}), 500
+
+
+# Check for existing templates with similar name
+@sessions_bp.route('/api/sessions/<session_id>/check-template-conflicts', methods=['POST'])
+@token_required
+def check_template_conflicts(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can check template conflicts"}), 403
+        
+        data = request.get_json() or {}
+        template_name = data.get('template_name', '')
+        
+        if not template_name:
+            return jsonify({"error": "Template name is required"}), 400
+        
+        # Import templates collection
+        from .templates import templates_collection
+        import re
+        
+        # Create template slug for checking
+        template_slug = re.sub(r'[^a-zA-Z0-9]+', '-', template_name.lower()).strip('-')
+        template_key = f"{user['user_id']}_{template_slug}"
+        
+        # Check for existing templates by same user with same key
+        existing_template = templates_collection.find_one({
+            "created_by_id": user["user_id"],
+            "template_key": template_key
+        })
+        
+        if existing_template:
+            return jsonify({
+                "conflict": True,
+                "existing_template": {
+                    "template_id": existing_template["template_id"],
+                    "template_name": existing_template["template_name"],
+                    "created_at": existing_template["metadata"]["created_at"],
+                    "version": existing_template["metadata"]["version"],
+                    "question_count": existing_template["metadata"]["question_count"]
+                }
+            }), 200
+        else:
+            return jsonify({"conflict": False}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error checking template conflicts: {str(e)}")
+        return jsonify({"error": "Failed to check template conflicts"}), 500
 
 
 # Update session mode/visibility settings
