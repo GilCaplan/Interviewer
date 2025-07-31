@@ -66,8 +66,10 @@ def generate_session_code():
 
 def sanitize_text_input(text, max_length=1000):
     """Sanitize text input to prevent XSS and injection attacks"""
+    if text is None:
+        return ""
     if not isinstance(text, str):
-        return str(text) if text is not None else ""
+        text = str(text)
     
     # Remove null bytes and control characters
     cleaned = ''.join(c for c in text if ord(c) >= 32 or c in '\t\n\r')
@@ -200,6 +202,10 @@ def is_valid_uuid(question_id):
         return True
     except ValueError:
         return False
+
+
+# Alias for unit tests
+validate_question_id = is_valid_uuid
 
 
 def validate_session_data(data):

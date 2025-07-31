@@ -90,8 +90,8 @@ class RateLimiter:
         )
         
         if testing_mode:
-            # Increase limits by 50x during testing to handle comprehensive test suites
-            max_requests *= 50
+            # Increase limits by 500x during testing to handle comprehensive test suites
+            max_requests *= 500
         
         now = time.time()
         

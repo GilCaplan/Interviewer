@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-Comprehensive Test Runner for Template Building System
-Runs all available tests and provides detailed reporting
+Comprehensive Test Runner for Interview Platform
+Runs all available tests and provides accurate reporting
 
 Usage:
 1. Start the server first: cd ../../.. && docker-compose up --build
 2. Run tests: python run_all_tests.py
+
+✅ Fixed to only run existing tests and provide accurate summaries
 """
 
 import os
@@ -192,9 +194,8 @@ def main():
     log("🔧 Updating test configurations...", Colors.BLUE)
     update_test_files_port(server_url)
     
-    # List of test files to run - comprehensive coverage
-    test_files = [
-        ("test_environment_setup.py", "Test environment setup and configuration"),
+    # List of available test files - only include ones that actually exist
+    potential_test_files = [
         ("test_unit_comprehensive.py", "Unit tests (individual components)"),
         ("test_basic_functionality.py", "Basic functionality and connectivity"),
         ("test_template_building.py", "Template CRUD operations"),
@@ -202,11 +203,19 @@ def main():
         ("test_session_collaboration.py", "Multi-user collaboration"),
         ("test_scaling_and_concurrent_users.py", "Scaling and concurrent user operations"),
         ("test_llm_mock_integration.py", "Mock LLM integration"),
+        ("test_suggestion_history.py", "Suggestion history functionality"),
         ("test_security_comprehensive.py", "Security tests (auth, XSS, injection)"),
-        ("test_interview_platform_parallelism.py", "Interview platform parallelism tests"),
         ("test_system_end_to_end.py", "System/End-to-End tests (complete workflows)"),
         ("test_stress_and_chaos.py", "Stress and chaos tests (resilience)")
     ]
+    
+    # Filter to only tests that actually exist
+    test_files = []
+    for test_file, description in potential_test_files:
+        if os.path.exists(test_file):
+            test_files.append((test_file, description))
+        else:
+            log(f"⚠️ Skipping {test_file} (file not found)", Colors.YELLOW)
     
     # Run all tests
     total_results = {
@@ -286,13 +295,13 @@ def main():
     # Final assessment
     log(f"\n🏆 Final Assessment:", Colors.BOLD + Colors.WHITE)
     
-    if overall_pass_rate >= 95 and total_results['test_files_passed'] == total_results['test_files_run']:
-        log("🌟 OUTSTANDING! Template building system is production-ready!", Colors.GREEN + Colors.BOLD)
-    elif overall_pass_rate >= 85 and total_results['test_files_passed'] >= total_results['test_files_run'] * 0.8:
-        log("🏅 EXCELLENT! System is working very well with minor issues", Colors.GREEN + Colors.BOLD)
-    elif overall_pass_rate >= 70:
+    if overall_pass_rate == 100.0 and total_results['test_files_passed'] == total_results['test_files_run']:
+        log("🏆 OUTSTANDING! All tests passing - Interview platform is production-ready!", Colors.GREEN + Colors.BOLD)
+    elif overall_pass_rate >= 95 and total_results['test_files_passed'] >= total_results['test_files_run'] * 0.9:
+        log("🌟 EXCELLENT! System is working very well with minimal issues", Colors.GREEN + Colors.BOLD)
+    elif overall_pass_rate >= 85:
         log("✅ GOOD! System is functional with some areas for improvement", Colors.YELLOW + Colors.BOLD)
-    elif overall_pass_rate >= 50:
+    elif overall_pass_rate >= 70:
         log("⚠️ FAIR! System has several issues that need attention", Colors.YELLOW + Colors.BOLD)
     else:
         log("🚨 POOR! System has critical issues requiring immediate attention", Colors.RED + Colors.BOLD)
