@@ -62,7 +62,10 @@ def update_test_files_port(server_url):
         "test_session_collaboration.py",
         "test_llm_mock_integration.py",
         "test_interview_platform_parallelism.py",
-        "test_system_end_to_end.py"
+        "test_system_end_to_end.py",
+        "test_edge_cases_critical.py",
+        "test_security_advanced.py",
+        "test_database_reliability.py"
     ]
     
     port = server_url.split(":")[-1]
@@ -207,7 +210,9 @@ def main():
         ("test_session_management.py", "Session management and cleanup"),
         ("test_session_collaboration.py", "Multi-user collaboration"),
         ("test_llm_mock_integration.py", "Mock LLM integration"),
-        ("test_suggestion_history.py", "Suggestion history functionality")
+        ("test_suggestion_history.py", "Suggestion history functionality"),
+        ("test_edge_cases_critical.py", "Critical edge cases and boundary testing"),
+        ("test_scaling_and_concurrent_users.py", "Scaling and concurrent user testing")
     ]
     
     # Filter to only tests that actually exist

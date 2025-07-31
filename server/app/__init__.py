@@ -46,6 +46,37 @@ def create_app(config_class=Config):
     app.register_blueprint(templates_bp)
     app.register_blueprint(coding_challenges)
 
+    # Global error handlers for graceful error handling
+    @app.errorhandler(400)
+    def bad_request(error):
+        return {"error": "Bad request", "message": "Invalid request format"}, 400
+    
+    @app.errorhandler(404)
+    def not_found(error):
+        return {"error": "Not found", "message": "Requested resource not found"}, 404
+    
+    @app.errorhandler(500)
+    def internal_error(error):
+        return {"error": "Internal server error", "message": "An unexpected error occurred"}, 500
+    
+    from werkzeug.exceptions import BadRequest
+    from flask import request
+    import json
+    
+    @app.errorhandler(BadRequest)
+    def handle_bad_request(error):
+        return {"error": "Bad request", "message": "Invalid JSON or request format"}, 400
+    
+    @app.before_request
+    def validate_json():
+        """Validate JSON for POST/PUT requests"""
+        if request.method in ['POST', 'PUT'] and request.content_type and 'application/json' in request.content_type:
+            try:
+                if request.data:  # Only validate if there's actually data
+                    request.get_json(force=True)
+            except:
+                return {"error": "Invalid JSON", "message": "Request body contains malformed JSON"}, 400
+
     @app.after_request
     def after_request(response):
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
