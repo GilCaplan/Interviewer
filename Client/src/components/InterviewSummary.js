@@ -1,6 +1,19 @@
 import React from 'react';
 import './Questions.css'; // Reuse our existing stylesheet
 
+/**
+ * Decodes HTML entities from a string by leveraging the browser's DOM parser.
+ * This is a safe way to convert entities like '&amp;' or '&#x27;' back to their character equivalents.
+ * @param {string | any} text The string containing HTML entities, or any other type.
+ * @returns {string} The decoded string.
+ */
+const decodeHTMLEntities = (text) => {
+    if (typeof text !== 'string') return text;
+    const textArea = document.createElement('textarea');
+    textArea.innerHTML = text;
+    return textArea.value;
+};
+
 function InterviewSummary({ session }) {
     if (!session) return null;
 
@@ -58,7 +71,7 @@ function InterviewSummary({ session }) {
                     const isCorrect = userAnswer.is_correct;
                     const displayCorrectAnswer = typeof userAnswer.correct_answer === 'boolean'
                         ? userAnswer.correct_answer.toString().charAt(0).toUpperCase() + userAnswer.correct_answer.toString().slice(1)
-                        : userAnswer.correct_answer;
+                        : decodeHTMLEntities(userAnswer.correct_answer);
 
                     return (
                         <li key={index} className={`result-item ${isCorrect ? 'correct' : 'incorrect'}`}>
@@ -68,7 +81,16 @@ function InterviewSummary({ session }) {
                             </div>
                             <div className="result-body">
                                 <p><strong>Your Answer:</strong> {userAnswer.answer || "No answer provided"}</p>
-                                {!isCorrect && <p><strong>Correct Answer:</strong> {displayCorrectAnswer}</p>}
+                                {!isCorrect && (
+                                    <>
+                                        <p><strong>Correct Answer:</strong> {displayCorrectAnswer}</p>
+                                        {question.explanation && (
+                                            <p className="explanation-text">
+                                                <strong>Explanation:</strong> {decodeHTMLEntities(question.explanation)}
+                                            </p>
+                                        )}
+                                    </>
+                                )}
                             </div>
                         </li>
                     );
