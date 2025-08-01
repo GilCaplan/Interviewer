@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import './Questions.css'; // Import the stylesheet
+import InterviewSummary from './InterviewSummary';
 
 function MockInterviewSession() {
     const { sessionId } = useParams();
@@ -38,6 +40,12 @@ function MockInterviewSession() {
 
     const handleSubmitAnswer = async () => {
         setError('');
+        // Add validation to ensure an answer is provided
+        if (!userAnswer.trim()) {
+            setError("Please select an option or provide an answer before submitting.");
+            return;
+        }
+
         const token = localStorage.getItem('token');
         try {
             const response = await fetch(`/api/interviews/${sessionId}/answer`, {
@@ -76,6 +84,70 @@ function MockInterviewSession() {
         }
     };
 
+    const renderQuestionInput = () => {
+        if (!currentQuestion) return null;
+
+        switch (currentQuestion.type) {
+            case 'multiple_choice':
+                return (
+                    <div className="question-options-container">
+                        {currentQuestion.options.map((option, index) => (
+                            <div key={index} className="radio-option">
+                                <input
+                                    type="radio"
+                                    id={`option-${index}`}
+                                    name="mcq-options"
+                                    value={option}
+                                    checked={userAnswer === option}
+                                    onChange={(e) => setUserAnswer(e.target.value)}
+                                />
+                                <label htmlFor={`option-${index}`}>{option}</label>
+                            </div>
+                        ))}
+                    </div>
+                );
+
+            case 'true_false':
+                return (
+                    <div className="question-options-container">
+                        <div className="radio-option">
+                            <input
+                                type="radio"
+                                id="option-true"
+                                name="tf-options"
+                                value="true"
+                                checked={userAnswer === 'true'}
+                                onChange={(e) => setUserAnswer(e.target.value)}
+                            />
+                            <label htmlFor="option-true">True</label>
+                        </div>
+                        <div className="radio-option">
+                            <input
+                                type="radio"
+                                id="option-false"
+                                name="tf-options"
+                                value="false"
+                                checked={userAnswer === 'false'}
+                                onChange={(e) => setUserAnswer(e.target.value)}
+                            />
+                            <label htmlFor="option-false">False</label>
+                        </div>
+                    </div>
+                );
+
+            default: // Handles 'open_ended', 'short_answer', 'coding'
+                return (
+                    <textarea
+                        value={userAnswer}
+                        onChange={(e) => setUserAnswer(e.target.value)}
+                        placeholder="Type your answer here..."
+                        rows="10"
+                        className="answer-textarea"
+                    />
+                );
+        }
+    };
+
     if (isLoading) return <p>Loading interview session...</p>;
     if (error) return <p style={{ color: 'red' }}>Error: {error}</p>;
     if (!session) return <p>No session data found.</p>;
@@ -87,42 +159,38 @@ function MockInterviewSession() {
 
     if (session.status === 'completed') {
         return (
-            <div style={{ padding: '20px 40px', textAlign: 'center' }}>
-                <h2>Interview Completed!</h2>
-                <p>You have successfully completed the mock interview for "{session.template_name}".</p>
-                <p>You can review your answers later (feature coming soon!).</p>
-                <button onClick={() => navigate('/')}>Back to Home</button>
+            <div className="mock-interview-container">
+                <InterviewSummary session={session} />
+                <div className="summary-actions">
+                    <button className="action-btn" onClick={() => navigate('/templates')}>
+                        Back to Templates
+                    </button>
+                </div>
             </div>
         );
     }
 
     return (
-        <div style={{ padding: '20px 40px' }}>
-            <h2>Mock Interview: {session.template_name}</h2>
-            <p>Status: {session.status}</p>
+        <div className="mock-interview-container">
+            <div className="interview-header">
+                <h2>Mock Interview: {session.template_name}</h2>
+                <p className="interview-progress">Question {Math.min(currentQuestionIndex + 1, totalQuestions)} of {totalQuestions}</p>
+            </div>
             <hr />
 
             {isInterviewOver ? (
-                <div>
+                <div className="interview-completed-container">
                     <h3>You've answered all questions!</h3>
                     <p>Click below to finish and save your session.</p>
-                    <button onClick={handleFinishInterview} style={{ padding: '10px 20px', backgroundColor: 'green', color: 'white', border: 'none', borderRadius: '5px' }}>
+                    <button onClick={handleFinishInterview} className="action-btn finish-btn">
                         Finish Interview
                     </button>
                 </div>
             ) : (
-                <div>
-                    <h3>Question {currentQuestionIndex + 1} of {totalQuestions}</h3>
-                    <p style={{ fontSize: '1.2em', fontWeight: 'bold' }}>{currentQuestion.question_text}</p>
-
-                    <textarea
-                        value={userAnswer}
-                        onChange={(e) => setUserAnswer(e.target.value)}
-                        placeholder="Type your answer here..."
-                        rows="10"
-                        style={{ width: '100%', boxSizing: 'border-box', padding: '10px', fontSize: '16px', marginTop: '10px' }}
-                    />
-                    <button onClick={handleSubmitAnswer} style={{ marginTop: '10px', padding: '10px 20px' }} >
+                <div className="question-card-interview">
+                    <p className="question-text-interview">{currentQuestion.question_text}</p>
+                    {renderQuestionInput()}
+                    <button onClick={handleSubmitAnswer} className="action-btn" disabled={!userAnswer.trim()}>
                         Submit Answer & Next Question
                     </button>
                 </div>

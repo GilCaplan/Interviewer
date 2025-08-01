@@ -127,12 +127,30 @@ def submit_answer(current_user, session_id):
     if current_index >= total_questions:
         return jsonify({"error": "No more questions in this interview"}), 400
 
+    # Get the current question to check the answer
+    current_question = session["questions"][current_index]
+    correct_answer = current_question.get("correct_answer")
+    user_answer = data["answer"]
+
+    # Determine if the answer is correct (case-insensitive for strings)
+    is_correct = False
+    if correct_answer is not None:
+        if isinstance(correct_answer, str):
+            is_correct = user_answer.strip().lower() == correct_answer.strip().lower()
+        elif isinstance(correct_answer, bool):
+            is_correct = user_answer.lower() == str(correct_answer).lower()
+        else:
+            # Handles other potential types like numbers
+            is_correct = user_answer == correct_answer
+
     # Store the answer
     answer_doc = {
         "question_index": current_index,
-        "question_text": session["questions"][current_index].get("question_text"),
-        "answer": data["answer"],
-        "submitted_at": datetime.utcnow()
+        "question_text": current_question.get("question_text"),
+        "answer": user_answer,
+        "submitted_at": datetime.utcnow(),
+        "is_correct": is_correct,
+        "correct_answer": correct_answer  # Store for review
     }
 
     # Move to the next question
