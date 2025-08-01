@@ -15,6 +15,7 @@ import './components/Login.css';
 import './components/Questions.css';
 import TemplateDetails from "./components/TemplateDetails";
 import SessionBuilder from './components/SessionBuilder';
+import MockInterviewSession from './components/MockInterviewSession';
 import SessionJoinForm from './components/SessionJoinForm';
 
 // Protected route component
@@ -169,6 +170,15 @@ function AppContent() {
             element={
               <ProtectedRoute>
                 <TemplateDetails />
+              </ProtectedRoute>
+          }
+        />
+
+        <Route
+            path="/interview/:sessionId"
+            element={
+              <ProtectedRoute>
+                <MockInterviewSession />
               </ProtectedRoute>
           }
         />

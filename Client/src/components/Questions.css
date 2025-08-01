@@ -429,3 +429,72 @@ button:disabled {
   margin-bottom: 16px;
   font-size: 14px;
 }
+
+/* Template Details Page */
+.template-details-container {
+  max-width: 900px;
+  margin: 20px auto;
+  padding: 20px 40px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.template-details-container h2 {
+  color: #333;
+  border-bottom: 2px solid #4a90e2;
+  padding-bottom: 10px;
+  margin-top: 0;
+}
+
+.template-details-container h3 {
+  margin-top: 30px;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 5px;
+}
+
+.template-details-container p {
+  line-height: 1.6;
+  color: #555;
+}
+
+.template-details-container strong {
+  color: #333;
+}
+
+.template-details-container .start-interview-btn {
+  margin-top: 20px;
+  padding: 12px 24px;
+  font-size: 16px;
+  cursor: pointer;
+  background-color: #28a745; /* A nice green */
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-weight: bold;
+  transition: background-color 0.3s;
+}
+
+.template-details-container .start-interview-btn:hover {
+  background-color: #218838;
+}
+
+.template-details-container .questions-list > li {
+  background-color: #f9f9f9;
+  border: 1px solid #eee;
+  border-radius: 5px;
+  padding: 15px;
+  margin-bottom: 10px;
+}
+
+.template-details-container .back-link {
+  display: inline-block;
+  margin-top: 30px;
+  color: #4a90e2;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.template-details-container .back-link:hover {
+  text-decoration: underline;
+}

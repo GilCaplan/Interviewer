@@ -1,18 +1,23 @@
 from flask import Blueprint, request, jsonify, current_app
 from bson import ObjectId
 from datetime import datetime
+from pymongo import MongoClient
+from .config import Config
 from .auth import token_required  # Assuming you have a token_required decorator
 
 interviews_bp = Blueprint('interviews_bp', __name__)
 
+# MongoDB connection, consistent with other blueprints
+client = MongoClient(Config.MONGO_URI)
+db = client.get_default_database()
 
 # Helper to get the collection
 def get_interview_sessions_collection():
-    return current_app.mongo.db.interview_sessions
+    return db.interview_sessions
 
 
 def get_templates_collection():
-    return current_app.mongo.db.templates
+    return db.templates
 
 
 @interviews_bp.route('/api/interviews/start', methods=['POST'])
@@ -26,15 +31,19 @@ def start_interview_session(current_user):
     if not data or 'template_id' not in data:
         return jsonify({"error": "Template ID is required"}), 400
 
-    template_id = data['template_id']
-    try:
-        template_oid = ObjectId(template_id)
-    except Exception:
-        return jsonify({"error": "Invalid Template ID format"}), 400
+    template_id_str = data['template_id']
 
-    template = get_templates_collection().find_one({"_id": template_oid})
+    # Find the template using the public-facing UUID string
+    template = get_templates_collection().find_one({"template_id": template_id_str})
     if not template:
         return jsonify({"error": "Template not found"}), 404
+
+    # Defend against starting an interview with an empty template
+    if not template.get("questions"):
+        return jsonify({"error": "Cannot start an interview with a template that has no questions"}), 400
+
+    # Get the internal MongoDB _id for referencing
+    template_oid = template['_id']
 
     # Create a new interview session document
     session_doc = {
