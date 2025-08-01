@@ -283,8 +283,6 @@ def validate_session_data(data):
     # Set limits and features
     clean_data['max_participants'] = get_int(settings.get('max_participants', 10), 10, 1, 50)
     clean_data['max_questions'] = get_int(settings.get('max_questions', 20), 20, 1, 100)
-    clean_data['allow_llm'] = get_bool(settings.get('allow_llm', True), True)
-    clean_data['allow_user_questions'] = get_bool(settings.get('allow_user_questions', True), True)
     clean_data['auto_approve_questions'] = get_bool(settings.get('auto_approve_questions', False), False)
     clean_data['question_numbering'] = get_bool(settings.get('question_numbering', True), True)
     clean_data['template_mode'] = get_bool(data.get('template_mode', False), False)
@@ -485,10 +483,9 @@ def create_session(user):
             "settings": {
                 "max_participants": clean_data['max_participants'],
                 "max_questions": clean_data['max_questions'],
-                "allow_llm": clean_data['allow_llm'],
-                "allow_user_questions": clean_data['allow_user_questions'],
                 "auto_approve_questions": clean_data['auto_approve_questions'],
-                "question_numbering": clean_data['question_numbering']
+                "question_numbering": clean_data['question_numbering'],
+                "viewing_mode": "edit"  # Default viewing mode: edit, view_only, suggestions_only
             },
             "template_data": {
                 "current_question_number": 0,
@@ -623,8 +620,6 @@ def get_llm_question(user, session_id):
         if user["username"] not in session["participants"]:
             return jsonify({"error": "Access denied"}), 403
 
-        if not session["settings"]["allow_llm"]:
-            return jsonify({"error": "LLM questions are disabled for this session"}), 400
 
         data = request.get_json() or {}
         subject = data.get('subject', session.get('subject', 'general'))
@@ -674,8 +669,6 @@ def add_user_question(user, session_id):
         if user["username"] not in session["participants"]:
             return jsonify({"error": "Access denied"}), 403
 
-        if not session["settings"]["allow_user_questions"]:
-            return jsonify({"error": "User questions are disabled for this session"}), 400
 
         data = request.get_json() or {}
 
@@ -871,6 +864,13 @@ def start_question_building(user, session_id, question_number):
         if user["username"] not in session["participants"]:
             return jsonify({"error": "Access denied"}), 403
         
+        # Check viewing mode permissions for non-hosts
+        viewing_mode = session.get("settings", {}).get("viewing_mode", "edit")
+        is_host = session["host_username"] == user["username"]
+        
+        if not is_host and viewing_mode == "view_only":
+            return jsonify({"error": "This session is in view-only mode. Only the host can create questions."}), 403
+        
         data = request.get_json() or {}
         question_type = data.get('type', 'open_ended')
         
@@ -958,6 +958,13 @@ def update_question_content(user, session_id, question_id):
         if user["username"] not in session["participants"]:
             return jsonify({"error": "Access denied"}), 403
         
+        # Check viewing mode permissions for non-hosts
+        viewing_mode = session.get("settings", {}).get("viewing_mode", "edit")
+        is_host = session["host_username"] == user["username"]
+        
+        if not is_host and viewing_mode == "view_only":
+            return jsonify({"error": "This session is in view-only mode. Only the host can make changes."}), 403
+        
         data = request.get_json() or {}
         field_name = data.get('field')
         field_value = data.get('value')
@@ -1034,8 +1041,6 @@ def generate_llm_suggestion(user, session_id, question_id):
         if user["username"] not in session["participants"]:
             return jsonify({"error": "Access denied"}), 403
         
-        if not session["settings"]["allow_llm"]:
-            return jsonify({"error": "LLM suggestions are disabled for this session"}), 400
         
         data = request.get_json() or {}
         field_name = data.get('field', 'question_text')
@@ -1173,6 +1178,13 @@ def add_field_suggestion(user, session_id, question_id):
         
         if user["username"] not in session["participants"]:
             return jsonify({"error": "Access denied"}), 403
+        
+        # Check viewing mode permissions for non-hosts
+        viewing_mode = session.get("settings", {}).get("viewing_mode", "edit")
+        is_host = session["host_username"] == user["username"]
+        
+        if not is_host and viewing_mode == "view_only":
+            return jsonify({"error": "This session is in view-only mode. Suggestions are not allowed."}), 403
         
         data = request.get_json() or {}
         field_name = sanitize_text_input(data.get("field", ""), max_length=50)
@@ -1699,13 +1711,21 @@ def update_session_settings(user, session_id):
         # Updatable settings
         update_fields = {}
         if 'viewing_mode' in data:  # edit, view_only, suggestions_only
-            update_fields['settings.viewing_mode'] = data['viewing_mode']
-        if 'allow_llm' in data:
-            update_fields['settings.allow_llm'] = data['allow_llm']
-        if 'allow_user_questions' in data:
-            update_fields['settings.allow_user_questions'] = data['allow_user_questions']
+            valid_modes = ['edit', 'view_only', 'suggestions_only']
+            viewing_mode = data['viewing_mode']
+            if viewing_mode in valid_modes:
+                update_fields['settings.viewing_mode'] = viewing_mode
+            else:
+                return jsonify({"error": f"Invalid viewing mode. Must be one of: {', '.join(valid_modes)}"}), 400
         if 'max_participants' in data:
-            update_fields['settings.max_participants'] = data['max_participants']
+            try:
+                max_participants = int(data['max_participants'])
+                if 1 <= max_participants <= 50:
+                    update_fields['settings.max_participants'] = max_participants
+                else:
+                    return jsonify({"error": "Max participants must be between 1 and 50"}), 400
+            except (ValueError, TypeError):
+                return jsonify({"error": "Max participants must be a valid number"}), 400
         
         if update_fields:
             update_fields['updated_at'] = datetime.datetime.utcnow()
@@ -1777,8 +1797,6 @@ def llm_chat(user, session_id):
         if user["username"] not in session["participants"]:
             return jsonify({"error": "Access denied"}), 403
         
-        if not session["settings"]["allow_llm"]:
-            return jsonify({"error": "LLM chat is disabled for this session"}), 400
         
         data = request.get_json() or {}
         message = data.get('message', '').strip()
@@ -2116,3 +2134,58 @@ def reset_session(user, session_id):
     except Exception as e:
         current_app.logger.error(f"Error resetting session: {str(e)}")
         return jsonify({"error": "Failed to reset session"}), 500
+
+
+@sessions_bp.route('/api/sessions/<session_id>/remove-user', methods=['POST'])
+@token_required
+def remove_user_from_session(user, session_id):
+    """Remove a user from a session (host only)"""
+    try:
+        # Get the session
+        session = sessions_collection.find_one({"session_id": session_id})
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Check if current user is the host
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can remove users from the session"}), 403
+        
+        # Get username to remove from request
+        data = request.get_json()
+        username_to_remove = data.get('username')
+        
+        if not username_to_remove:
+            return jsonify({"error": "Username is required"}), 400
+        
+        # Cannot remove the host
+        if username_to_remove == session["host_username"]:
+            return jsonify({"error": "Cannot remove the host from the session"}), 400
+        
+        # Remove user from participants (participants are stored as simple username strings)
+        result = sessions_collection.update_one(
+            {"session_id": session_id},
+            {"$pull": {"participants": username_to_remove}}
+        )
+        
+        if result.modified_count == 0:
+            return jsonify({"error": "User not found in session or already removed"}), 404
+        
+        # Emit WebSocket event to notify about user removal
+        try:
+            from . import socketio
+            socketio.emit('user_removed_from_session', {
+                'username': username_to_remove,
+                'removed_by': user["username"],
+                'session_id': session_id,
+                'timestamp': datetime.datetime.utcnow().isoformat()
+            }, room=session_id)
+        except Exception as socket_error:
+            print(f"WebSocket error: {socket_error}")
+        
+        return jsonify({
+            "message": f"User {username_to_remove} removed from session successfully"
+        })
+        
+    except Exception as e:
+        print(f"Error removing user from session: {e}")
+        return jsonify({"error": "Internal server error"}), 500

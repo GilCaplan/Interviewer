@@ -6,6 +6,7 @@ import time
 from datetime import datetime, timedelta
 from .config import Config
 from .rate_limiter import rate_limit
+from .local_llm_service import local_llm_service
 
 # Rate limiting for free tier
 class RateLimiter:
@@ -53,48 +54,72 @@ else:
 class LLMService:
     @staticmethod
     def is_available():
-        """Check if LLM service is available"""
-        return GEMINI_API_KEY is not None and model is not None
+        """Check if any LLM service is available (Gemini or Local)"""
+        return (GEMINI_API_KEY is not None and model is not None) or local_llm_service.is_available()
+    
+    @staticmethod
+    def get_llm_status():
+        """Get detailed status of all LLM services"""
+        return {
+            "gemini": {
+                "available": GEMINI_API_KEY is not None and model is not None,
+                "has_api_key": GEMINI_API_KEY is not None
+            },
+            "local_llm": local_llm_service.get_model_info(),
+            "fallback": "mock_responses"
+        }
     
     @staticmethod
     def generate_question(subject="general", context="", question_type="open_ended", question_number=1):
         """
-        Generate a question using Gemini API with rate limiting or fallback to mock
+        Generate a question using best available LLM service:
+        1. Gemini API (if available and not rate limited)
+        2. Local Llama model (if available)
+        3. Mock responses (fallback)
         """
-        if not LLMService.is_available():
-            return LLMService._mock_generate_question(subject, context, question_type, question_number)
+        # Try Gemini first if available
+        if GEMINI_API_KEY and model:
+            # Check rate limits
+            can_request, error_msg = rate_limiter.can_make_request()
+            if can_request:
+                try:
+                    # Record the request
+                    rate_limiter.record_request()
+                    
+                    # Build the prompt based on question type and context
+                    prompt = LLMService._build_prompt(subject, context, question_type, question_number)
+                    
+                    # Generate with Gemini (free tier)
+                    response = model.generate_content(prompt)
+                    
+                    # Parse the response
+                    result = LLMService._parse_gemini_response(response.text, question_type, subject)
+                    result["rate_limited"] = False
+                    result["llm_source"] = "gemini"
+                    return result
+                    
+                except Exception as e:
+                    print(f"Error with Gemini API: {e}")
+                    # Continue to next fallback
+            else:
+                print(f"Gemini rate limit exceeded: {error_msg}")
+                # Continue to next fallback
         
-        # Check rate limits
-        can_request, error_msg = rate_limiter.can_make_request()
-        if not can_request:
-            print(f"Rate limit exceeded: {error_msg}")
-            # Use mock when rate limited
-            mock_response = LLMService._mock_generate_question(subject, context, question_type, question_number)
-            mock_response["rate_limited"] = True
-            mock_response["rate_limit_reason"] = error_msg
-            return mock_response
+        # Try Local Llama model
+        if local_llm_service.is_available():
+            try:
+                result = local_llm_service.generate_question(question_type, subject, context)
+                result["llm_source"] = "local_llama"
+                return result
+            except Exception as e:
+                print(f"Error with local LLM: {e}")
+                # Continue to fallback
         
-        try:
-            # Record the request
-            rate_limiter.record_request()
-            
-            # Build the prompt based on question type and context
-            prompt = LLMService._build_prompt(subject, context, question_type, question_number)
-            
-            # Generate with Gemini (free tier)
-            response = model.generate_content(prompt)
-            
-            # Parse the response
-            result = LLMService._parse_gemini_response(response.text, question_type, subject)
-            result["rate_limited"] = False
-            return result
-            
-        except Exception as e:
-            print(f"Error with Gemini API: {e}")
-            # Fallback to mock
-            mock_response = LLMService._mock_generate_question(subject, context, question_type, question_number)
-            mock_response["api_error"] = str(e)
-            return mock_response
+        # Final fallback to mock
+        result = LLMService._mock_generate_question(subject, context, question_type, question_number)
+        result["llm_source"] = "mock"
+        return result
+        
     
     @staticmethod
     def _build_prompt(subject, context, question_type, question_number):
@@ -341,55 +366,65 @@ class LLMService:
 
     @staticmethod
     def generate_chat_response(message, context=""):
-        """Generate a chat response for LLM conversation with rate limiting"""
-        if not LLMService.is_available():
-            return {
-                "response": "I'm a mock LLM assistant. I can help you with interview questions and suggestions. What would you like to work on?",
-                "generated_by": "mock_llm",
-                "timestamp": datetime.utcnow().isoformat()
-            }
+        """Generate a chat response using best available LLM service"""
+        # Try Gemini first if available
+        if GEMINI_API_KEY and model:
+            # Check rate limits
+            can_request, error_msg = rate_limiter.can_make_request()
+            if can_request:
+                try:
+                    # Record the request
+                    rate_limiter.record_request()
+                    
+                    prompt = f"""
+                    You are an expert interview preparation assistant. Help the user with their question or request.
+                    Keep responses concise and focused on interview preparation.
+                    
+                    Context: {context}
+                    User message: {message}
+                    
+                    Provide a helpful, practical response focused on interview preparation and question design.
+                    """
+                    
+                    response = model.generate_content(prompt)
+                    
+                    return {
+                        "response": response.text,
+                        "generated_by": "gemini",
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "rate_limited": False,
+                        "llm_source": "gemini"
+                    }
+                    
+                except Exception as e:
+                    print(f"Error with Gemini chat: {e}")
+                    # Continue to next fallback
+            else:
+                print(f"Gemini rate limit exceeded: {error_msg}")
+                # Continue to next fallback
         
-        # Check rate limits
-        can_request, error_msg = rate_limiter.can_make_request()
-        if not can_request:
-            return {
-                "response": f"I'm currently rate-limited to stay within free API limits. {error_msg}. Please try again in a moment, or I can provide general guidance without AI assistance.",
-                "generated_by": "rate_limited",
-                "timestamp": datetime.utcnow().isoformat(),
-                "rate_limited": True
-            }
+        # Try Local Llama model
+        if local_llm_service.is_available():
+            try:
+                response_text = local_llm_service.chat_with_context(message, context)
+                return {
+                    "response": response_text,
+                    "generated_by": "llama-local",
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "llm_source": "local_llama"
+                }
+            except Exception as e:
+                print(f"Error with local LLM chat: {e}")
+                # Continue to fallback
         
-        try:
-            # Record the request
-            rate_limiter.record_request()
-            
-            prompt = f"""
-            You are an expert interview preparation assistant. Help the user with their question or request.
-            Keep responses concise and focused on interview preparation.
-            
-            Context: {context}
-            User message: {message}
-            
-            Provide a helpful, practical response focused on interview preparation and question design.
-            """
-            
-            response = model.generate_content(prompt)
-            
-            return {
-                "response": response.text,
-                "generated_by": "gemini",
-                "timestamp": datetime.utcnow().isoformat(),
-                "rate_limited": False
-            }
-            
-        except Exception as e:
-            print(f"Error with Gemini chat: {e}")
-            return {
-                "response": "I apologize, but I'm having trouble processing your request right now. Please try again later, or feel free to ask for general interview advice.",
-                "generated_by": "mock_llm",
-                "timestamp": datetime.utcnow().isoformat(),
-                "api_error": str(e)
-            }
+        # Final fallback to mock
+        return {
+            "response": "I'm a mock LLM assistant. I can help you with interview questions and suggestions. What would you like to work on?",
+            "generated_by": "mock_llm",
+            "timestamp": datetime.utcnow().isoformat(),
+            "llm_source": "mock"
+        }
+        
     
     @staticmethod
     def generate_mock_response(subject="general", question_type="open_ended", context=""):

@@ -9,6 +9,7 @@ import './SessionBuilder.css';
 import TemplateEditor from './TemplateEditor';
 import LLMChat from './LLMChat';
 import ParticipantsList from './ParticipantsList';
+import SessionSettings from './SessionSettings';
 
 const SessionBuilder = () => {
   const { sessionCode } = useParams();
@@ -26,10 +27,12 @@ const SessionBuilder = () => {
   const [isHost, setIsHost] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
   
   // Screen data
   const [questions, setQuestions] = useState([]);
   const [participants, setParticipants] = useState([]);
+  const [onlineUsers, setOnlineUsers] = useState(new Set()); // Track online status
   const [chatMessages, setChatMessages] = useState([]);
 
   // Use ref to track if component is mounted
@@ -340,12 +343,37 @@ const SessionBuilder = () => {
       );
     });
 
-    socket.on('user_joined', (data) => {
-      setParticipants(prev => [...prev, data.user]);
+    // Listen for the correct WebSocket events from backend
+    socket.on('user_joined_room', (data) => {
+      console.log('WebSocket: User joined room', data);
+      // For now, just reload participants to avoid duplicates
+      if (session?.session_id) {
+        loadParticipants(session.session_id);
+      }
     });
 
-    socket.on('user_left', (data) => {
+    socket.on('user_left_room', (data) => {
+      console.log('WebSocket: User left room', data);
       setParticipants(prev => prev.filter(p => p.username !== data.username));
+      
+      // Mark user as offline
+      setOnlineUsers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(data.username);
+        return newSet;
+      });
+    });
+
+    socket.on('session_settings_updated', (data) => {
+      console.log('WebSocket: Session settings updated', data);
+      // Update session settings in state
+      setSession(prev => ({
+        ...prev,
+        settings: {
+          ...prev.settings,
+          ...data.settings
+        }
+      }));
     });
   };
 
@@ -369,6 +397,10 @@ const SessionBuilder = () => {
       if (response.ok) {
         const data = await response.json();
         setParticipants(data.participants);
+        
+        // Initialize all current participants as online
+        const usernames = data.participants.map(p => p.username);
+        setOnlineUsers(new Set(usernames));
       }
     } catch (err) {
       console.error('Failed to load participants:', err);
@@ -717,6 +749,49 @@ const SessionBuilder = () => {
     }
   };
 
+  const removeUserFromSession = async (username) => {
+    if (!window.confirm(`Remove ${username} from this session?`)) {
+      return;
+    }
+
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      
+      // Get token with fallback
+      let authToken = localStorage.getItem('token');
+      if (!authToken && user?.sessionToken) {
+        authToken = user.sessionToken;
+      }
+      
+      const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/remove-user`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ username })
+      });
+
+      if (response.ok) {
+        // Remove from local state immediately
+        setParticipants(prev => prev.filter(p => p.username !== username));
+        setOnlineUsers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(username);
+          return newSet;
+        });
+        
+        alert(`${username} has been removed from the session.`);
+      } else {
+        const errorData = await response.json();
+        alert('Failed to remove user: ' + (errorData.error || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Error removing user from session:', err);
+      alert('Failed to remove user: ' + err.message);
+    }
+  };
+
   if (loading) {
     return <div className="session-loading">Loading session...</div>;
   }
@@ -803,44 +878,12 @@ const SessionBuilder = () => {
             className={`nav-btn ${activeScreen === 'participants' ? 'active' : ''}`}
             onClick={() => setActiveScreen('participants')}
           >
-            Users ({participants.length})
+            Settings & Users ({participants.length})
           </button>
         </div>
 
         <div className="session-actions">
-          <button onClick={() => navigate('/')}>Leave Session</button>
-          {isHost && (
-            <>
-              <button 
-                onClick={deleteCurrentSession}
-                style={{ 
-                  backgroundColor: '#dc3545', 
-                  color: 'white',
-                  marginLeft: '10px',
-                  padding: '8px 12px',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                🗑️ Delete Session
-              </button>
-              <button 
-                onClick={cleanupAllUserSessions}
-                style={{ 
-                  backgroundColor: '#6c757d', 
-                  color: 'white',
-                  marginLeft: '5px',
-                  padding: '8px 12px',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                🧹 Cleanup All Sessions
-              </button>
-            </>
-          )}
+          <button onClick={() => navigate('/')}>← Leave Session</button>
         </div>
       </div>
 
@@ -855,6 +898,7 @@ const SessionBuilder = () => {
             onStartQuestion={handleStartQuestion}
             onUpdateQuestion={handleUpdateQuestion}
             onFinalizeQuestion={handleFinalizeQuestion}
+            viewingMode={session?.settings?.viewing_mode || 'edit'}
           />
         )}
         
@@ -872,11 +916,35 @@ const SessionBuilder = () => {
           <ParticipantsList
             session={session}
             participants={participants}
+            onlineUsers={onlineUsers}
             user={user}
             isHost={isHost}
+            onShowSettings={() => setShowSettings(true)}
+            onDeleteSession={deleteCurrentSession}
+            onCleanupAllSessions={cleanupAllUserSessions}
+            onRemoveUser={removeUserFromSession}
           />
         )}
       </div>
+
+      {/* Session Settings Modal */}
+      {showSettings && (
+        <SessionSettings
+          session={session}
+          isHost={isHost}
+          user={user}
+          onClose={() => setShowSettings(false)}
+          onSettingsUpdate={(newSettings) => {
+            setSession(prev => ({
+              ...prev,
+              settings: {
+                ...prev.settings,
+                ...newSettings
+              }
+            }));
+          }}
+        />
+      )}
     </div>
   );
 };

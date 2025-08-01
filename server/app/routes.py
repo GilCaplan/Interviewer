@@ -4,6 +4,7 @@ from .config import Config
 from .availability import availability_manager
 from .security import security_manager
 from .async_handler import task_manager
+from .llm_service import LLMService
 import os
 
 main = Blueprint('main', __name__)
@@ -80,5 +81,25 @@ def system_status():
 def security_report():
     """Detailed security status report"""
     return jsonify(security_manager.get_security_report())
+
+@main.route('/api/llm/status', methods=['GET'])
+def llm_status():
+    """Get detailed LLM service status"""
+    try:
+        status_info = LLMService.get_llm_status()
+        
+        return jsonify({
+            "status": "available" if LLMService.is_available() else "unavailable",
+            "services": status_info,
+            "message": "LLM service status retrieved successfully",
+            "timestamp": availability_manager.last_health_check.isoformat()
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Error retrieving LLM status: {str(e)}",
+            "timestamp": availability_manager.last_health_check.isoformat()
+        }), 500
 
 # Template routes moved to templates.py module

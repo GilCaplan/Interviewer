@@ -16,7 +16,7 @@ from datetime import datetime
 import random
 
 # Test Configuration
-API_URLS = ["http://localhost:5000", "http://localhost:5001"]
+API_URLS = ["http://localhost:5001", "http://localhost:5001"]
 API_URL = None
 
 class Colors:

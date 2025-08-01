@@ -8,7 +8,8 @@ const TemplateEditor = ({
   user, 
   onStartQuestion, 
   onUpdateQuestion, 
-  onFinalizeQuestion 
+  onFinalizeQuestion,
+  viewingMode = 'edit'  // 'edit', 'view_only', 'suggestions_only'
 }) => {
   const [selectedQuestionType, setSelectedQuestionType] = useState('open_ended');
   const [newQuestionNumber, setNewQuestionNumber] = useState(1);
@@ -37,6 +38,12 @@ const TemplateEditor = ({
     { value: 'true_false', label: 'True/False' },
     { value: 'short_answer', label: 'Short Answer' }
   ];
+
+  // Permission helpers based on viewing mode
+  const canEdit = isHost || viewingMode === 'edit';
+  const canSuggest = isHost || viewingMode === 'suggestions_only';
+  const canView = true; // Everyone can view
+  const isViewOnly = !isHost && viewingMode === 'view_only';
 
   const getNextQuestionNumber = () => {
     const existingNumbers = questions.map(q => q.question_number).sort((a, b) => a - b);
@@ -822,8 +829,41 @@ const TemplateEditor = ({
         </div>
       </div>
 
-      {/* Add New Question Section (Host Only) */}
-      {isHost && (
+      {/* Viewing Mode Indicator */}
+      {!isHost && (
+        <div className={`viewing-mode-notice ${viewingMode}`}>
+          {viewingMode === 'edit' && (
+            <div className="mode-info">
+              <span className="mode-icon">✏️</span>
+              <div className="mode-text">
+                <strong>Full Edit Access</strong>
+                <p>You can create and edit questions directly</p>
+              </div>
+            </div>
+          )}
+          {viewingMode === 'suggestions_only' && (
+            <div className="mode-info">
+              <span className="mode-icon">💡</span>
+              <div className="mode-text">
+                <strong>Suggestions Mode</strong>
+                <p>You can suggest changes that the host can approve or reject</p>
+              </div>
+            </div>
+          )}
+          {viewingMode === 'view_only' && (
+            <div className="mode-info">
+              <span className="mode-icon">👁️</span>
+              <div className="mode-text">
+                <strong>View Only Mode</strong>
+                <p>You can view questions but cannot make changes</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Add New Question Section */}
+      {canEdit && (
         <div className="add-question-section">
           <h3>Add New Question</h3>
           <div className="add-question-form">

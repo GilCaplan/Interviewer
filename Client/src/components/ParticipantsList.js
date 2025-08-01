@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
 import './ParticipantsList.css';
 
-const ParticipantsList = ({ session, participants, user, isHost }) => {
+const ParticipantsList = ({ session, participants, onlineUsers, user, isHost, onShowSettings, onDeleteSession, onCleanupAllSessions, onRemoveUser }) => {
   const [sessionSettings, setSessionSettings] = useState({
     viewing_mode: session.settings?.viewing_mode || 'edit',
-    allow_llm: session.settings?.allow_llm || true,
-    allow_user_questions: session.settings?.allow_user_questions || true,
     max_participants: session.settings?.max_participants || 10
   });
 
@@ -40,8 +38,7 @@ const ParticipantsList = ({ session, participants, user, isHost }) => {
   };
 
   const getActivityStatus = (participant) => {
-    // This would be based on real-time data in a full implementation
-    return 'online'; // Mock status
+    return onlineUsers && onlineUsers.has(participant.username) ? 'online' : 'offline';
   };
 
   const getParticipantRole = (participant) => {
@@ -73,22 +70,26 @@ const ParticipantsList = ({ session, participants, user, isHost }) => {
   return (
     <div className="participants-list">
       <div className="participants-header">
-        <h2>Session Participants</h2>
-        <div className="session-info">
-          <div className="session-details">
-            <p><strong>Session:</strong> {session.title}</p>
-            <p><strong>Subject:</strong> {session.subject}</p>
-            <p><strong>Code:</strong> 
-              <span className="session-code" onClick={copySessionCode}>
-                {session.session_code} 📋
-              </span>
-            </p>
-          </div>
-          <div className="session-actions">
-            <button onClick={copySessionLink} className="share-btn">
-              Share Session Link
-            </button>
-          </div>
+        <h2>Settings & Session Management</h2>
+      </div>
+
+      {/* Session Actions */}
+      <div className="session-management">
+        <h3>🔧 Session Actions</h3>
+        <div className="action-buttons">
+          <button onClick={onShowSettings} className="action-btn primary">
+            ⚙️ Session Settings
+          </button>
+          {isHost && (
+            <>
+              <button onClick={onDeleteSession} className="action-btn danger">
+                🗑️ Delete This Session
+              </button>
+              <button onClick={onCleanupAllSessions} className="action-btn secondary">
+                🧹 Cleanup All My Sessions
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -112,29 +113,6 @@ const ParticipantsList = ({ session, participants, user, isHost }) => {
               <small>{viewingModeOptions.find(o => o.value === sessionSettings.viewing_mode)?.description}</small>
             </div>
 
-            <div className="setting-group">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={sessionSettings.allow_llm}
-                  onChange={(e) => handleSettingsUpdate({ allow_llm: e.target.checked })}
-                />
-                Allow LLM Assistance
-              </label>
-              <small>Enable AI suggestions and chat</small>
-            </div>
-
-            <div className="setting-group">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={sessionSettings.allow_user_questions}
-                  onChange={(e) => handleSettingsUpdate({ allow_user_questions: e.target.checked })}
-                />
-                Allow User Questions
-              </label>
-              <small>Let participants add their own questions</small>
-            </div>
 
             <div className="setting-group">
               <label>Max Participants:</label>
@@ -152,7 +130,25 @@ const ParticipantsList = ({ session, participants, user, isHost }) => {
 
       {/* Participants List */}
       <div className="participants-section">
-        <h3>👥 Participants ({participants.length})</h3>
+        <div className="participants-section-header">
+          <h3>👥 Participants ({participants.length})</h3>
+          <div className="session-info">
+            <div className="session-details">
+              <p><strong>Session:</strong> {session.title}</p>
+              <p><strong>Subject:</strong> {session.subject}</p>
+              <p><strong>Code:</strong> 
+                <span className="session-code" onClick={copySessionCode}>
+                  {session.session_code} 📋
+                </span>
+              </p>
+            </div>
+            <div className="session-actions">
+              <button onClick={copySessionLink} className="share-btn">
+                Share Session Link
+              </button>
+            </div>
+          </div>
+        </div>
         
         {participants.length === 0 ? (
           <div className="no-participants">
@@ -211,7 +207,10 @@ const ParticipantsList = ({ session, participants, user, isHost }) => {
                   {/* Host Actions */}
                   {isHost && !participant.is_host && (
                     <div className="participant-actions">
-                      <button className="action-btn warning">
+                      <button 
+                        className="action-btn warning"
+                        onClick={() => onRemoveUser(participant.username)}
+                      >
                         Remove from Session
                       </button>
                     </div>
@@ -255,7 +254,7 @@ const ParticipantsList = ({ session, participants, user, isHost }) => {
             <h4>Settings</h4>
             <div className="stat-details">
               <p>Mode: {sessionSettings.viewing_mode}</p>
-              <p>LLM: {sessionSettings.allow_llm ? 'Enabled' : 'Disabled'}</p>
+              <p>Max Users: {sessionSettings.max_participants}</p>
             </div>
           </div>
         </div>

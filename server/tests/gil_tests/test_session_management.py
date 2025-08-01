@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime
 
 # Test Configuration
-API_URLS = ["http://localhost:5000", "http://localhost:5001"]
+API_URLS = ["http://localhost:5001", "http://localhost:5001"]
 API_URL = None
 
 class Colors:

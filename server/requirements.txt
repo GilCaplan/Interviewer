@@ -12,3 +12,10 @@ google-generativeai==0.8.5
 eventlet==0.33.3
 gunicorn==21.2.0
 redis==5.0.1
+
+# Local LLM Support
+torch>=2.0.0
+transformers>=4.35.0
+accelerate>=0.20.0
+huggingface-hub>=0.16.0
+bitsandbytes>=0.41.0

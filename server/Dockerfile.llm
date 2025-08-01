@@ -1,0 +1,93 @@
+# Multi-stage build for Interview Platform with Local LLM Support
+FROM python:3.11-slim as base
+
+# Install system dependencies including build tools for PyTorch
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# ================================
+# Stage 1: Dependencies Installation
+# ================================
+FROM base as dependencies
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies with optimizations
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install PyTorch with CPU-only support for smaller image size
+# (GPU support can be enabled by changing index-url)
+RUN pip install --no-cache-dir \
+    torch==2.7.1+cpu \
+    torchvision==0.19.1+cpu \
+    torchaudio==2.7.1+cpu \
+    --index-url https://download.pytorch.org/whl/cpu
+
+# ================================
+# Stage 2: Model Download (Optional)
+# ================================
+FROM dependencies as model-downloader
+
+# Create models directory
+RUN mkdir -p /app/models/llama-1b-instruct
+
+# Set environment variables for model download
+ENV PYTHONPATH=/app
+ENV HF_HOME=/app/.cache/huggingface
+ENV TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers
+
+# Copy model download script
+COPY download_model.py .
+
+# Download model if DOWNLOAD_MODEL_AT_BUILD is set to true
+ARG DOWNLOAD_MODEL_AT_BUILD=false
+ARG HUGGINGFACE_TOKEN=""
+
+RUN if [ "$DOWNLOAD_MODEL_AT_BUILD" = "true" ]; then \
+    echo "Downloading model at build time..." && \
+    HUGGINGFACE_TOKEN=$HUGGINGFACE_TOKEN python download_model.py; \
+    else \
+    echo "Skipping model download at build time"; \
+    fi
+
+# ================================
+# Stage 3: Final Runtime Image
+# ================================
+FROM dependencies as runtime
+
+# Copy application code
+COPY . .
+
+# Copy models from model-downloader stage (if they exist)
+COPY --from=model-downloader /app/models /app/models
+COPY --from=model-downloader /app/.cache /app/.cache
+
+# Create non-root user for security
+RUN useradd -m -u 1000 flaskuser && \
+    chown -R flaskuser:flaskuser /app && \
+    chmod +x /app/entrypoint.sh
+
+USER flaskuser
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV FLASK_APP=app
+ENV FLASK_ENV=production
+
+# Expose port
+EXPOSE 5000
+
+# Health check that accounts for LLM initialization time
+HEALTHCHECK --interval=45s --timeout=15s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:5000/api/health || exit 1
+
+# Use entrypoint script for initialization
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=5000"]

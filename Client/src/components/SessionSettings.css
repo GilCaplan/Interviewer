@@ -1,0 +1,327 @@
+/* Session Settings Modal */
+.session-settings-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.session-settings-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 85vh;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+}
+
+.session-settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+
+.session-settings-header h2 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.close-button:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.session-settings-body {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.session-settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+
+.session-settings-footer button {
+  padding: 10px 20px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.session-settings-footer button:first-child {
+  background: white;
+  color: #374151;
+}
+
+.session-settings-footer button:first-child:hover {
+  background: #f3f4f6;
+}
+
+.save-button {
+  background: #3b82f6 !important;
+  color: white !important;
+  border-color: #3b82f6 !important;
+}
+
+.save-button:hover {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+}
+
+.save-button:disabled {
+  background: #9ca3af !important;
+  border-color: #9ca3af !important;
+  cursor: not-allowed;
+}
+
+/* Error Message */
+.error-message {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin: 0 24px 16px;
+  font-size: 14px;
+}
+
+/* Access Denied */
+.access-denied {
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+  margin-bottom: 24px;
+}
+
+/* Setting Groups */
+.setting-group {
+  margin-bottom: 32px;
+}
+
+.setting-group:last-child {
+  margin-bottom: 0;
+}
+
+.setting-label {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.label-text {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 16px;
+  display: block;
+}
+
+.label-description {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 400;
+  margin-top: 4px;
+  display: block;
+}
+
+/* Viewing Mode Options */
+.viewing-mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.radio-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.radio-option:hover {
+  border-color: #d1d5db;
+  background: #f9fafb;
+}
+
+.radio-option input[type="radio"] {
+  margin: 2px 0 0 0;
+  accent-color: #3b82f6;
+}
+
+.radio-option input[type="radio"]:checked + .radio-content {
+  color: #1f2937;
+}
+
+.radio-option:has(input:checked) {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.radio-content {
+  flex: 1;
+}
+
+.radio-title {
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 4px;
+  font-size: 15px;
+}
+
+.radio-description {
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+/* Checkbox Group */
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  cursor: pointer;
+  color: #374151;
+  font-size: 15px;
+}
+
+.checkbox-option input[type="checkbox"] {
+  accent-color: #3b82f6;
+  transform: scale(1.1);
+}
+
+.checkbox-option:hover {
+  color: #1f2937;
+}
+
+/* Number Input */
+.number-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.number-input {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  width: 80px;
+  text-align: center;
+}
+
+.number-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  ring: 1px;
+  ring-color: #3b82f6;
+}
+
+.input-suffix {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* Current Settings Display */
+.current-settings {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.current-settings h3 {
+  margin: 0 0 16px 0;
+  color: #1f2937;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.setting-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.setting-display:last-child {
+  border-bottom: none;
+}
+
+.setting-display .setting-label {
+  color: #6b7280;
+  font-weight: 500;
+  margin: 0;
+}
+
+.setting-display .setting-value {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  .session-settings-content {
+    width: 95%;
+    margin: 10px;
+  }
+  
+  .session-settings-header,
+  .session-settings-body,
+  .session-settings-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  
+  .radio-option {
+    padding: 12px;
+  }
+  
+  .viewing-mode-options {
+    gap: 8px;
+  }
+}

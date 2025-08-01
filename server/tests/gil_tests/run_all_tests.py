@@ -82,8 +82,8 @@ def update_test_files_port(server_url):
                 # Update API_URL configuration
                 if 'API_URL = "http://localhost:5001"' in content:
                     content = content.replace('API_URL = "http://localhost:5001"', f'API_URL = "{server_url}"')
-                elif 'API_URL = "http://localhost:5000"' in content:
-                    content = content.replace('API_URL = "http://localhost:5000"', f'API_URL = "{server_url}"')
+                elif 'API_URL = "http://localhost:5001"' in content:
+                    content = content.replace('API_URL = "http://localhost:5001"', f'API_URL = "{server_url}"')
                 
                 with open(test_file, 'w') as f:
                     f.write(content)
