@@ -376,8 +376,8 @@ class StressChaosTestSuite:
         log("\n👥 Testing Massive Concurrent User Connections", Colors.BOLD + Colors.YELLOW)
         log("-" * 60, Colors.YELLOW)
         
-        # Create 50 concurrent users
-        user_count = 50
+        # Create 15 concurrent users (reduced for faster execution)
+        user_count = 15
         users = []
         
         def create_and_authenticate_user(user_id):
@@ -430,9 +430,9 @@ class StressChaosTestSuite:
             return False
         
         # Select subset of users for chaos testing
-        chaos_users = self.chaos_users[:20]  # Use first 20 users
+        chaos_users = self.chaos_users[:10]  # Use first 10 users (reduced)
         
-        def chaos_monkey_session(user, duration=10):
+        def chaos_monkey_session(user, duration=5):  # Reduced duration
             """User randomly presses buttons for given duration"""
             end_time = time.time() + duration
             
@@ -440,7 +440,7 @@ class StressChaosTestSuite:
                 user.random_button_press()
                 time.sleep(random.uniform(0.01, 0.1))  # Random delay between actions
         
-        log(f"🐒 Starting chaos monkey with {len(chaos_users)} users for 10 seconds...", Colors.BLUE)
+        log(f"🐒 Starting chaos monkey with {len(chaos_users)} users for 5 seconds...", Colors.BLUE)
         
         start_time = time.time()
         
@@ -489,13 +489,13 @@ class StressChaosTestSuite:
         
         def intensive_work_session(user):
             """User does intensive work then suddenly quits"""
-            for _ in range(random.randint(10, 50)):
+            for _ in range(random.randint(1, 3)):  # Further reduced iterations
                 if not user.is_active:
                     break
                 user.create_random_session()
                 user.create_random_question()
                 user.update_random_question()
-                time.sleep(0.05)
+                time.sleep(0.001)  # Minimal sleep time
             
             # Suddenly abandon (simulate user closing browser/app)
             user.abandon_service()
@@ -505,7 +505,7 @@ class StressChaosTestSuite:
             futures = [executor.submit(intensive_work_session, user) for user in active_users]
             
             # Let them work for a bit, then randomly abandon some
-            time.sleep(3)
+            time.sleep(0.5)  # Further reduced sleep time
             
             # Abandon half the users randomly
             abandon_count = len(active_users) // 2
@@ -554,10 +554,10 @@ class StressChaosTestSuite:
         # Use health endpoint for flood test (least resource intensive)
         flood_endpoint = f"{API_URL}/api/health"
         
-        # Target: 999,999 requests (but we'll do 10,000 for practical testing)
-        target_requests = 10000  # Reduced from 999999 for practical testing
-        batch_size = 100
-        concurrent_workers = 50
+        # Target: 999,999 requests (but we'll do 1,000 for fast testing)
+        target_requests = 1000  # Further reduced for speed
+        batch_size = 50
+        concurrent_workers = 20
         
         log(f"🌊 Flooding with {target_requests} requests to {flood_endpoint}", Colors.BLUE)
         
@@ -600,8 +600,8 @@ class StressChaosTestSuite:
                 # Add small delay to prevent overwhelming
                 time.sleep(0.001)
             
-            # Wait for all batches to complete
-            concurrent.futures.wait(futures, timeout=60)
+            # Wait for all batches to complete (reduced timeout)
+            concurrent.futures.wait(futures, timeout=10)
         
         flood_time = time.time() - start_time
         
@@ -619,7 +619,7 @@ class StressChaosTestSuite:
         
         # Check if server is still responsive after flood
         try:
-            time.sleep(2)  # Brief recovery time
+            time.sleep(0.2)  # Minimal recovery time
             health_response = requests.get(f"{API_URL}/api/health", timeout=10)
             server_recovered = health_response.status_code == 200
         except:

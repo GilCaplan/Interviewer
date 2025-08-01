@@ -64,8 +64,11 @@ def update_test_files_port(server_url):
         "test_interview_platform_parallelism.py",
         "test_system_end_to_end.py",
         "test_edge_cases_critical.py",
-        "test_security_advanced.py",
-        "test_database_reliability.py"
+        "test_security_comprehensive.py",
+        "test_database_reliability.py",
+        "test_field_suggestions.py",
+        "test_suggestion_history.py",
+        "test_stress_and_chaos.py"
     ]
     
     port = server_url.split(":")[-1]
@@ -94,11 +97,14 @@ def run_test_file(test_file):
     log(f"\n🧪 Running {test_file}...", Colors.BOLD + Colors.CYAN)
     log("=" * 60, Colors.CYAN)
     
+    # Set timeout based on test type
+    timeout = 300 if "stress_and_chaos" in test_file else 120  # 5 minutes for stress test, 2 minutes for others
+    
     try:
         result = subprocess.run([sys.executable, test_file], 
                               capture_output=True, 
                               text=True, 
-                              timeout=120)
+                              timeout=timeout)
         
         print(result.stdout)
         
@@ -109,8 +115,8 @@ def run_test_file(test_file):
         return success, result.stdout, result.stderr
         
     except subprocess.TimeoutExpired:
-        log(f"⏰ Test {test_file} timed out", Colors.RED)
-        return False, "", "Test timed out"
+        log(f"⏰ Test {test_file} timed out after {timeout}s", Colors.RED)
+        return False, "", f"Test timed out after {timeout} seconds"
     except Exception as e:
         log(f"❌ Failed to run {test_file}: {e}", Colors.RED)
         return False, "", str(e)
@@ -212,7 +218,13 @@ def main():
         ("test_llm_mock_integration.py", "Mock LLM integration"),
         ("test_suggestion_history.py", "Suggestion history functionality"),
         ("test_edge_cases_critical.py", "Critical edge cases and boundary testing"),
-        ("test_scaling_and_concurrent_users.py", "Scaling and concurrent user testing")
+        ("test_scaling_and_concurrent_users.py", "Scaling and concurrent user testing"),
+        ("test_system_end_to_end.py", "End-to-end system workflows"),
+        ("test_security_comprehensive.py", "Comprehensive security testing"),
+        ("test_interview_platform_parallelism.py", "Interview platform parallelism"),
+        ("test_database_reliability.py", "Database reliability testing"),
+        ("test_field_suggestions.py", "Field suggestion functionality"),
+        ("test_stress_and_chaos.py", "Stress and chaos testing (long-running)")
     ]
     
     # Filter to only tests that actually exist
