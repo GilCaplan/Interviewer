@@ -38,18 +38,14 @@ def test_session_settings_integration():
         host_token = setup_user(host_user)
         non_host_token = setup_user(non_host_user)
         
-        if not host_token or not non_host_token:
-            print("❌ Failed to setup test users")
-            return False
+        assert host_token and non_host_token, "❌ Failed to setup test users"
         
         print("✅ Test users created and authenticated")
         
         # Step 2: Host creates a session
         print("\n2. Host creating session...")
         session = create_session(host_token)
-        if not session:
-            print("❌ Failed to create session")
-            return False
+        assert session, "❌ Failed to create session"
         
         session_id = session['session_id']
         session_code = session['session_code']
@@ -93,7 +89,7 @@ def test_session_settings_integration():
                 continue
             
             # Test non-host permissions based on viewing mode
-            test_non_host_permissions(non_host_token, session_id, mode)
+            check_non_host_permissions(non_host_token, session_id, mode)
         
         # Step 5: Test non-host cannot change settings
         print("\n5. Testing non-host settings access...")
@@ -115,13 +111,12 @@ def test_session_settings_integration():
         
         print("\n" + "=" * 50)
         print("🎉 All session settings integration tests PASSED!")
-        return True
         
     except Exception as e:
         print(f"\n❌ Integration test failed with error: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        raise
 
 def setup_user(user_data):
     """Register and login a user, return auth token"""
@@ -228,7 +223,7 @@ def get_session(token, session_id):
         print(f"Get session error: {e}")
         return None
 
-def test_non_host_permissions(token, session_id, viewing_mode):
+def check_non_host_permissions(token, session_id, viewing_mode):
     """Test what non-host can do based on viewing mode"""
     print(f"    Testing non-host permissions for {viewing_mode} mode...")
     

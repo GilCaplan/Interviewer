@@ -10,9 +10,7 @@ def test_field_suggestions():
     
     # Login
     response = requests.post(f'{api_url}/api/auth/login', json={'username': 'test_user_suggestions'})
-    if response.status_code != 200:
-        print(f'❌ Login failed: {response.status_code}')
-        return False
+    assert response.status_code == 200, f'❌ Login failed: {response.status_code}'
         
     token = response.json()['token']
     headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
@@ -26,9 +24,7 @@ def test_field_suggestions():
         'settings': {'max_participants': 10, 'max_questions': 15}
     }
     response = requests.post(f'{api_url}/api/sessions/create', json=session_data, headers=headers)
-    if response.status_code != 201:
-        print(f'❌ Session creation failed: {response.status_code}')
-        return False
+    assert response.status_code == 201, f'❌ Session creation failed: {response.status_code}'
         
     session_id = response.json()['session']['session_id']
     print('✅ Session created')
@@ -62,18 +58,11 @@ def test_field_suggestions():
         # Test accepting suggestion
         response = requests.put(f'{api_url}/api/sessions/{session_id}/questions/{question_id}/suggestions/{suggestion_id}',
                               json={'action': 'accept'}, headers=headers)
-        if response.status_code == 200:
-            print('✅ Suggestion accepted successfully!')
-            print('🎉 All field suggestion endpoints working!')
-            return True
-        else:
-            print(f'❌ Accept suggestion failed: {response.status_code}')
-            print(f'Error: {response.text}')
-            return False
+        assert response.status_code == 200, f'❌ Accept suggestion failed: {response.status_code} Error: {response.text}'
+        print('✅ Suggestion accepted successfully!')
+        print('🎉 All field suggestion endpoints working!')
     else:
-        print(f'❌ Create suggestion failed: {response.status_code}')
-        print(f'Error response: {response.text}')
-        return False
+        assert False, f'❌ Create suggestion failed: {response.status_code} Error response: {response.text}'
 
 if __name__ == "__main__":
     test_field_suggestions()

@@ -92,6 +92,99 @@ def verify_token(token):
         return None
 
 
+# Registration route
+@auth.route('/api/auth/register', methods=['POST'])
+@rate_limit('auth', 5, 900, per_user=False)  # 5 attempts per 15 minutes per client
+def register():
+    try:
+        # Basic validation
+        if not request.is_json:
+            return jsonify({'message': 'Content-Type must be application/json'}), 400
+            
+        data = request.get_json()
+        if not data:
+            return jsonify({'message': 'Request body is required'}), 400
+            
+        username = data.get('username', '').strip()
+        email = data.get('email', '').strip()
+        password = data.get('password', '')
+        
+        if not username:
+            return jsonify({'message': 'Username is required'}), 400
+        if not email:
+            return jsonify({'message': 'Email is required'}), 400
+        if not password:
+            return jsonify({'message': 'Password is required'}), 400
+            
+        # Validate username
+        if len(username) < 3 or len(username) > 30:
+            return jsonify({'message': 'Username must be between 3 and 30 characters'}), 400
+        if not all(c.isalnum() or c == '_' for c in username):
+            return jsonify({'message': 'Username can only contain letters, numbers, and underscores'}), 400
+            
+        # Validate email (basic)
+        if '@' not in email or '.' not in email.split('@')[1]:
+            return jsonify({'message': 'Invalid email format'}), 400
+            
+        # Validate password
+        if len(password) < 6:
+            return jsonify({'message': 'Password must be at least 6 characters'}), 400
+        
+        # Check if user already exists
+        existing_user = users_collection.find_one({
+            '$or': [{'username': username}, {'email': email}]
+        })
+        if existing_user:
+            return jsonify({'message': 'Username or email already exists'}), 409
+        
+        # Create user
+        user = {
+            'username': username,
+            'email': email,
+            'password': password,  # In production, hash this
+            'created_at': datetime.datetime.utcnow(),
+            'user_id': str(uuid.uuid4()),
+            'is_guest': False
+        }
+        users_collection.insert_one(user)
+        
+        # Create session
+        session_id = str(uuid.uuid4())
+        session = {
+            'session_id': session_id,
+            'username': username,
+            'created_at': datetime.datetime.utcnow(),
+            'expires_at': datetime.datetime.utcnow() + datetime.timedelta(days=7),
+            'is_revoked': False
+        }
+        sessions_collection.insert_one(session)
+
+        # Generate JWT token
+        token = jwt.encode({
+            'username': username,
+            'session_id': session_id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
+        }, current_app.config.get('SECRET_KEY'), algorithm='HS256')
+
+        # Return response
+        response = jsonify({
+            'message': 'Registration successful',
+            'username': username,
+            'token': token,
+            'user': {'username': username, 'user_id': user['user_id']}
+        })
+
+        response.set_cookie('session_token', token, httponly=True,
+                          secure=not current_app.config.get('DEBUG', False),
+                          samesite='Lax', max_age=60 * 60 * 24 * 7)
+
+        return response, 201
+
+    except Exception as e:
+        current_app.logger.error(f"Registration error: {str(e)}")
+        return jsonify({'message': 'Registration failed'}), 500
+
+
 # Login route with rate limiting
 @auth.route('/api/auth/login', methods=['POST'])
 @rate_limit('auth', 10, 900, per_user=False)  # 10 attempts per 15 minutes per client

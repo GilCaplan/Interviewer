@@ -36,18 +36,14 @@ def test_remove_user():
         host_token = setup_user(host_user)
         user_token = setup_user(regular_user)
         
-        if not host_token or not user_token:
-            print("❌ Failed to setup test users")
-            return False
+        assert host_token and user_token, "❌ Failed to setup test users"
         
         print("✅ Test users created")
         
         # Step 2: Create session
         print("\n2. Creating session...")
         session = create_session(host_token)
-        if not session:
-            print("❌ Failed to create session")
-            return False
+        assert session, "❌ Failed to create session"
         
         session_id = session['session_id']
         session_code = session['session_code']
@@ -56,36 +52,28 @@ def test_remove_user():
         # Step 3: Regular user joins
         print("\n3. Regular user joining session...")
         join_result = join_session(user_token, session_code)
-        if not join_result:
-            print("❌ Failed for user to join")
-            return False
+        assert join_result, "❌ Failed for user to join"
         
         print("✅ Regular user joined")
         
         # Step 4: Verify participant count before removal
         print("\n4. Verifying participants before removal...")
         participants = get_participants(host_token, session_id)
-        if not participants or len(participants) != 2:
-            print(f"❌ Expected 2 participants, got {len(participants) if participants else 0}")
-            return False
+        assert participants and len(participants) == 2, f"❌ Expected 2 participants, got {len(participants) if participants else 0}"
         
         print(f"✅ Found {len(participants)} participants")
         
         # Step 5: Test non-host cannot remove users
         print("\n5. Testing non-host removal prevention...")
         remove_result = remove_user_from_session(user_token, session_id, host_user['username'])
-        if remove_result:
-            print("❌ Non-host was able to remove users (should be forbidden)")
-            return False
+        assert not remove_result, "❌ Non-host was able to remove users (should be forbidden)"
         
         print("✅ Non-host correctly forbidden from removing users")
         
         # Step 6: Test host can remove regular user
         print("\n6. Testing host removes regular user...")
         remove_result = remove_user_from_session(host_token, session_id, regular_user['username'])
-        if not remove_result:
-            print("❌ Host failed to remove regular user")
-            return False
+        assert remove_result, "❌ Host failed to remove regular user"
         
         print("✅ Host successfully removed regular user")
         
@@ -93,18 +81,14 @@ def test_remove_user():
         print("\n7. Verifying participants after removal...")
         time.sleep(1)  # Give time for database update
         participants_after = get_participants(host_token, session_id)
-        if not participants_after or len(participants_after) != 1:
-            print(f"❌ Expected 1 participant after removal, got {len(participants_after) if participants_after else 0}")
-            return False
+        assert participants_after and len(participants_after) == 1, f"❌ Expected 1 participant after removal, got {len(participants_after) if participants_after else 0}"
         
         print(f"✅ Participant count correct after removal: {len(participants_after)}")
         
         # Step 8: Test cannot remove host
         print("\n8. Testing host cannot be removed...")
         remove_host_result = remove_user_from_session(host_token, session_id, host_user['username'])
-        if remove_host_result:
-            print("❌ Host was able to remove themselves (should be forbidden)")
-            return False
+        assert not remove_host_result, "❌ Host was able to remove themselves (should be forbidden)"
         
         print("✅ Host correctly cannot be removed")
         
@@ -116,13 +100,12 @@ def test_remove_user():
         
         print("\n" + "=" * 45)
         print("🎉 All remove user tests PASSED!")
-        return True
         
     except Exception as e:
         print(f"\n❌ Remove user test failed with error: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        raise
 
 def setup_user(user_data):
     """Register and login a user, return auth token"""
