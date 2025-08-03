@@ -1045,6 +1045,9 @@ def generate_llm_suggestion(user, session_id, question_id):
         data = request.get_json() or {}
         field_name = data.get('field', 'question_text')
         context = data.get('context', '')
+        num_responses = min(int(data.get('num_responses', 1)), 5)  # Limit to max 5 responses
+        
+        current_app.logger.info(f"LLM suggestion request: field={field_name}, context='{context}', num_responses={num_responses}")
         
         # Find the question
         questions_queue = session.get("template_data", {}).get("questions_queue", [])
@@ -1067,46 +1070,103 @@ def generate_llm_suggestion(user, session_id, question_id):
         existing_content = current_question.get("user_content", {})
         full_context = f"{context}. Question {question_number}. Existing content: {existing_content}"
         
-        llm_response = LLMService.generate_question(
-            subject=subject,
-            context=full_context,
-            question_type=question_type,
-            question_number=question_number
-        )
+        # Generate multiple responses
+        suggestions = []
+        llm_responses = []  # Store all responses for later use
         
-        # Extract the requested field from LLM response
-        suggested_value = llm_response.get(field_name, f"LLM suggestion for {field_name}")
+        for i in range(num_responses):
+            try:
+                llm_response = LLMService.generate_question(
+                    subject=subject,
+                    context=full_context + f" (Variation {i+1})",
+                    question_type=question_type,
+                    question_number=question_number
+                )
+                llm_responses.append(llm_response)
+                
+                # Extract the requested field from LLM response
+                suggested_value = llm_response.get(field_name, f"LLM suggestion for {field_name}")
+                
+                # If the field is not directly available, try to get it from question_text as fallback
+                if not suggested_value or suggested_value == f"LLM suggestion for {field_name}":
+                    suggested_value = llm_response.get("question_text", "No suggestion generated")
+                
+                # Debug logging for troubleshooting
+                current_app.logger.info(f"LLM Response keys: {llm_response.keys()}")
+                current_app.logger.info(f"Field {field_name} extracted value: {suggested_value[:100]}...")
+                
+                # Create suggestion data structure EXACTLY like user suggestions
+                suggestion_data = {
+                    "suggestion_id": str(uuid.uuid4()),
+                    "field": field_name,
+                    "suggested_value": suggested_value,
+                    "current_value": existing_content.get(field_name, ""),
+                    "author": "AI Assistant",
+                    "timestamp": datetime.datetime.utcnow(),  # Keep as datetime like user suggestions
+                    "status": "pending"  # pending, accepted, rejected
+                }
+                
+                suggestions.append(suggestion_data)
+                
+                # Add suggestion EXACTLY like user suggestions
+                sessions_collection.update_one(
+                    {"session_id": session_id, "template_data.questions_queue.question_id": question_id},
+                    {
+                        "$push": {"template_data.questions_queue.$.collaboration_notes": {
+                            "note_id": suggestion_data["suggestion_id"],
+                            "type": "field_suggestion", 
+                            "author": "AI Assistant",
+                            "timestamp": suggestion_data["timestamp"],  # Use the same timestamp
+                            "note": f"AI suggests changing '{field_name}' to: {suggested_value[:100]}{'...' if len(suggested_value) > 100 else ''}",
+                            "suggestion_data": suggestion_data
+                        }},
+                        "$set": {"updated_at": datetime.datetime.utcnow()}
+                    }
+                )
+                
+            except Exception as e:
+                current_app.logger.error(f"Error generating LLM suggestion {i+1}: {e}")
+                print(f"Error generating LLM suggestion {i+1}: {e}")
+                # Create a fallback suggestion so user knows something happened
+                fallback_suggestion = {
+                    "suggestion_id": str(uuid.uuid4()),
+                    "field": field_name,
+                    "suggested_value": f"Error generating suggestion {i+1}: {str(e)}",
+                    "current_value": existing_content.get(field_name, ""),
+                    "author": "AI Assistant (Error)",
+                    "timestamp": datetime.datetime.utcnow().isoformat(),
+                    "status": "pending"
+                }
+                suggestions.append(fallback_suggestion)
+                continue
         
-        suggestion_data = {
-            "suggestion_id": str(uuid.uuid4()),
-            "field": field_name,
-            "suggested_value": suggested_value,
-            "full_llm_response": llm_response,
-            "context_used": full_context,
-            "generated_at": datetime.datetime.utcnow(),
-            "requested_by": user["username"]
-        }
+        if not suggestions:
+            return jsonify({"error": "Failed to generate any suggestions"}), 500
         
-        # Save suggestion to question
-        sessions_collection.update_one(
-            {"session_id": session_id, "template_data.questions_queue.question_id": question_id},
-            {
-                "$push": {"template_data.questions_queue.$.llm_suggestions": suggestion_data},
-                "$set": {"updated_at": datetime.datetime.utcnow()}
-            }
-        )
-        
-        # Broadcast to participants
-        emit('llm_suggestion_generated', {
-            'question_id': question_id,
-            'question_number': current_question["question_number"],
-            'suggestion': suggestion_data,
-            'requested_by': user["username"]
-        }, room=session_id, namespace='/')
+        # Broadcast each suggestion EXACTLY like user suggestions
+        current_app.logger.info(f"Broadcasting {len(suggestions)} suggestions to session {session_id}")
+        for suggestion in suggestions:
+            try:
+                # Convert datetime to string for WebSocket serialization
+                serializable_suggestion = {
+                    **suggestion,
+                    'timestamp': suggestion['timestamp'].isoformat() if isinstance(suggestion['timestamp'], datetime.datetime) else suggestion['timestamp']
+                }
+                
+                # Emit the exact same event as user suggestions
+                emit('field_suggestion_added', {
+                    'question_id': question_id,
+                    'suggestion': serializable_suggestion
+                }, room=session_id, namespace='/')
+                current_app.logger.info(f"Emitted AI suggestion for field {field_name}")
+            except Exception as e:
+                current_app.logger.error(f"Error emitting field_suggestion_added: {e}")
+                print(f"Error emitting field_suggestion_added: {e}")
         
         return jsonify({
-            "message": "LLM suggestion generated",
-            "suggestion": suggestion_data
+            "message": f"{len(suggestions)} LLM suggestions generated",
+            "suggestions": suggestions,
+            "total_generated": len(suggestions)
         }), 200
         
     except Exception as e:
@@ -1228,10 +1288,15 @@ def add_field_suggestion(user, session_id, question_id):
             current_app.logger.error(f"Failed to add suggestion for question {question_id} in session {session_id}")
             return jsonify({"error": "Question not found or not accessible"}), 404
         
-        # Broadcast suggestion to participants
+        # Broadcast suggestion to participants (serialize datetime for WebSocket)
+        serializable_suggestion = {
+            **suggestion_data,
+            'timestamp': suggestion_data['timestamp'].isoformat() if isinstance(suggestion_data['timestamp'], datetime.datetime) else suggestion_data['timestamp']
+        }
+        
         emit('field_suggestion_added', {
             'question_id': question_id,
-            'suggestion': suggestion_data
+            'suggestion': serializable_suggestion
         }, room=session_id, namespace='/')
         
         return jsonify({

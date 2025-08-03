@@ -282,6 +282,19 @@ const SessionBuilder = () => {
 
     socket.on('field_suggestion_added', (data) => {
       console.log('WebSocket: Field suggestion added', data);
+      console.log('Suggestion data structure:', {
+        hasQuestionId: !!data.question_id,
+        hasSuggestion: !!data.suggestion,
+        author: data.suggestion?.author,
+        field: data.suggestion?.field,
+        hasValue: !!data.suggestion?.suggested_value,
+        valueLength: data.suggestion?.suggested_value?.length || 0,
+        timestamp: data.suggestion?.timestamp
+      });
+      if (data.suggestion?.author === 'AI Assistant') {
+        console.log('🤖 AI Suggestion content:', data.suggestion?.suggested_value);
+        console.log('🤖 AI Suggestion full data:', JSON.stringify(data.suggestion, null, 2));
+      }
       // Update questions to include new suggestion in collaboration_notes
       setQuestions(prev => 
         prev.map(q => 
@@ -295,7 +308,7 @@ const SessionBuilder = () => {
                     type: 'field_suggestion',
                     author: data.suggestion.author,
                     timestamp: data.suggestion.timestamp,
-                    note: `Suggests changing '${data.suggestion.field}' to: ${data.suggestion.suggested_value}`,
+                    note: `${data.suggestion.author === 'AI Assistant' ? 'AI suggests' : 'Suggests'} changing '${data.suggestion.field}' to: ${data.suggestion.suggested_value}`,
                     suggestion_data: data.suggestion
                   }
                 ]
@@ -588,7 +601,7 @@ const SessionBuilder = () => {
     }
   };
 
-  const handleLLMRequest = async (questionId, field, context) => {
+  const handleLLMRequest = async (questionId, field, context, numResponses = 1) => {
     try {
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
       
@@ -604,13 +617,19 @@ const SessionBuilder = () => {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ field, context }),
+        body: JSON.stringify({ field, context, num_responses: numResponses }),
         credentials: 'include'
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get LLM suggestion');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to get LLM suggestion');
       }
+      
+      const data = await response.json();
+      console.log('LLM suggestion response:', data);
+      const count = data.total_generated || data.suggestions?.length || numResponses;
+      alert(`Generated ${count} AI suggestion${count > 1 ? 's' : ''} for ${field}. Check the template editor to accept/reject them.`);
     } catch (err) {
       console.error('Error requesting LLM suggestion:', err);
       alert('Failed to get LLM suggestion: ' + err.message);

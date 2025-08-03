@@ -7,6 +7,7 @@ const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
   const [selectedQuestion, setSelectedQuestion] = useState('');
   const [selectedField, setSelectedField] = useState('question_text');
   const [context, setContext] = useState('');
+  const [numResponses, setNumResponses] = useState(1);
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef(null);
 
@@ -95,7 +96,7 @@ const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
 
     try {
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/llm-chat`, {
+      const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/chat`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${user.sessionToken}`,
@@ -140,7 +141,7 @@ const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
     setLoading(true);
 
     try {
-      await onLLMRequest(selectedQuestion, selectedField, context);
+      await onLLMRequest(selectedQuestion, selectedField, context, numResponses);
       setContext('');
     } catch (err) {
       console.error('Error requesting LLM suggestion:', err);
@@ -312,11 +313,26 @@ const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
                 rows={2}
               />
 
+              <div className="form-row">
+                <label htmlFor="numResponses">Number of responses:</label>
+                <select
+                  id="numResponses"
+                  value={numResponses}
+                  onChange={(e) => setNumResponses(parseInt(e.target.value))}
+                >
+                  <option value={1}>1 response</option>
+                  <option value={2}>2 responses</option>
+                  <option value={3}>3 responses</option>
+                  <option value={4}>4 responses</option>
+                  <option value={5}>5 responses</option>
+                </select>
+              </div>
+
               <button
                 onClick={handleQuestionSpecificSuggestion}
                 disabled={loading || !selectedQuestion}
               >
-                {loading ? 'Getting Suggestion...' : 'Get AI Suggestion'}
+                {loading ? `Getting ${numResponses} Suggestion${numResponses > 1 ? 's' : ''}...` : `Get ${numResponses} AI Suggestion${numResponses > 1 ? 's' : ''}`}
               </button>
             </div>
           </div>

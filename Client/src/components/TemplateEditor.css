@@ -1475,3 +1475,57 @@
   border-radius: 8px 0 0 8px;
   background: linear-gradient(to bottom, #ffc107 0%, #ff8f00 100%);
 }
+
+/* AI-generated suggestions styling */
+.field-suggestion.ai-suggestion {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-color: #0ea5e9;
+}
+
+.field-suggestion.ai-suggestion::before {
+  background: linear-gradient(to bottom, #0ea5e9 0%, #0284c7 100%);
+}
+
+.field-suggestion.ai-suggestion:hover {
+  border-color: #0284c7;
+  box-shadow: 0 4px 15px rgba(14, 165, 233, 0.15);
+}
+
+.suggestion-author.ai-author {
+  color: #0ea5e9;
+  font-weight: 600;
+}
+
+.suggestion-author.user-author {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+/* User suggestions styling */
+.field-suggestion.user-suggestion {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border-color: #f59e0b;
+}
+
+.field-suggestion.user-suggestion::before {
+  background: linear-gradient(to bottom, #f59e0b 0%, #d97706 100%);
+}
+
+.field-suggestion.user-suggestion:hover {
+  border-color: #d97706;
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.15);
+}
+
+/* AI context display */
+.ai-context {
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(14, 165, 233, 0.05);
+  border-radius: 4px;
+  border-left: 2px solid #0ea5e9;
+}
+
+.ai-context small {
+  color: #64748b;
+  font-style: italic;
+}
