@@ -102,6 +102,17 @@ def validate_question_id(question_id):
         return False
 
 
+def safe_emit(event, data, room=None, namespace='/'):
+    """Safely emit WebSocket events with error handling for test environments"""
+    try:
+        emit(event, data, room=room, namespace=namespace)
+    except RuntimeError as e:
+        # WebSocket context may not be available in test environment
+        current_app.logger.warning(f"WebSocket emit failed (likely test environment): {str(e)}")
+    except Exception as e:
+        current_app.logger.warning(f"WebSocket emit failed: {str(e)}")
+
+
 def hash_session_password(password):
     """Hash a session password using SHA-256 with salt"""
     if not password:
@@ -595,10 +606,10 @@ def become_host(user, session_id):
         )
 
         # Broadcast host change to all participants
-        emit('host_changed', {
+        safe_emit('host_changed', {
             'new_host': user["username"],
             'timestamp': datetime.datetime.utcnow().isoformat()
-        }, room=session_id, namespace='/')
+        }, room=session_id)
 
         return jsonify({"message": f"{user['username']} is now the host"}), 200
 
@@ -734,7 +745,7 @@ def send_chat_message(user, session_id):
         message_data.pop('_id', None)
 
         # Broadcast message to all session participants
-        emit('new_message', message_data, room=session_id, namespace='/')
+        safe_emit('new_message', message_data, room=session_id)
 
         return jsonify({
             "message": "Message sent",
@@ -962,12 +973,12 @@ def start_question_building(user, session_id, question_number):
         current_app.logger.info(f"Question creation update result: matched={update_result.matched_count}, modified={update_result.modified_count}")
         
         # Broadcast to all participants
-        emit('question_building_started', {
+        safe_emit('question_building_started', {
             'question_number': question_number,
             'question_type': question_type,
             'started_by': user["username"],
             'question_structure': question_structure
-        }, room=session_id, namespace='/')
+        }, room=session_id)
         
         return jsonify({
             "message": f"Started building question {question_number}",
@@ -1047,13 +1058,13 @@ def update_question_content(user, session_id, question_id):
         current_app.logger.info(f"Updated question {question_id} field '{field_name}' with value: {sanitized_value}")
         
         # Broadcast update to all participants
-        emit('question_content_updated', {
+        safe_emit('question_content_updated', {
             'question_id': question_id,
             'question_number': current_question["question_number"],
             'field': field_name,
             'value': sanitized_value,
             'updated_by': user["username"]
-        }, room=session_id, namespace='/')
+        }, room=session_id)
         
         return jsonify({
             "message": "Question content updated",
@@ -1192,10 +1203,10 @@ def generate_llm_suggestion(user, session_id, question_id):
                 }
                 
                 # Emit the exact same event as user suggestions
-                emit('field_suggestion_added', {
+                safe_emit('field_suggestion_added', {
                     'question_id': question_id,
                     'suggestion': serializable_suggestion
-                }, room=session_id, namespace='/')
+                }, room=session_id)
                 current_app.logger.info(f"Emitted AI suggestion for field {field_name}")
             except Exception as e:
                 current_app.logger.error(f"Error emitting field_suggestion_added: {e}")
@@ -1249,10 +1260,10 @@ def add_collaboration_note(user, session_id, question_id):
         )
         
         # Broadcast to participants
-        emit('collaboration_note_added', {
+        safe_emit('collaboration_note_added', {
             'question_id': question_id,
             'note': note_data
-        }, room=session_id, namespace='/')
+        }, room=session_id)
         
         return jsonify({
             "message": "Collaboration note added",
@@ -1332,10 +1343,10 @@ def add_field_suggestion(user, session_id, question_id):
             'timestamp': suggestion_data['timestamp'].isoformat() if isinstance(suggestion_data['timestamp'], datetime.datetime) else suggestion_data['timestamp']
         }
         
-        emit('field_suggestion_added', {
+        safe_emit('field_suggestion_added', {
             'question_id': question_id,
             'suggestion': serializable_suggestion
-        }, room=session_id, namespace='/')
+        }, room=session_id)
         
         return jsonify({
             "message": "Field suggestion added",
@@ -1426,14 +1437,14 @@ def handle_field_suggestion(user, session_id, question_id, suggestion_id):
             return jsonify({"error": "Failed to update suggestion"}), 404
         
         # Broadcast the decision to participants
-        emit('field_suggestion_handled', {
+        safe_emit('field_suggestion_handled', {
             'question_id': question_id,
             'suggestion_id': suggestion_id,
             'action': action,
             'field': suggestion['field'],
             'new_value': suggestion['suggested_value'] if action == "accept" else None,
             'handled_by': user["username"]
-        }, room=session_id, namespace='/')
+        }, room=session_id)
         
         return jsonify({
             "message": f"Suggestion {action}ed successfully",
@@ -1615,10 +1626,10 @@ def finalize_question(user, session_id, question_id):
         current_app.logger.info(f"Successfully finalized question {question_id}")
         
         # Broadcast to participants
-        emit('question_finalized', {
+        safe_emit('question_finalized', {
             'question': finalized_question,
             'finalized_by': user["username"]
-        }, room=session_id, namespace='/')
+        }, room=session_id)
         
         return jsonify({
             "message": f"Question {question_to_finalize['question_number']} finalized successfully",
@@ -1839,11 +1850,11 @@ def update_session_settings(user, session_id):
             )
             
             # Broadcast settings update to all participants
-            emit('session_settings_updated', {
+            safe_emit('session_settings_updated', {
                 'session_id': session_id,
                 'settings': data,
                 'updated_by': user["username"]
-            }, room=session_id, namespace='/')
+            }, room=session_id)
         
         return jsonify({"message": "Session settings updated successfully"}), 200
         
@@ -1928,13 +1939,13 @@ def llm_chat(user, session_id):
         messages_collection.insert_one(chat_data)
         
         # Broadcast to all participants
-        emit('llm_chat_response', {
+        safe_emit('llm_chat_response', {
             'message_id': chat_data["message_id"],
             'user_message': message,
             'llm_response': llm_response["response"],
             'username': user["username"],
             'timestamp': chat_data["timestamp"].isoformat()
-        }, room=session_id, namespace='/')
+        }, room=session_id)
         
         return jsonify({
             "message": "LLM chat response generated",
@@ -2091,11 +2102,11 @@ def remove_question_from_session(user, session_id, question_id):
         current_app.logger.info(f"Question {question_id} removed from session {session_id} by {user['username']}")
         
         # Broadcast removal to all participants
-        emit('question_removed', {
+        safe_emit('question_removed', {
             'question_id': question_id,
             'removed_by': user["username"],
             'session_id': session_id
-        }, room=session_id, namespace='/')
+        }, room=session_id)
         
         return jsonify({"message": "Question removed successfully"}), 200
         
@@ -2137,10 +2148,10 @@ def clear_all_questions(user, session_id):
         current_app.logger.info(f"All questions cleared from session {session_id} by {user['username']}")
         
         # Broadcast clear to all participants
-        emit('all_questions_cleared', {
+        safe_emit('all_questions_cleared', {
             'cleared_by': user["username"],
             'session_id': session_id
-        }, room=session_id, namespace='/')
+        }, room=session_id)
         
         return jsonify({"message": "All questions cleared successfully"}), 200
         
@@ -2227,10 +2238,10 @@ def reset_session(user, session_id):
         current_app.logger.info(f"Session {session_id} reset to fresh state by {user['username']}")
         
         # Broadcast reset to all participants
-        emit('session_reset', {
+        safe_emit('session_reset', {
             'reset_by': user["username"],
             'session_id': session_id
-        }, room=session_id, namespace='/')
+        }, room=session_id)
         
         return jsonify({"message": "Session reset to fresh state successfully"}), 200
         
@@ -2274,16 +2285,13 @@ def remove_user_from_session(user, session_id):
             return jsonify({"error": "User not found in session or already removed"}), 404
         
         # Emit WebSocket event to notify about user removal
-        try:
-            from . import socketio
-            socketio.emit('user_removed_from_session', {
-                'username': username_to_remove,
-                'removed_by': user["username"],
-                'session_id': session_id,
-                'timestamp': datetime.datetime.utcnow().isoformat()
-            }, room=session_id)
-        except Exception as socket_error:
-            print(f"WebSocket error: {socket_error}")
+        # Broadcast user removal to all participants
+        safe_emit('user_removed_from_session', {
+            'username': username_to_remove,
+            'removed_by': user["username"],
+            'session_id': session_id,
+            'timestamp': datetime.datetime.utcnow().isoformat()
+        }, room=session_id)
         
         return jsonify({
             "message": f"User {username_to_remove} removed from session successfully"

@@ -342,11 +342,23 @@ class BasicTestSuite:
                 llm_success = response.status_code == 200
                 
                 if llm_success:
-                    suggestion = response.json().get("suggestion", {})
-                    suggested_text = suggestion.get("suggested_value", "")
+                    response_data = response.json()
+                    suggestions = response_data.get("suggestions", [])
                     
-                    self.assert_test(len(suggested_text) > 10, "LLM Suggestion Quality",
-                                    f"Generated: {suggested_text[:50]}...")
+                    if suggestions:
+                        # Get the first suggestion
+                        suggestion = suggestions[0]
+                        suggested_text = suggestion.get("suggested_value", "")
+                        
+                        self.assert_test(len(suggested_text) > 10, "LLM Suggestion Quality",
+                                        f"Generated: {suggested_text[:50]}...")
+                    else:
+                        # Fallback: check if there's a single suggestion field for backward compatibility
+                        suggestion = response_data.get("suggestion", {})
+                        suggested_text = suggestion.get("suggested_value", "")
+                        
+                        self.assert_test(len(suggested_text) > 10, "LLM Suggestion Quality",
+                                        f"Generated: {suggested_text[:50]}...")
                 else:
                     self.assert_test(False, "LLM Suggestion", 
                                     f"Status: {response.status_code}")

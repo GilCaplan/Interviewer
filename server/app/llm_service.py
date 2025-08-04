@@ -435,15 +435,15 @@ class LLMService:
     def generate_field_suggestion(field="question_text", question_type="open_ended", context=""):
         """Generate field-specific suggestions for testing"""
         suggestions = {
-            "question_text": "What is the main concept you want candidates to understand?",
-            "options": "Consider providing diverse and plausible options",
-            "hints": "Think about what clues would help without giving away the answer",
-            "explanation": "Explain why this answer is correct and others are not"
+            "question_text": "What is the main concept you want candidates to understand? Consider making it clear, specific, and aligned with the learning objectives.",
+            "options": "Consider providing diverse and plausible options that test different aspects of knowledge while maintaining one clearly correct answer.",
+            "hints": "Think about what clues would help without giving away the answer. Progressive hints work well for guiding candidates.",
+            "explanation": "Explain why this answer is correct and others are not. Include reasoning that helps candidates learn from their mistakes."
         }
         
-        base_suggestion = suggestions.get(field, "Consider the context and requirements")
+        base_suggestion = suggestions.get(field, "Consider the context and requirements for this field and ensure it aligns with best practices.")
         
         if context:
-            return f"For {question_type} questions: {base_suggestion}. Context: {context}"
+            return f"For {question_type} questions: {base_suggestion}. Context: {context}. Make sure this enhances the overall question quality."
         else:
-            return f"For {question_type} questions: {base_suggestion}"
+            return f"For {question_type} questions: {base_suggestion}. Ensure this contributes to a comprehensive assessment."
