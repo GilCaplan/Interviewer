@@ -64,5 +64,18 @@ def test_field_suggestions():
     else:
         assert False, f'❌ Create suggestion failed: {response.status_code} Error response: {response.text}'
 
+def run_all_tests():
+    """Run all tests and return standardized format"""
+    try:
+        test_field_suggestions()
+        return (100.0, 4, 4)  # 4 test steps all passed
+    except Exception as e:
+        print(f"❌ Field suggestions test failed: {e}")
+        return (0.0, 0, 4)  # All 4 test steps failed
+
 if __name__ == "__main__":
-    test_field_suggestions()
+    try:
+        test_field_suggestions()
+        print("✅ Field suggestions test completed successfully!")
+    except Exception as e:
+        print(f"❌ Field suggestions test failed: {e}")

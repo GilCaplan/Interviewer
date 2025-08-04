@@ -108,6 +108,14 @@ def test_remove_user():
         traceback.print_exc()
         return False
 
+def run_all_tests():
+    """Run all tests and return standardized format"""
+    success = test_remove_user()
+    if success:
+        return (100.0, 8, 8)  # 8 test steps all passed
+    else:
+        return (0.0, 0, 8)  # All 8 test steps failed
+
 def setup_user(user_data):
     """Register and login a user, return auth token"""
     try:

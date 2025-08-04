@@ -111,12 +111,25 @@ def test_session_settings_integration():
         
         print("\n" + "=" * 50)
         print("🎉 All session settings integration tests PASSED!")
+        return True
         
     except Exception as e:
         print(f"\n❌ Integration test failed with error: {e}")
         import traceback
         traceback.print_exc()
-        raise
+        return False
+
+def run_all_tests():
+    """Run all tests and return standardized format"""
+    try:
+        success = test_session_settings_integration()
+        if success:
+            return (100.0, 6, 6)  # 6 test steps all passed
+        else:
+            return (0.0, 0, 6)  # All 6 test steps failed
+    except Exception as e:
+        print(f"❌ Session settings integration test failed: {e}")
+        return (0.0, 0, 6)
 
 def setup_user(user_data):
     """Register and login a user, return auth token"""

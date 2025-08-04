@@ -175,6 +175,18 @@ def test_suggestion_history_simple():
     print('\n🎉 All suggestion history tests passed!')
     return True
 
+def run_all_tests():
+    """Run all tests and return standardized format"""
+    try:
+        success = test_suggestion_history_simple()
+        if success:
+            return (100.0, 10, 10)  # 10 test steps all passed
+        else:
+            return (0.0, 0, 10)  # All 10 test steps failed
+    except Exception as e:
+        print(f"❌ Suggestion history test failed: {e}")
+        return (0.0, 0, 10)
+
 if __name__ == "__main__":
     success = test_suggestion_history_simple()
     if success:
