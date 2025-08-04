@@ -13,8 +13,14 @@ import time
 from datetime import datetime
 from unittest.mock import Mock, patch, MagicMock
 
+# Set testing environment
+os.environ['TESTING'] = 'true'
+os.environ['TEST_MODE'] = '1'
+os.environ['FLASK_ENV'] = 'testing'
+
 # Add the server directory to the path so we can import our modules
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+server_root = os.path.join(os.path.dirname(__file__), '../../../')
+sys.path.insert(0, server_root)
 
 # Import modules to test - Force real implementations
 try:
@@ -22,7 +28,7 @@ try:
     import os
     
     # Ensure we're importing from the actual server directory
-    server_path = os.path.join(os.path.dirname(__file__), '..', '..')
+    server_path = os.path.join(os.path.dirname(__file__), '../../../')
     if server_path not in sys.path:
         sys.path.insert(0, server_path)
     

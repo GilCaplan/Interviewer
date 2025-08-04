@@ -6,7 +6,13 @@ import sys
 import os
 
 # Add server app to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../'))
+server_root = os.path.join(os.path.dirname(__file__), '../../../')
+sys.path.insert(0, server_root)
+
+# Set testing environment
+os.environ['TESTING'] = 'true'
+os.environ['TEST_MODE'] = '1'
+os.environ['FLASK_ENV'] = 'testing'
 
 try:
     from app.llm_service import LLMService
