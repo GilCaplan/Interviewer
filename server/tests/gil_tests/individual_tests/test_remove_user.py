@@ -100,12 +100,13 @@ def test_remove_user():
         
         print("\n" + "=" * 45)
         print("🎉 All remove user tests PASSED!")
+        return True
         
     except Exception as e:
         print(f"\n❌ Remove user test failed with error: {e}")
         import traceback
         traceback.print_exc()
-        raise
+        return False
 
 def setup_user(user_data):
     """Register and login a user, return auth token"""

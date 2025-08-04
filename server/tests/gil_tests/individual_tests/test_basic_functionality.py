@@ -417,6 +417,9 @@ class BasicTestSuite:
             log("⚠️ FAIR! Several issues need attention", Colors.YELLOW + Colors.BOLD)
         else:
             log("🚨 POOR! Major issues need immediate attention", Colors.RED + Colors.BOLD)
+        
+        # Return results in the format expected by run_all_tests.py
+        return (pass_rate, self.passed_tests, total_tests)
 
 if __name__ == "__main__":
     print(f"\n{Colors.BOLD}{Colors.CYAN}")
