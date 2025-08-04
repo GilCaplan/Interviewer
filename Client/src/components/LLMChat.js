@@ -3,7 +3,7 @@ import './LLMChat.css';
 
 const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
   const [selectedQuestion, setSelectedQuestion] = useState('');
-  const [selectedField, setSelectedField] = useState('question_text');
+  const [selectedField, setSelectedField] = useState('all');
   const [context, setContext] = useState('');
   const [numResponses, setNumResponses] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -12,6 +12,7 @@ const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
   // Field options for different question types
   const getFieldOptions = (questionType) => {
     const baseFields = [
+      { value: 'all', label: 'All Fields' },
       { value: 'question_text', label: 'Question Text' },
       { value: 'hints', label: 'Hints' }
     ];
@@ -19,31 +20,41 @@ const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
     switch (questionType) {
       case 'multiple_choice':
         return [
-          ...baseFields,
+          { value: 'all', label: 'All Fields' },
+          { value: 'question_text', label: 'Question Text' },
+          { value: 'hints', label: 'Hints' },
           { value: 'options', label: 'Answer Options' },
           { value: 'explanation', label: 'Explanation' }
         ];
       case 'coding':
         return [
-          ...baseFields,
+          { value: 'all', label: 'All Fields' },
+          { value: 'question_text', label: 'Question Text' },
+          { value: 'hints', label: 'Hints' },
           { value: 'starter_code', label: 'Starter Code' },
           { value: 'solution', label: 'Solution' },
           { value: 'test_cases', label: 'Test Cases' }
         ];
       case 'true_false':
         return [
-          ...baseFields,
+          { value: 'all', label: 'All Fields' },
+          { value: 'question_text', label: 'Question Text' },
+          { value: 'hints', label: 'Hints' },
           { value: 'explanation', label: 'Explanation' }
         ];
       case 'short_answer':
         return [
-          ...baseFields,
+          { value: 'all', label: 'All Fields' },
+          { value: 'question_text', label: 'Question Text' },
+          { value: 'hints', label: 'Hints' },
           { value: 'expected_keywords', label: 'Expected Keywords' },
           { value: 'sample_answers', label: 'Sample Answers' }
         ];
       case 'open_ended':
         return [
-          ...baseFields,
+          { value: 'all', label: 'All Fields' },
+          { value: 'question_text', label: 'Question Text' },
+          { value: 'hints', label: 'Hints' },
           { value: 'sample_answer', label: 'Sample Answer' },
           { value: 'grading_criteria', label: 'Grading Criteria' }
         ];
@@ -152,7 +163,7 @@ const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
                   value={selectedQuestion}
                   onChange={(e) => {
                     setSelectedQuestion(e.target.value);
-                    setSelectedField('question_text'); // Reset field when question changes
+                    setSelectedField('all'); // Reset field when question changes
                   }}
                 >
                   <option value="">Select a question...</option>

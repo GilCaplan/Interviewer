@@ -1119,75 +1119,135 @@ def generate_llm_suggestion(user, session_id, question_id):
         existing_content = current_question.get("user_content", {})
         full_context = f"{context}. Question {question_number}. Existing content: {existing_content}"
         
-        # Generate multiple responses
-        suggestions = []
-        llm_responses = []  # Store all responses for later use
-        
-        for i in range(num_responses):
+        # Check if requesting all fields
+        if field_name.lower() == "all":
+            current_app.logger.info(f"Generating suggestions for all fields: type={question_type}, subject={subject}")
+            # Generate suggestions for all key fields at once
             try:
-                llm_response = LLMService.generate_question(
-                    subject=subject,
-                    context=full_context + f" (Variation {i+1})",
+                field_suggestions = LLMService.generate_all_field_suggestions(
                     question_type=question_type,
+                    subject=subject,
+                    context=full_context,
                     question_number=question_number
                 )
-                llm_responses.append(llm_response)
                 
-                # Extract the requested field from LLM response
-                suggested_value = llm_response.get(field_name, f"LLM suggestion for {field_name}")
+                suggestions = []
                 
-                # If the field is not directly available, try to get it from question_text as fallback
-                if not suggested_value or suggested_value == f"LLM suggestion for {field_name}":
-                    suggested_value = llm_response.get("question_text", "No suggestion generated")
-                
-                # Debug logging for troubleshooting
-                current_app.logger.info(f"LLM Response keys: {llm_response.keys()}")
-                current_app.logger.info(f"Field {field_name} extracted value: {suggested_value[:100]}...")
-                
-                # Create suggestion data structure EXACTLY like user suggestions
-                suggestion_data = {
-                    "suggestion_id": str(uuid.uuid4()),
-                    "field": field_name,
-                    "suggested_value": suggested_value,
-                    "current_value": existing_content.get(field_name, ""),
-                    "author": "AI Assistant",
-                    "timestamp": datetime.datetime.utcnow(),  # Keep as datetime like user suggestions
-                    "status": "pending"  # pending, accepted, rejected
-                }
-                
-                suggestions.append(suggestion_data)
-                
-                # Add suggestion EXACTLY like user suggestions
-                sessions_collection.update_one(
-                    {"session_id": session_id, "template_data.questions_queue.question_id": question_id},
-                    {
-                        "$push": {"template_data.questions_queue.$.collaboration_notes": {
-                            "note_id": suggestion_data["suggestion_id"],
-                            "type": "field_suggestion", 
-                            "author": "AI Assistant",
-                            "timestamp": suggestion_data["timestamp"],  # Use the same timestamp
-                            "note": f"AI suggests changing '{field_name}' to: {suggested_value[:100]}{'...' if len(suggested_value) > 100 else ''}",
-                            "suggestion_data": suggestion_data
-                        }},
-                        "$set": {"updated_at": datetime.datetime.utcnow()}
+                # Create individual suggestions for each field
+                for field, suggested_value in field_suggestions.items():
+                    if field in ["llm_source", "generated_by", "timestamp"]:
+                        continue  # Skip metadata fields
+                    
+                    # Skip empty values
+                    if not suggested_value or str(suggested_value).strip() == "":
+                        continue
+                    
+                    suggestion_data = {
+                        "suggestion_id": str(uuid.uuid4()),
+                        "field": field,
+                        "suggested_value": str(suggested_value),  # Ensure it's a string
+                        "current_value": existing_content.get(field, ""),
+                        "author": "AI Assistant",
+                        "timestamp": datetime.datetime.utcnow(),
+                        "status": "pending"
                     }
-                )
+                    
+                    suggestions.append(suggestion_data)
+                    
+                    # Add suggestion to database
+                    sessions_collection.update_one(
+                        {"session_id": session_id, "template_data.questions_queue.question_id": question_id},
+                        {
+                            "$push": {"template_data.questions_queue.$.collaboration_notes": {
+                                "note_id": suggestion_data["suggestion_id"],
+                                "type": "field_suggestion", 
+                                "author": "AI Assistant",
+                                "timestamp": suggestion_data["timestamp"],
+                                "note": f"AI suggests changing '{field}' to: {str(suggested_value)[:100]}{'...' if len(str(suggested_value)) > 100 else ''}",
+                                "suggestion_data": suggestion_data
+                            }},
+                            "$set": {"updated_at": datetime.datetime.utcnow()}
+                        }
+                    )
+                
+                current_app.logger.info(f"Generated {len(suggestions)} suggestions for all fields")
+                
+                if not suggestions:
+                    return jsonify({"error": "No valid field suggestions generated"}), 500
                 
             except Exception as e:
-                current_app.logger.error(f"Error generating LLM suggestion {i+1}: {e}")
-                print(f"Error generating LLM suggestion {i+1}: {e}")
-                # Create a fallback suggestion so user knows something happened
-                fallback_suggestion = {
-                    "suggestion_id": str(uuid.uuid4()),
-                    "field": field_name,
-                    "suggested_value": f"Error generating suggestion {i+1}: {str(e)}",
-                    "current_value": existing_content.get(field_name, ""),
-                    "author": "AI Assistant (Error)",
-                    "timestamp": datetime.datetime.utcnow().isoformat(),
-                    "status": "pending"
-                }
-                suggestions.append(fallback_suggestion)
-                continue
+                current_app.logger.error(f"Error generating all-field suggestions: {e}")
+                return jsonify({"error": f"Failed to generate all-field suggestions: {str(e)}"}), 500
+        else:
+            # Generate multiple responses for single field (existing behavior)
+            suggestions = []
+            llm_responses = []  # Store all responses for later use
+            
+            for i in range(num_responses):
+                try:
+                    llm_response = LLMService.generate_question(
+                        subject=subject,
+                        context=full_context + f" (Variation {i+1})",
+                        question_type=question_type,
+                        question_number=question_number
+                    )
+                    llm_responses.append(llm_response)
+                    
+                    # Extract the requested field from LLM response
+                    suggested_value = llm_response.get(field_name, f"LLM suggestion for {field_name}")
+                    
+                    # If the field is not directly available, try to get it from question_text as fallback
+                    if not suggested_value or suggested_value == f"LLM suggestion for {field_name}":
+                        suggested_value = llm_response.get("question_text", "No suggestion generated")
+                    
+                    # Debug logging for troubleshooting
+                    current_app.logger.info(f"LLM Response keys: {llm_response.keys()}")
+                    current_app.logger.info(f"Field {field_name} extracted value: {suggested_value[:100]}...")
+                    
+                    # Create suggestion data structure EXACTLY like user suggestions
+                    suggestion_data = {
+                        "suggestion_id": str(uuid.uuid4()),
+                        "field": field_name,
+                        "suggested_value": suggested_value,
+                        "current_value": existing_content.get(field_name, ""),
+                        "author": "AI Assistant",
+                        "timestamp": datetime.datetime.utcnow(),  # Keep as datetime like user suggestions
+                        "status": "pending"  # pending, accepted, rejected
+                    }
+                    
+                    suggestions.append(suggestion_data)
+                    
+                    # Add suggestion EXACTLY like user suggestions
+                    sessions_collection.update_one(
+                        {"session_id": session_id, "template_data.questions_queue.question_id": question_id},
+                        {
+                            "$push": {"template_data.questions_queue.$.collaboration_notes": {
+                                "note_id": suggestion_data["suggestion_id"],
+                                "type": "field_suggestion", 
+                                "author": "AI Assistant",
+                                "timestamp": suggestion_data["timestamp"],  # Use the same timestamp
+                                "note": f"AI suggests changing '{field_name}' to: {suggested_value[:100]}{'...' if len(suggested_value) > 100 else ''}",
+                                "suggestion_data": suggestion_data
+                            }},
+                            "$set": {"updated_at": datetime.datetime.utcnow()}
+                        }
+                    )
+                    
+                except Exception as e:
+                    current_app.logger.error(f"Error generating LLM suggestion {i+1}: {e}")
+                    print(f"Error generating LLM suggestion {i+1}: {e}")
+                    # Create a fallback suggestion so user knows something happened
+                    fallback_suggestion = {
+                        "suggestion_id": str(uuid.uuid4()),
+                        "field": field_name,
+                        "suggested_value": f"Error generating suggestion {i+1}: {str(e)}",
+                        "current_value": existing_content.get(field_name, ""),
+                        "author": "AI Assistant (Error)",
+                        "timestamp": datetime.datetime.utcnow().isoformat(),
+                        "status": "pending"
+                    }
+                    suggestions.append(fallback_suggestion)
+                    continue
         
         if not suggestions:
             return jsonify({"error": "Failed to generate any suggestions"}), 500
@@ -1207,7 +1267,7 @@ def generate_llm_suggestion(user, session_id, question_id):
                     'question_id': question_id,
                     'suggestion': serializable_suggestion
                 }, room=session_id)
-                current_app.logger.info(f"Emitted AI suggestion for field {field_name}")
+                current_app.logger.info(f"Emitted AI suggestion for field {suggestion.get('field', 'unknown')}")
             except Exception as e:
                 current_app.logger.error(f"Error emitting field_suggestion_added: {e}")
                 print(f"Error emitting field_suggestion_added: {e}")
@@ -2300,3 +2360,13 @@ def remove_user_from_session(user, session_id):
     except Exception as e:
         print(f"Error removing user from session: {e}")
         return jsonify({"error": "Internal server error"}), 500
+
+
+@sessions_bp.route('/api/llm/status', methods=['GET'])
+def get_llm_status():
+    """Get the current status of all LLM services"""
+    try:
+        status = LLMService.get_llm_status()
+        return jsonify(status), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

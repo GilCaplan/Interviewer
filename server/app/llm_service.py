@@ -447,3 +447,73 @@ class LLMService:
             return f"For {question_type} questions: {base_suggestion}. Context: {context}. Make sure this enhances the overall question quality."
         else:
             return f"For {question_type} questions: {base_suggestion}. Ensure this contributes to a comprehensive assessment."
+    
+    @staticmethod
+    def generate_all_field_suggestions(question_type="open_ended", subject="general", context="", question_number=1):
+        """Generate suggestions for all key fields at once"""
+        # Generate a comprehensive question using the existing method
+        llm_response = LLMService.generate_question(
+            subject=subject,
+            context=context,
+            question_type=question_type,
+            question_number=question_number
+        )
+        
+        # Map the response to the three key fields we want to suggest
+        field_suggestions = {}
+        
+        # Always include question_text
+        field_suggestions["question_text"] = llm_response.get("question_text", "Generated question text")
+        
+        # Add answer/explanation field based on question type
+        if question_type == "multiple_choice":
+            field_suggestions["explanation"] = llm_response.get("explanation", "Explanation for the correct answer")
+            # Also include options for multiple choice
+            options = llm_response.get("options", ["A. Option 1", "B. Option 2", "C. Option 3", "D. Option 4"])
+            if isinstance(options, list):
+                field_suggestions["options"] = "\n".join(options) if options else "A. Option 1\nB. Option 2\nC. Option 3\nD. Option 4"
+            else:
+                field_suggestions["options"] = str(options)
+            # Include correct answer
+            field_suggestions["correct_answer"] = llm_response.get("correct_answer", "A. Option 1")
+        elif question_type == "true_false":
+            field_suggestions["explanation"] = llm_response.get("explanation", "Explanation for why this is true/false")
+            field_suggestions["correct_answer"] = str(llm_response.get("correct_answer", True))
+        elif question_type == "coding":
+            field_suggestions["solution"] = llm_response.get("solution", "Sample solution code")
+            field_suggestions["starter_code"] = llm_response.get("starter_code", "# Your code here")
+        elif question_type == "short_answer":
+            sample_answers = llm_response.get("sample_answers", ["Sample answer"])
+            if isinstance(sample_answers, list):
+                field_suggestions["sample_answers"] = "; ".join(sample_answers) if sample_answers else "Sample answer"
+            else:
+                field_suggestions["sample_answers"] = str(sample_answers)
+            # Include expected keywords
+            expected_keywords = llm_response.get("expected_keywords", ["key", "concept"])
+            if isinstance(expected_keywords, list):
+                field_suggestions["expected_keywords"] = ", ".join(expected_keywords)
+            else:
+                field_suggestions["expected_keywords"] = str(expected_keywords)
+        else:  # open_ended
+            field_suggestions["sample_answer"] = llm_response.get("sample_answer", "Sample comprehensive answer")
+            # Include grading criteria
+            grading_criteria = llm_response.get("grading_criteria", ["Understanding of concepts", "Clear explanation"])
+            if isinstance(grading_criteria, list):
+                field_suggestions["grading_criteria"] = "; ".join(grading_criteria)
+            else:
+                field_suggestions["grading_criteria"] = str(grading_criteria)
+        
+        # Always include hints
+        hints = llm_response.get("hints", ["Consider the key concepts", "Think step by step"])
+        # Convert hints to a readable format if it's a list
+        if isinstance(hints, list):
+            field_suggestions["hints"] = "; ".join(hints) if len(hints) > 1 else hints[0] if hints else "Think about the key concepts"
+        else:
+            field_suggestions["hints"] = str(hints)
+        
+        # Add metadata
+        field_suggestions["llm_source"] = llm_response.get("llm_source", "unknown")
+        field_suggestions["generated_by"] = llm_response.get("generated_by", "llm")
+        field_suggestions["timestamp"] = llm_response.get("timestamp", datetime.utcnow().isoformat())
+        
+        return field_suggestions

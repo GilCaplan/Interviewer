@@ -658,6 +658,21 @@ const TemplateEditor = ({
                 placeholder="Explain why this is the correct answer..."
               />
             )}
+
+            {renderFieldGroup(
+              "Hints",
+              "hints",
+              <textarea
+                value={(() => {
+                  const hints = getFieldValueLocal('hints');
+                  return Array.isArray(hints) ? hints.join('\n') : (hints || '');
+                })()}
+                onChange={(e) => handleFieldUpdate(question.question_id, 'hints', e.target.value.split('\n').filter(h => h.trim()))}
+                disabled={!canEdit}
+                placeholder="Hint 1: Think about the key concepts...\nHint 2: Consider edge cases..."
+                rows={2}
+              />
+            )}
           </div>
         );
 
@@ -716,6 +731,21 @@ const TemplateEditor = ({
                 className="code-textarea"
               />
             )}
+
+            {renderFieldGroup(
+              "Hints",
+              "hints",
+              <textarea
+                value={(() => {
+                  const hints = getFieldValueLocal('hints');
+                  return Array.isArray(hints) ? hints.join('\n') : (hints || '');
+                })()}
+                onChange={(e) => handleFieldUpdate(question.question_id, 'hints', e.target.value.split('\n').filter(h => h.trim()))}
+                disabled={!canEdit}
+                placeholder="Hint 1: Think about the algorithm approach...\nHint 2: Consider edge cases like empty input..."
+                rows={2}
+              />
+            )}
           </div>
         );
 
@@ -755,6 +785,21 @@ const TemplateEditor = ({
                 onChange={(e) => handleFieldUpdate(question.question_id, 'explanation', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Explain why this statement is true or false..."
+              />
+            )}
+
+            {renderFieldGroup(
+              "Hints",
+              "hints",
+              <textarea
+                value={(() => {
+                  const hints = getFieldValueLocal('hints');
+                  return Array.isArray(hints) ? hints.join('\n') : (hints || '');
+                })()}
+                onChange={(e) => handleFieldUpdate(question.question_id, 'hints', e.target.value.split('\n').filter(h => h.trim()))}
+                disabled={!canEdit}
+                placeholder="Hint 1: Consider the fundamentals...\nHint 2: Think about common misconceptions..."
+                rows={2}
               />
             )}
           </div>
@@ -801,6 +846,21 @@ const TemplateEditor = ({
                 max="200"
               />
             )}
+
+            {renderFieldGroup(
+              "Hints",
+              "hints",
+              <textarea
+                value={(() => {
+                  const hints = getFieldValueLocal('hints');
+                  return Array.isArray(hints) ? hints.join('\n') : (hints || '');
+                })()}
+                onChange={(e) => handleFieldUpdate(question.question_id, 'hints', e.target.value.split('\n').filter(h => h.trim()))}
+                disabled={!canEdit}
+                placeholder="Hint 1: Focus on key concepts...\nHint 2: Be concise but complete..."
+                rows={2}
+              />
+            )}
           </div>
         );
 
@@ -843,6 +903,21 @@ const TemplateEditor = ({
                 disabled={!canEdit}
                 placeholder="Demonstrates understanding of concepts\nProvides practical examples\nShows analytical thinking"
                 rows={3}
+              />
+            )}
+
+            {renderFieldGroup(
+              "Hints",
+              "hints",
+              <textarea
+                value={(() => {
+                  const hints = getFieldValueLocal('hints');
+                  return Array.isArray(hints) ? hints.join('\n') : (hints || '');
+                })()}
+                onChange={(e) => handleFieldUpdate(question.question_id, 'hints', e.target.value.split('\n').filter(h => h.trim()))}
+                disabled={!canEdit}
+                placeholder="Hint 1: Think about real-world applications...\nHint 2: Consider multiple perspectives..."
+                rows={2}
               />
             )}
           </div>
