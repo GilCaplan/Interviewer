@@ -208,7 +208,7 @@ def main():
     log("🔧 Updating test configurations...", Colors.BLUE)
     update_test_files_port(server_url)
     
-    # List of test files - only include core tests that work reliably
+    # List of ALL test files in gil_tests directory
     potential_test_files = [
         ("test_unit_comprehensive.py", "Unit tests (individual components)"),
         ("test_basic_functionality.py", "Basic functionality and connectivity"),
@@ -217,14 +217,22 @@ def main():
         ("test_session_collaboration.py", "Multi-user collaboration"),
         ("test_llm_mock_integration.py", "Mock LLM integration"),
         ("test_suggestion_history.py", "Suggestion history functionality"),
+        ("test_suggestion_history_simple.py", "Simple suggestion history tests"),
         ("test_edge_cases_critical.py", "Critical edge cases and boundary testing"),
         ("test_scaling_and_concurrent_users.py", "Scaling and concurrent user testing"),
         ("test_system_end_to_end.py", "End-to-end system workflows"),
         ("test_security_comprehensive.py", "Comprehensive security testing"),
+        ("test_security_advanced.py", "Advanced security testing"),
         ("test_interview_platform_parallelism.py", "Interview platform parallelism"),
         ("test_database_reliability.py", "Database reliability testing"),
         ("test_field_suggestions.py", "Field suggestion functionality"),
-        ("test_stress_and_chaos.py", "Stress and chaos testing (long-running)")
+        ("test_ai_suggestions_unit.py", "AI suggestions unit tests"),
+        ("test_stress_and_chaos.py", "Stress and chaos testing (long-running)"),
+        ("test_environment_setup.py", "Environment setup validation"),
+        ("test_remove_user.py", "User removal functionality"),
+        ("test_session_settings_integration.py", "Session settings integration"),
+        ("test_ui_improvements.py", "UI improvements testing"),
+        ("template_test_health.py", "Template health checks")
     ]
     
     # Filter to only tests that actually exist
@@ -323,6 +331,33 @@ def main():
         log("⚠️ FAIR! System has several issues that need attention", Colors.YELLOW + Colors.BOLD)
     else:
         log("🚨 POOR! System has critical issues requiring immediate attention", Colors.RED + Colors.BOLD)
+    
+    # Concise Summary Table
+    log(f"\n📊 CONCISE TEST SUMMARY:", Colors.BOLD + Colors.CYAN)
+    log("=" * 80, Colors.CYAN)
+    log(f"{'Test File':<40} {'Pass Rate':<12} {'Tests':<10} {'Status':<8}", Colors.BOLD + Colors.WHITE)
+    log("-" * 80, Colors.CYAN)
+    
+    for summary in test_summaries:
+        test_name = summary['file'].replace('.py', '')
+        if len(test_name) > 37:
+            test_name = test_name[:34] + "..."
+        
+        passed = summary['results']['passed']
+        failed = summary['results']['failed']
+        total_tests = passed + failed if (passed + failed) > 0 else 1
+        pass_rate = (passed / total_tests * 100) if total_tests > 0 else (100 if summary['success'] else 0)
+        
+        status = "PASS" if summary['success'] else "FAIL"
+        status_color = Colors.GREEN if summary['success'] else Colors.RED
+        
+        # Format the row
+        log(f"{test_name:<40} {pass_rate:>6.1f}%{'':<5} {passed:>2}/{total_tests:<4} {status_color}{status:<8}{Colors.END}", Colors.WHITE)
+    
+    log("-" * 80, Colors.CYAN)
+    total_all_tests = total_results['total_passed'] + total_results['total_failed']
+    log(f"{'TOTAL SUMMARY':<40} {overall_pass_rate:>6.1f}%{'':<5} {total_results['total_passed']:>2}/{total_all_tests:<4} {'FINAL':<8}", Colors.BOLD + Colors.YELLOW)
+    log("=" * 80, Colors.CYAN)
     
     # Recommendations
     log(f"\n💡 Recommendations:", Colors.BOLD + Colors.WHITE)

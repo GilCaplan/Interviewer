@@ -9,7 +9,7 @@ const TemplateEditor = ({
   onStartQuestion, 
   onUpdateQuestion, 
   onFinalizeQuestion,
-  viewingMode = 'edit'  // 'edit', 'view_only', 'suggestions_only'
+  viewingMode = 'suggestions_only'  // 'view_only', 'suggestions_only'
 }) => {
   const [selectedQuestionType, setSelectedQuestionType] = useState('open_ended');
   const [newQuestionNumber, setNewQuestionNumber] = useState(1);
@@ -40,7 +40,7 @@ const TemplateEditor = ({
   ];
 
   // Permission helpers based on viewing mode
-  const canEdit = isHost || viewingMode === 'edit';
+  const canEdit = isHost; // Only hosts can edit directly
   const canSuggest = isHost || viewingMode === 'suggestions_only';
   const canView = true; // Everyone can view
   const isViewOnly = !isHost && viewingMode === 'view_only';
@@ -454,7 +454,7 @@ const TemplateEditor = ({
     const userContent = question.user_content || {};
     const isFinalized = question.status === 'finalized';
     const canEdit = isHost && !isFinalized;
-    const canSuggest = !isHost && !isFinalized;
+    const canSuggest = !isHost && !isFinalized && viewingMode === 'suggestions_only';
     const canViewSuggestions = !isFinalized; // Everyone can view suggestions if question isn't finalized
     
     // Helper function to get field value for this specific question
@@ -852,15 +852,6 @@ const TemplateEditor = ({
       {/* Viewing Mode Indicator */}
       {!isHost && (
         <div className={`viewing-mode-notice ${viewingMode}`}>
-          {viewingMode === 'edit' && (
-            <div className="mode-info">
-              <span className="mode-icon">✏️</span>
-              <div className="mode-text">
-                <strong>Full Edit Access</strong>
-                <p>You can create and edit questions directly</p>
-              </div>
-            </div>
-          )}
           {viewingMode === 'suggestions_only' && (
             <div className="mode-info">
               <span className="mode-icon">💡</span>

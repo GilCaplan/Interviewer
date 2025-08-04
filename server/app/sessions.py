@@ -485,7 +485,7 @@ def create_session(user):
                 "max_questions": clean_data['max_questions'],
                 "auto_approve_questions": clean_data['auto_approve_questions'],
                 "question_numbering": clean_data['question_numbering'],
-                "viewing_mode": "edit"  # Default viewing mode: edit, view_only, suggestions_only
+                "viewing_mode": "suggestions_only"  # Default viewing mode: view_only, suggestions_only
             },
             "template_data": {
                 "current_question_number": 0,
@@ -848,6 +848,42 @@ def list_sessions(user):
         current_app.logger.error(f"Error listing sessions: {str(e)}")
         return jsonify({"error": "Failed to list sessions"}), 500
 
+@sessions_bp.route('/api/sessions/current', methods=['GET'])
+@token_required
+def list_current_sessions(user):
+    try:
+        # Get sessions where user is a participant but NOT the host
+        current_sessions = list(sessions_collection.find(
+            {
+                "participants": user["username"], 
+                "host_username": {"$ne": user["username"]},  # Not the host
+                "status": "active"
+            },
+            {
+                "_id": 0,
+                "session_id": 1,
+                "session_code": 1,
+                "title": 1,
+                "subject": 1,
+                "host_username": 1,
+                "participants": 1,
+                "created_at": 1,
+                "is_active": 1
+            }
+        ).sort("created_at", -1))
+        
+        # Check if user has been removed from any sessions
+        filtered_sessions = []
+        for session in current_sessions:
+            # Check if user is still in participants list (not removed)
+            if user["username"] in session.get("participants", []):
+                filtered_sessions.append(session)
+        
+        return jsonify({"sessions": filtered_sessions}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error listing current sessions: {str(e)}")
+        return jsonify({"error": "Failed to list current sessions"}), 500
+
 
 # NEW ENDPOINTS FOR STRUCTURED TEMPLATE BUILDING
 
@@ -865,7 +901,7 @@ def start_question_building(user, session_id, question_number):
             return jsonify({"error": "Access denied"}), 403
         
         # Check viewing mode permissions for non-hosts
-        viewing_mode = session.get("settings", {}).get("viewing_mode", "edit")
+        viewing_mode = session.get("settings", {}).get("viewing_mode", "suggestions_only")
         is_host = session["host_username"] == user["username"]
         
         if not is_host and viewing_mode == "view_only":
@@ -959,7 +995,7 @@ def update_question_content(user, session_id, question_id):
             return jsonify({"error": "Access denied"}), 403
         
         # Check viewing mode permissions for non-hosts
-        viewing_mode = session.get("settings", {}).get("viewing_mode", "edit")
+        viewing_mode = session.get("settings", {}).get("viewing_mode", "suggestions_only")
         is_host = session["host_username"] == user["username"]
         
         if not is_host and viewing_mode == "view_only":
@@ -1240,7 +1276,7 @@ def add_field_suggestion(user, session_id, question_id):
             return jsonify({"error": "Access denied"}), 403
         
         # Check viewing mode permissions for non-hosts
-        viewing_mode = session.get("settings", {}).get("viewing_mode", "edit")
+        viewing_mode = session.get("settings", {}).get("viewing_mode", "suggestions_only")
         is_host = session["host_username"] == user["username"]
         
         if not is_host and viewing_mode == "view_only":
@@ -1775,8 +1811,8 @@ def update_session_settings(user, session_id):
         
         # Updatable settings
         update_fields = {}
-        if 'viewing_mode' in data:  # edit, view_only, suggestions_only
-            valid_modes = ['edit', 'view_only', 'suggestions_only']
+        if 'viewing_mode' in data:  # view_only, suggestions_only
+            valid_modes = ['view_only', 'suggestions_only']
             viewing_mode = data['viewing_mode']
             if viewing_mode in valid_modes:
                 update_fields['settings.viewing_mode'] = viewing_mode

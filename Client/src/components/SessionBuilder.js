@@ -917,7 +917,7 @@ const SessionBuilder = () => {
             onStartQuestion={handleStartQuestion}
             onUpdateQuestion={handleUpdateQuestion}
             onFinalizeQuestion={handleFinalizeQuestion}
-            viewingMode={session?.settings?.viewing_mode || 'edit'}
+            viewingMode={session?.settings?.viewing_mode || 'suggestions_only'}
           />
         )}
         

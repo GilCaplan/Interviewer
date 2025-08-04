@@ -3,14 +3,13 @@ import './ParticipantsList.css';
 
 const ParticipantsList = ({ session, participants, onlineUsers, user, isHost, onShowSettings, onDeleteSession, onCleanupAllSessions, onRemoveUser }) => {
   const [sessionSettings, setSessionSettings] = useState({
-    viewing_mode: session.settings?.viewing_mode || 'edit',
+    viewing_mode: session.settings?.viewing_mode || 'suggestions_only',
     max_participants: session.settings?.max_participants || 10
   });
 
   const viewingModeOptions = [
-    { value: 'edit', label: 'Full Edit Access', description: 'All users can edit questions' },
-    { value: 'suggestions_only', label: 'Suggestions Only', description: 'Users can only suggest, host edits' },
-    { value: 'view_only', label: 'View Only', description: 'Users can only view, no editing' }
+    { value: 'suggestions_only', label: 'Allow Suggestions', description: 'Users can suggest changes, host approves' },
+    { value: 'view_only', label: 'View Only', description: 'Users can only view, no changes allowed' }
   ];
 
   const handleSettingsUpdate = async (newSettings) => {

@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef, memo } from 'react';
 import './LLMChat.css';
 
 const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
-  const [chatMessage, setChatMessage] = useState('');
-  const [chatHistory, setChatHistory] = useState([]);
   const [selectedQuestion, setSelectedQuestion] = useState('');
   const [selectedField, setSelectedField] = useState('question_text');
   const [context, setContext] = useState('');
@@ -54,82 +52,13 @@ const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
     }
   };
 
-  // Load chat history on component mount
-  useEffect(() => {
-    loadChatHistory();
-  }, [session.session_id]);
-
   // Scroll to bottom when new messages arrive
   useEffect(() => {
     scrollToBottom();
-  }, [chatHistory, messages]);
-
-  const loadChatHistory = async () => {
-    try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/chat-history`, {
-        headers: {
-          'Authorization': `Bearer ${user.sessionToken}`
-        },
-        credentials: 'include'
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setChatHistory(data.messages || []);
-      }
-    } catch (err) {
-      console.error('Failed to load chat history:', err);
-    }
-  };
+  }, [messages]);
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const handleGeneralChat = async () => {
-    if (!chatMessage.trim()) return;
-
-    setLoading(true);
-    const messageToSend = chatMessage.trim();
-    setChatMessage('');
-
-    try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/chat`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${user.sessionToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ message: messageToSend }),
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to send message');
-      }
-
-      const data = await response.json();
-      
-      // Add to local chat history
-      const newMessage = {
-        message_id: data.message_id,
-        user_message: messageToSend,
-        llm_response: data.response,
-        username: user.username,
-        timestamp: new Date().toISOString(),
-        generated_by: 'gemini'
-      };
-
-      setChatHistory(prev => [...prev, newMessage]);
-
-    } catch (err) {
-      console.error('Error sending chat message:', err);
-      alert('Failed to send message: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleQuestionSpecificSuggestion = async () => {
@@ -153,59 +82,28 @@ const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
   const selectedQuestionObj = questions.find(q => q.question_id === selectedQuestion);
   const availableFields = selectedQuestionObj ? getFieldOptions(selectedQuestionObj.type) : [];
 
-  const allMessages = [
-    ...chatHistory,
-    ...messages.filter(m => m.type === 'llm_suggestion' || m.type === 'collaboration_note')
-  ].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  // Only show LLM suggestions and collaboration notes (no general chat)
+  const suggestionMessages = messages.filter(m => m.type === 'llm_suggestion' || m.type === 'collaboration_note')
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
   return (
     <div className="llm-chat">
       <div className="chat-header">
-        <h2>LLM Assistant</h2>
-        <p>Get AI-powered suggestions for your interview questions</p>
+        <h2>🤖 AI Question Assistant</h2>
+        <p>Get AI-powered suggestions to improve your interview questions</p>
       </div>
 
       <div className="chat-container">
-        {/* Chat Messages */}
+        {/* Suggestion Messages */}
         <div className="chat-messages">
-          {allMessages.length === 0 ? (
+          {suggestionMessages.length === 0 ? (
             <div className="no-messages">
-              <p>💬 Start a conversation with the AI assistant!</p>
-              <p>Ask for help with question ideas, improvements, or general interview advice.</p>
+              <p>🎯 Generate AI suggestions for your questions!</p>
+              <p>Select a question below and get specific improvements from the AI assistant.</p>
             </div>
           ) : (
-            allMessages.map((message, index) => (
+            suggestionMessages.map((message, index) => (
               <div key={message.message_id || index} className="message-group">
-                {/* User Message */}
-                {message.user_message && (
-                  <div className="message user-message">
-                    <div className="message-header">
-                      <strong>{message.username}</strong>
-                      <span className="timestamp">
-                        {new Date(message.timestamp).toLocaleTimeString()}
-                      </span>
-                    </div>
-                    <div className="message-content">
-                      {message.user_message}
-                    </div>
-                  </div>
-                )}
-
-                {/* LLM Response */}
-                {message.llm_response && (
-                  <div className="message llm-message">
-                    <div className="message-header">
-                      <strong>🤖 AI Assistant</strong>
-                      <span className="timestamp">
-                        {new Date(message.timestamp).toLocaleTimeString()}
-                      </span>
-                    </div>
-                    <div className="message-content">
-                      {message.llm_response}
-                    </div>
-                  </div>
-                )}
-
                 {/* LLM Suggestion for specific question */}
                 {message.type === 'llm_suggestion' && (
                   <div className="message llm-suggestion">
@@ -244,36 +142,10 @@ const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
           <div ref={chatEndRef} />
         </div>
 
-        {/* Chat Input Sections */}
+        {/* Question-Specific Suggestions */}
         <div className="chat-inputs">
-          {/* General Chat */}
           <div className="chat-section">
-            <h3>💬 General Chat</h3>
-            <div className="chat-input-group">
-              <textarea
-                value={chatMessage}
-                onChange={(e) => setChatMessage(e.target.value)}
-                placeholder="Ask the AI assistant anything about interview questions, best practices, or get general advice..."
-                rows={3}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleGeneralChat();
-                  }
-                }}
-              />
-              <button 
-                onClick={handleGeneralChat}
-                disabled={loading || !chatMessage.trim()}
-              >
-                {loading ? 'Sending...' : 'Send'}
-              </button>
-            </div>
-          </div>
-
-          {/* Question-Specific Suggestions */}
-          <div className="chat-section">
-            <h3>🎯 Question-Specific Suggestions</h3>
+            <h3>🎯 Generate AI Suggestions</h3>
             <div className="suggestion-form">
               <div className="form-row">
                 <select

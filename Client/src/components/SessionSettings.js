@@ -3,7 +3,7 @@ import './SessionSettings.css';
 
 const SessionSettings = ({ session, isHost, user, onClose, onSettingsUpdate }) => {
   const [settings, setSettings] = useState({
-    viewing_mode: 'edit',
+    viewing_mode: 'suggestions_only',
     max_participants: 10
   });
   const [loading, setLoading] = useState(false);
@@ -12,7 +12,7 @@ const SessionSettings = ({ session, isHost, user, onClose, onSettingsUpdate }) =
   useEffect(() => {
     if (session && session.settings) {
       setSettings({
-        viewing_mode: session.settings.viewing_mode || 'edit',
+        viewing_mode: session.settings.viewing_mode || 'suggestions_only',
         max_participants: session.settings.max_participants || 10
       });
     }
@@ -88,9 +88,8 @@ const SessionSettings = ({ session, isHost, user, onClose, onSettingsUpdate }) =
               <div className="setting-display">
                 <span className="setting-label">Viewing Mode:</span>
                 <span className="setting-value">
-                  {session?.settings?.viewing_mode === 'edit' && '✏️ Full Edit Access'}
                   {session?.settings?.viewing_mode === 'view_only' && '👁️ View Only'}
-                  {session?.settings?.viewing_mode === 'suggestions_only' && '💡 Suggestions Only'}
+                  {(session?.settings?.viewing_mode === 'suggestions_only' || !session?.settings?.viewing_mode) && '💡 Allow Suggestions'}
                 </span>
               </div>
               <div className="setting-display">
@@ -134,30 +133,14 @@ const SessionSettings = ({ session, isHost, user, onClose, onSettingsUpdate }) =
                 <input
                   type="radio"
                   name="viewing_mode"
-                  value="edit"
-                  checked={settings.viewing_mode === 'edit'}
-                  onChange={(e) => handleSettingChange('viewing_mode', e.target.value)}
-                />
-                <div className="radio-content">
-                  <div className="radio-title">✏️ Full Edit Access</div>
-                  <div className="radio-description">
-                    Everyone can create and edit questions directly
-                  </div>
-                </div>
-              </label>
-              
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="viewing_mode"
                   value="suggestions_only"
                   checked={settings.viewing_mode === 'suggestions_only'}
                   onChange={(e) => handleSettingChange('viewing_mode', e.target.value)}
                 />
                 <div className="radio-content">
-                  <div className="radio-title">💡 Suggestions Only</div>
+                  <div className="radio-title">💡 Allow Suggestions</div>
                   <div className="radio-description">
-                    Non-hosts can suggest changes that you can approve/reject
+                    Other users can suggest changes that you can approve/reject
                   </div>
                 </div>
               </label>
@@ -173,7 +156,7 @@ const SessionSettings = ({ session, isHost, user, onClose, onSettingsUpdate }) =
                 <div className="radio-content">
                   <div className="radio-title">👁️ View Only</div>
                   <div className="radio-description">
-                    Non-hosts can only view questions, no changes allowed
+                    Other users can only view questions, no changes allowed
                   </div>
                 </div>
               </label>
