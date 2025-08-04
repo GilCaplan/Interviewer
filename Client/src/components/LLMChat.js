@@ -7,6 +7,7 @@ const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
   const [context, setContext] = useState('');
   const [numResponses, setNumResponses] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [llmStatus, setLlmStatus] = useState(null);
   const chatEndRef = useRef(null);
 
   // Field options for different question types
@@ -68,6 +69,27 @@ const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
     scrollToBottom();
   }, [messages]);
 
+  // Fetch LLM status on component mount
+  useEffect(() => {
+    const fetchLLMStatus = async () => {
+      try {
+        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+        const response = await fetch(`${apiUrl}/api/llm/status`);
+        if (response.ok) {
+          const status = await response.json();
+          setLlmStatus(status);
+        }
+      } catch (error) {
+        console.error('Failed to fetch LLM status:', error);
+      }
+    };
+
+    fetchLLMStatus();
+    // Refresh status every 30 seconds
+    const interval = setInterval(fetchLLMStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -102,6 +124,15 @@ const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
       <div className="chat-header">
         <h2>🤖 AI Question Assistant</h2>
         <p>Get AI-powered suggestions to improve your interview questions</p>
+        {llmStatus && (
+          <div className={`llm-status ${llmStatus.gemini?.available ? 'gemini-active' : 'mock-active'}`}>
+            {llmStatus.gemini?.available ? (
+              <span>✅ Gemini AI Active</span>
+            ) : (
+              <span>⚠️ Using Mock Responses (Gemini API quota exceeded)</span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="chat-container">
