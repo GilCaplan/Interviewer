@@ -270,6 +270,17 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  background: #fafbfc;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid #e9ecef;
+  margin-bottom: 16px;
+  transition: all 0.3s ease;
+}
+
+.field-group:hover {
+  border-color: #dae2ea;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .field-group label {
@@ -371,7 +382,15 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.field-header label {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 0.95rem;
 }
 
 .field-with-suggest {
@@ -469,22 +488,31 @@
 }
 
 .suggest-btn {
-  background: #f39c12;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
+  padding: 8px 16px;
+  border-radius: 20px;
   cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 500;
+  font-size: 0.85rem;
+  font-weight: 600;
   transition: all 0.3s ease;
   white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(118, 75, 162, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .suggest-btn:hover {
-  background: #e67e22;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(243, 156, 18, 0.3);
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(118, 75, 162, 0.3);
+}
+
+.suggest-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(118, 75, 162, 0.4);
 }
 
 .modal-overlay {
@@ -501,20 +529,27 @@
 }
 
 .suggestion-modal {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border-radius: 16px;
+  padding: 32px;
   width: 90%;
-  max-width: 500px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  max-width: 520px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border: 1px solid #e9ecef;
+  backdrop-filter: blur(10px);
+  position: relative;
 }
 
 .suggestion-modal h3 {
   color: #2c3e50;
-  margin: 0 0 16px 0;
+  margin: 0 0 24px 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  font-size: 1.4rem;
+  font-weight: 700;
+  border-bottom: 2px solid #f0f2f5;
+  padding-bottom: 16px;
 }
 
 .suggestion-form {
@@ -524,45 +559,234 @@
 }
 
 .suggestion-form textarea {
-  padding: 12px;
-  border: 2px solid #ecf0f1;
-  border-radius: 8px;
-  font-size: 1rem;
-  min-height: 100px;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px;
+  color: #64748b;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  min-height: 120px;
   resize: vertical;
-  transition: border-color 0.3s ease;
+  position: relative;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.suggestion-form textarea::placeholder {
+  color: #94a3b8;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.suggestion-form textarea:hover {
+  border-color: #cbd5e0;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.08);
 }
 
 .suggestion-form textarea:focus {
   outline: none;
-  border-color: #f39c12;
-  box-shadow: 0 0 0 3px rgba(243, 156, 18, 0.1);
+  border-color: #667eea;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05), 0 0 0 3px rgba(102, 126, 234, 0.1);
+  background: linear-gradient(135deg, #f8faff 0%, #e8f2ff 100%);
+}
+
+.modal-body {
+  margin: 20px 0;
+}
+
+.modal-body p {
+  font-weight: 700;
+  color: #2d3748;
+  margin-bottom: 12px;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+
+.current-value {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px;
+  font-style: italic;
+  color: #64748b;
+  margin-bottom: 20px;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  max-height: 120px;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.current-value::before {
+  content: "📝";
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  opacity: 0.5;
+  font-size: 1.2rem;
+}
+
+.current-value:empty::after {
+  content: "No current value set";
+  opacity: 0.6;
+  font-style: normal;
+  color: #94a3b8;
+}
+
+.textarea-container {
+  position: relative;
+  width: 100%;
+}
+
+.suggestion-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 0;
+}
+
+.textarea-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  padding: 0 4px;
+  font-size: 0.85rem;
+}
+
+.character-count {
+  color: #64748b;
+  font-weight: 500;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+}
+
+.character-count.warning {
+  color: #f59e0b;
+}
+
+.character-count.danger {
+  color: #ef4444;
+}
+
+.suggestion-tip {
+  color: #8b5cf6;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-style: italic;
 }
 
 .suggestion-actions {
   display: flex;
-  gap: 12px;
+  gap: 20px;
   justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e9ecef;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 20px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e9ecef;
 }
 
 .suggestion-actions button {
-  padding: 10px 20px;
-  border-radius: 6px;
+  padding: 12px 24px;
+  border-radius: 10px;
   border: none;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  min-width: 100px;
+}
+
+.submit-suggestion-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(118, 75, 162, 0.3);
+}
+
+.submit-suggestion-btn:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(118, 75, 162, 0.4);
+}
+
+.submit-suggestion-btn:disabled {
+  background: #dee2e6;
+  color: #6c757d;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.suggestion-actions button:first-child {
+  background: #f8f9fa;
+  color: #495057;
+  border: 2px solid #dee2e6;
+}
+
+.suggestion-actions button:first-child:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+  transform: translateY(-1px);
+}
+
+.cancel-btn {
+  background: #f8f9fa;
+  color: #495057;
+  border: 2px solid #dee2e6;
+  padding: 12px 24px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  min-width: 100px;
+}
+
+.cancel-btn:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+  transform: translateY(-1px);
+}
+
+.close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(0, 0, 0, 0.1);
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  color: #6c757d;
   transition: all 0.3s ease;
 }
 
-.submit-suggestion {
-  background: #f39c12;
-  color: white;
-}
-
-.submit-suggestion:hover {
-  background: #e67e22;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(243, 156, 18, 0.3);
+.close-btn:hover {
+  background: rgba(0, 0, 0, 0.2);
+  color: #495057;
+  transform: scale(1.1);
 }
 
 .cancel-suggestion {

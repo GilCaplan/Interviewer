@@ -214,6 +214,12 @@ const SessionBuilder = () => {
     // Cleanup function
     return () => {
       isMountedRef.current = false;
+      
+      // Clear pending participant loads
+      if (loadParticipantsTimeoutRef.current) {
+        clearTimeout(loadParticipantsTimeoutRef.current);
+      }
+      
       if (socket) {
         console.log('Cleaning up socket connection');
         socket.off(); // Remove all listeners
@@ -390,34 +396,51 @@ const SessionBuilder = () => {
     });
   };
 
-  const loadParticipants = async (sessionId) => {
-    try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
-      
-      // Get token with fallback
-      let authToken = localStorage.getItem('token');
-      if (!authToken && user?.sessionToken) {
-        authToken = user.sessionToken;
-      }
-      
-      const response = await fetch(`${apiUrl}/api/sessions/${sessionId}/participants`, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        },
-        credentials: 'include'
-      });
+  // Add debounce ref to prevent multiple rapid calls
+  const loadParticipantsTimeoutRef = useRef(null);
 
-      if (response.ok) {
-        const data = await response.json();
-        setParticipants(data.participants);
-        
-        // Initialize all current participants as online
-        const usernames = data.participants.map(p => p.username);
-        setOnlineUsers(new Set(usernames));
-      }
-    } catch (err) {
-      console.error('Failed to load participants:', err);
+  const loadParticipants = async (sessionId) => {
+    // Clear any pending load
+    if (loadParticipantsTimeoutRef.current) {
+      clearTimeout(loadParticipantsTimeoutRef.current);
     }
+
+    // Debounce the load to prevent multiple rapid calls
+    loadParticipantsTimeoutRef.current = setTimeout(async () => {
+      try {
+        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+        
+        // Get token with fallback
+        let authToken = localStorage.getItem('token');
+        if (!authToken && user?.sessionToken) {
+          authToken = user.sessionToken;
+        }
+        
+        const response = await fetch(`${apiUrl}/api/sessions/${sessionId}/participants`, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`
+          },
+          credentials: 'include'
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          
+          // Deduplicate participants by username to prevent duplicates
+          const uniqueParticipants = data.participants.filter((participant, index, self) => 
+            index === self.findIndex(p => p.username === participant.username)
+          );
+          
+          setParticipants(uniqueParticipants);
+          
+          // Initialize all current participants as online
+          const usernames = uniqueParticipants.map(p => p.username);
+          setOnlineUsers(new Set(usernames));
+        }
+      } catch (err) {
+        console.error('Failed to load participants:', err);
+      }
+    }, 100); // 100ms debounce
   };
 
   // Handler functions

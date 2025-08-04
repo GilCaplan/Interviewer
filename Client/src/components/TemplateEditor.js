@@ -272,6 +272,28 @@ const TemplateEditor = ({
     return localQuestions[localKey] !== undefined ? localQuestions[localKey] : (userContent[field] || '');
   };
 
+  // Helper function to convert technical field names to user-friendly names
+  const getFieldDisplayName = (fieldName) => {
+    const fieldDisplayNames = {
+      'question_text': 'Question Text',
+      'options': 'Answer Options',
+      'correct_answer': 'Correct Answer',
+      'explanation': 'Explanation',
+      'hints': 'Hints',
+      'starter_code': 'Starter Code',
+      'solution': 'Solution',
+      'test_cases': 'Test Cases',
+      'language': 'Programming Language',
+      'expected_keywords': 'Expected Keywords',
+      'sample_answers': 'Sample Answers',
+      'sample_answer': 'Sample Answer',
+      'grading_criteria': 'Grading Criteria',
+      'max_words': 'Maximum Words'
+    };
+    
+    return fieldDisplayNames[fieldName] || fieldName;
+  };
+
   const clearAllQuestions = async () => {
     if (!window.confirm('Are you sure you want to clear ALL questions? This cannot be undone.')) {
       return;
@@ -1220,7 +1242,7 @@ const TemplateEditor = ({
         <div className="modal-overlay" onClick={() => setShowSuggestionModal(false)}>
           <div className="suggestion-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>💡 Suggest Edit for {suggestionField}</h3>
+              <h3>💡 Suggest Edit for {getFieldDisplayName(suggestionField)}</h3>
               <button 
                 className="close-btn"
                 onClick={() => setShowSuggestionModal(false)}
@@ -1234,13 +1256,24 @@ const TemplateEditor = ({
                 {getFieldValue(suggestionField, suggestionQuestionId) || '<empty>'}
               </div>
               <p>Your suggestion:</p>
-              <textarea
-                value={suggestionText}
-                onChange={(e) => setSuggestionText(e.target.value)}
-                placeholder="Enter your suggested change..."
-                rows={4}
-                className="suggestion-textarea"
-              />
+              <div className="textarea-container">
+                <textarea
+                  value={suggestionText}
+                  onChange={(e) => setSuggestionText(e.target.value)}
+                  placeholder="✨ Share your brilliant idea here... Be specific and clear about what you'd like to change and why it would be better."
+                  rows={4}
+                  className="suggestion-textarea"
+                  maxLength={1000}
+                />
+                <div className="textarea-footer">
+                  <div className={`character-count ${suggestionText.length > 800 ? 'warning' : ''} ${suggestionText.length > 950 ? 'danger' : ''}`}>
+                    {suggestionText.length}/1000 characters
+                  </div>
+                  <div className="suggestion-tip">
+                    💡 Tip: Be specific and explain your reasoning
+                  </div>
+                </div>
+              </div>
             </div>
             <div className="modal-footer">
               <button 

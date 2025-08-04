@@ -262,9 +262,8 @@ function SessionControls() {
                       <button 
                         className="join-btn"
                         onClick={() => joinCurrentSessionById(session.session_code)}
-                        disabled={!session.is_active}
                       >
-                        {session.is_active ? 'Rejoin' : 'Inactive'}
+                        Rejoin
                       </button>
                     </div>
                   </div>

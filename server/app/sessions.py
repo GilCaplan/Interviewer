@@ -868,7 +868,7 @@ def list_current_sessions(user):
                 "host_username": 1,
                 "participants": 1,
                 "created_at": 1,
-                "is_active": 1
+                "status": 1
             }
         ).sort("created_at", -1))
         
@@ -877,6 +877,8 @@ def list_current_sessions(user):
         for session in current_sessions:
             # Check if user is still in participants list (not removed)
             if user["username"] in session.get("participants", []):
+                # Add is_active field based on status
+                session["is_active"] = session.get("status") == "active"
                 filtered_sessions.append(session)
         
         return jsonify({"sessions": filtered_sessions}), 200
