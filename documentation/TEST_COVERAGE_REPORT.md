@@ -109,30 +109,90 @@ TEST_DATA_ISOLATION=true
 
 ## Test Runner and Automation
 
-### Comprehensive Test Runner (`run_all_tests.py`)
-- Automatically detects server on ports 5000/5001
-- Updates test configurations dynamically
-- Runs all test categories sequentially
-- Provides detailed reporting and statistics
-- Color-coded output for easy result interpretation
+### Restructured Test Architecture (Updated)
 
-### Individual Test Execution
-Each test file can be run independently:
+The test suite has been completely restructured for improved maintainability and execution:
+
+#### **New Directory Structure**
+```
+server/tests/gil_tests/
+├── run_all_tests.py              # Main dynamic test runner
+├── individual_tests/             # All test files organized
+│   ├── test_basic_functionality.py
+│   ├── test_session_management.py
+│   ├── test_template_building.py
+│   ├── test_scaling_and_concurrent_users.py
+│   ├── test_session_collaboration.py
+│   ├── test_llm_mock_integration.py
+│   ├── test_security_comprehensive.py
+│   ├── test_unit_comprehensive.py
+│   └── ... (23 total test files)
+└── run_comprehensive_tests.py   # Legacy comprehensive runner
+```
+
+#### **Enhanced Test Runner Features**
+- **Dynamic Test Discovery**: Automatically finds all test files in `individual_tests/` directory
+- **Standardized Result Format**: All tests return `(pass_rate, passed, total)` tuple
+- **Error-Only Output**: Only displays error messages when tests fail - minimal output for passed tests
+- **Timeout Protection**: 30-second timeout per individual test to prevent hanging
+- **Robust Error Handling**: Detailed error messages for module loading failures
+- **Real-time Progress**: Shows progress with `[X/Y]` format during execution
+- **Summary Tables**: Clean, formatted results display with pass rates
+
+#### **Individual Test Execution**
+Each test file can be run independently and returns standardized format:
 ```bash
-python test_basic_functionality.py
-python test_security_comprehensive.py
-python test_stress_and_chaos.py
-# ... etc
+# Run individual tests (returns pass_rate, passed, total)
+python individual_tests/test_basic_functionality.py
+python individual_tests/test_security_comprehensive.py
+python individual_tests/test_stress_and_chaos.py
+
+# Run all tests with new dynamic runner
+python run_all_tests.py
+```
+
+#### **Test Output Format**
+```
+🧪 Interview Platform Test Suite Runner
+============================================================
+
+📁 Found 23 test files
+
+[ 1/23] Running test_basic_functionality.py... ✅ 14/14
+[ 2/23] Running test_session_management.py... ✅ 35/35
+[ 3/23] Running test_security_comprehensive.py... ❌ 10/12
+    💥 Invalid token rejection test failed
+    💥 Session enumeration protection failed
+
+📊 Test Results Summary
+======================================================================
+Test Name                                Pass Rate  Results      Status
+----------------------------------------------------------------------
+Basic Functionality                        100.0%    14/14        ✅ PASS
+Session Management                         100.0%    35/35        ✅ PASS
+Security Comprehensive                      83.3%    10/12        ❌ FAIL
+----------------------------------------------------------------------
+OVERALL RESULTS                             96.1%   173/180       ❌ FAIL
+======================================================================
+
+🎯 Final Results
+   Total Tests: 180
+   Passed: 173
+   Failed: 7
+   Pass Rate: 96.1%
+   Duration: 45.3s
 ```
 
 ## Test Statistics and Coverage
 
-### Overall Test Metrics
-- **Total Test Files**: 11 comprehensive test suites
-- **Total Individual Tests**: 180+ individual test cases
+### Overall Test Metrics (Updated)
+- **Total Test Files**: 23 comprehensive test suites in `individual_tests/` directory
+- **Total Individual Tests**: 180+ individual test cases across all suites
 - **Test Categories**: 7 major categories (Unit, Integration, System, Security, Stress, Scaling, Collaboration)
-- **Average Pass Rate**: 95%+ across functional tests
-- **Execution Time**: ~60 seconds for full suite
+- **Test Organization**: Restructured with dynamic test discovery and standardized output
+- **Average Pass Rate**: 95%+ across functional tests (when server is running)
+- **Execution Time**: ~45-60 seconds for full suite with timeout protection
+- **New Features**: Error-only output, timeout protection, robust error handling
 
 ### Coverage by Feature Area
 
@@ -222,19 +282,22 @@ python run_all_tests.py
 python test_environment_setup.py
 ```
 
-### Individual Test Categories
+### Individual Test Categories (Updated Paths)
 ```bash
 # Unit tests
-python test_unit_comprehensive.py
+python individual_tests/test_unit_comprehensive.py
 
 # Security tests
-python test_security_comprehensive.py
+python individual_tests/test_security_comprehensive.py
 
 # Stress tests
-python test_stress_and_chaos.py
+python individual_tests/test_stress_and_chaos.py
 
 # System tests
-python test_system_end_to_end.py
+python individual_tests/test_system_end_to_end.py
+
+# All tests with new dynamic runner
+python run_all_tests.py
 ```
 
 ## Test Results Interpretation

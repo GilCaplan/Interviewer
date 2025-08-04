@@ -34,12 +34,12 @@ docker-compose up --build
 
 ## 🧪 **Comprehensive Testing (Guidelines Compliant)**
 
-### **Run All Tests (173 individual tests)**
+### **Run All Tests (180+ individual tests)**
 ```bash
 # Navigate to test directory
 cd server/tests/gil_tests
 
-# Run comprehensive test suite
+# Run comprehensive test suite (new dynamic runner)
 python run_all_tests.py
 ```
 
@@ -56,18 +56,18 @@ python run_all_tests.py
 - **Environment**: Uses `TESTING=true` for isolated testing
 - **First Try**: Tests run successfully on any system with Docker
 
-### **Individual Test Files**
+### **Individual Test Files (Updated Paths)**
 ```bash
 # Core functionality tests
-python test_basic_functionality.py          # API connectivity
-python test_template_building.py            # CRUD operations
-python test_session_management.py           # Session lifecycle
+python individual_tests/test_basic_functionality.py          # API connectivity
+python individual_tests/test_template_building.py            # CRUD operations
+python individual_tests/test_session_management.py           # Session lifecycle
 
 # Advanced feature tests  
-python test_session_collaboration.py        # Multi-user real-time
-python test_llm_mock_integration.py         # AI integration
-python test_edge_cases_critical.py          # Boundary conditions
-python test_scaling_and_concurrent_users.py # Performance under load
+python individual_tests/test_session_collaboration.py        # Multi-user real-time
+python individual_tests/test_llm_mock_integration.py         # AI integration
+python individual_tests/test_edge_cases_critical.py          # Boundary conditions
+python individual_tests/test_scaling_and_concurrent_users.py # Performance under load
 ```
 
 ## 🚀 Key Features
@@ -136,18 +136,21 @@ Project_Interviewer/
 │   │   ├── questions.py      # Question management
 │   │   └── websocket_handlers.py # Real-time communication
 │   └── tests/gil_tests/      # Comprehensive test suite
-│       ├── run_all_tests.py  # Comprehensive test runner (12 test suites)
-│       ├── test_basic_functionality.py
-│       ├── test_template_building.py
-│       ├── test_session_management.py
-│       ├── test_session_collaboration.py
-│       ├── test_scaling_and_concurrent_users.py
-│       ├── test_llm_mock_integration.py
-│       ├── test_security_comprehensive.py
-│       ├── test_interview_platform_parallelism.py
-│       ├── test_system_end_to_end.py
-│       ├── test_stress_and_chaos.py
-│       └── test_unit_comprehensive.py
+│       ├── run_all_tests.py  # Dynamic test runner (23 test files)
+│       ├── individual_tests/ # All test files organized
+│       │   ├── test_basic_functionality.py
+│       │   ├── test_template_building.py
+│       │   ├── test_session_management.py
+│       │   ├── test_session_collaboration.py
+│       │   ├── test_scaling_and_concurrent_users.py
+│       │   ├── test_llm_mock_integration.py
+│       │   ├── test_security_comprehensive.py
+│       │   ├── test_interview_platform_parallelism.py
+│       │   ├── test_system_end_to_end.py
+│       │   ├── test_stress_and_chaos.py
+│       │   ├── test_unit_comprehensive.py
+│       │   └── ... (23 total test files)
+│       └── run_comprehensive_tests.py # Legacy runner
 ├── .env                      # Environment variables (Gemini API key)
 ├── .gitignore               # Security-focused gitignore
 ├── docker-compose.yml       # Multi-container setup
@@ -201,33 +204,33 @@ Our testing suite is production-ready with exceptional coverage:
 # Start the application first
 docker-compose up --build
 
-# Run comprehensive test suite (all 12 test suites)
+# Run comprehensive test suite (all 23 test files)
 cd server/tests/gil_tests
 python run_all_tests.py
 ```
 
-#### Individual Test Suites
+#### Individual Test Suites (Updated Paths)
 ```bash
 cd server/tests/gil_tests
 
 # Core functionality tests
-python test_basic_functionality.py          # Basic connectivity & auth
-python test_template_building.py            # CRUD operations & validation
-python test_session_management.py           # Session lifecycle & cleanup
+python individual_tests/test_basic_functionality.py          # Basic connectivity & auth
+python individual_tests/test_template_building.py            # CRUD operations & validation
+python individual_tests/test_session_management.py           # Session lifecycle & cleanup
 
 # Collaboration & scaling tests  
-python test_session_collaboration.py        # Multi-user real-time features
-python test_scaling_and_concurrent_users.py # Performance under load
-python test_interview_platform_parallelism.py # Concurrent interview scenarios
+python individual_tests/test_session_collaboration.py        # Multi-user real-time features
+python individual_tests/test_scaling_and_concurrent_users.py # Performance under load
+python individual_tests/test_interview_platform_parallelism.py # Concurrent interview scenarios
 
 # Integration & system tests
-python test_llm_mock_integration.py         # AI integration features
-python test_security_comprehensive.py       # Auth, XSS, injection prevention
-python test_system_end_to_end.py           # Complete user workflows
+python individual_tests/test_llm_mock_integration.py         # AI integration features
+python individual_tests/test_security_comprehensive.py       # Auth, XSS, injection prevention
+python individual_tests/test_system_end_to_end.py           # Complete user workflows
 
 # Advanced testing
-python test_unit_comprehensive.py           # Individual component testing
-python test_stress_and_chaos.py            # Resilience & error recovery
+python individual_tests/test_unit_comprehensive.py           # Individual component testing
+python individual_tests/test_stress_and_chaos.py            # Resilience & error recovery
 ```
 
 #### Test Environment Setup
@@ -495,7 +498,7 @@ The test suite currently achieves 100% pass rate. If tests fail after modificati
 
 5. **Isolate issues**: Run individual test suites to identify problems
    ```bash
-   python test_basic_functionality.py  # Start with basic connectivity
+   python individual_tests/test_basic_functionality.py  # Start with basic connectivity
    ```
 
 6. **Review logs**: Check Docker logs for detailed error information
@@ -509,7 +512,7 @@ The test suite currently achieves 100% pass rate. If tests fail after modificati
 This is a university project. For development:
 
 1. **Focus Areas**: Collaborative template building, real-time features, AI integration
-2. **Testing Standard**: Maintain 100% test pass rate across all 12 test suites
+2. **Testing Standard**: Maintain 100% test pass rate across all 23 test files
 3. **Test Before Committing**: Always run the comprehensive test suite
    ```bash
    cd server/tests/gil_tests && python run_all_tests.py

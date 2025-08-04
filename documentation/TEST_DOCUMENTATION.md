@@ -222,22 +222,95 @@ FLASK_ENV=testing
 
 ## Test Execution and Reporting
 
+### **Restructured Test Architecture (Updated)**
+
+The test suite has been reorganized for improved maintainability and execution:
+
+#### **Directory Structure**
+```
+server/tests/gil_tests/
+├── run_all_tests.py              # Main test runner
+├── individual_tests/             # All test files
+│   ├── test_basic_functionality.py
+│   ├── test_session_management.py
+│   ├── test_template_building.py
+│   ├── test_scaling_and_concurrent_users.py
+│   ├── test_session_collaboration.py
+│   ├── test_llm_mock_integration.py
+│   ├── test_security_comprehensive.py
+│   ├── test_unit_comprehensive.py
+│   └── ... (23 total test files)
+└── run_comprehensive_tests.py   # Legacy comprehensive runner
+```
+
+#### **New Test Runner Features**
+- **Dynamic Test Discovery**: Automatically finds all test files in `individual_tests/`
+- **Standardized Output Format**: All tests return `(pass_rate, passed, total)` tuple
+- **Minimal Error Reporting**: Only shows error messages for failed tests
+- **Timeout Protection**: 30-second timeout per individual test
+- **Robust Error Handling**: Detailed error messages for module loading failures
+- **Summary Tables**: Clean, formatted results display
+
+#### **Test Execution Commands**
+```bash
+# Run all tests with new structure
+python run_all_tests.py
+
+# Run individual test files (returns standardized format)
+python individual_tests/test_basic_functionality.py
+```
+
+#### **Output Format**
+```
+🧪 Interview Platform Test Suite Runner
+============================================================
+
+📁 Found 23 test files
+
+[ 1/23] Running test_basic_functionality.py... ✅ 14/14
+[ 2/23] Running test_session_management.py... ✅ 35/35
+[ 3/23] Running test_template_building.py... ❌ 18/20
+    💥 Template deletion permission denied
+    💥 Public template visibility issue
+
+📊 Test Results Summary
+======================================================================
+Test Name                                Pass Rate  Results      Status
+----------------------------------------------------------------------
+Basic Functionality                        100.0%    14/14        ✅ PASS
+Session Management                         100.0%    35/35        ✅ PASS
+Template Building                           90.0%    18/20        ❌ FAIL
+----------------------------------------------------------------------
+OVERALL RESULTS                             96.4%   173/179       ❌ FAIL
+======================================================================
+
+🎯 Final Results
+   Total Tests: 179
+   Passed: 173
+   Failed: 6
+   Pass Rate: 96.4%
+   Duration: 45.3s
+```
+
 ### **Automated Test Runner**
 - Single command execution: `python run_all_tests.py`
-- Comprehensive result reporting
-- Color-coded output for clarity
+- Dynamic test file discovery
+- Minimal output for passed tests, detailed errors for failures
+- Timeout protection and graceful error handling
 - Performance timing measurements
 
 ### **Test Result Analysis**
-- Pass/fail statistics per category
-- Overall system health assessment
-- Performance benchmarking
-- Detailed failure reporting
+- Pass/fail statistics per category with exact test counts
+- Real-time progress indication during execution
+- Overall system health assessment with detailed breakdowns
+- Performance benchmarking with execution timing
+- Clean summary tables for easy result interpretation
 
 ### **Continuous Integration Ready**
 - Docker-compatible test environment
-- Environment variable configuration
+- Environment variable configuration (`TESTING=true`, `TEST_MODE=1`)
 - Automated cleanup procedures
-- Exit code reporting for CI/CD
+- Exit code reporting for CI/CD (0 = success, 1 = failures)
+- Standardized test result format for automated parsing
 
 This comprehensive testing approach ensures the Interview Process Assistant meets all project guidelines requirements for production-ready software with robust error handling, security measures, and scalability features.
