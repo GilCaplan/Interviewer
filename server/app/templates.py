@@ -6,6 +6,7 @@ import datetime
 import uuid
 from .auth import token_required
 from .config import Config
+from .rate_limiter import rate_limit
 
 templates_bp = Blueprint('templates', __name__)
 
@@ -137,6 +138,7 @@ def validate_question_data(question_data, is_update=False):
 
 # Create a new template
 @templates_bp.route('/api/templates', methods=['POST'])
+@rate_limit('template_create', 20, 3600, per_user=True)  # 20 template creations per hour per user
 @token_required
 def create_template(user):
     try:
@@ -359,6 +361,7 @@ def update_template(user, template_id):
 
 # Add question to template
 @templates_bp.route('/api/templates/<template_id>/questions', methods=['POST'])
+@rate_limit('question_create', 200, 3600, per_user=True)  # 200 questions per hour per user
 @token_required
 def add_question_to_template(user, template_id):
     try:
@@ -428,6 +431,7 @@ def add_question_to_template(user, template_id):
 
 # Update question in template
 @templates_bp.route('/api/templates/<template_id>/questions/<question_id>', methods=['PUT'])
+@rate_limit('question_create', 200, 3600, per_user=True)  # 200 question updates per hour per user
 @token_required
 def update_question_in_template(user, template_id, question_id):
     try:
@@ -565,6 +569,7 @@ def get_question_types(user):
 
 # Delete template
 @templates_bp.route('/api/templates/<template_id>', methods=['DELETE'])
+@rate_limit('heavy_operation', 10, 600, per_user=True)  # 10 template deletions per 10 minutes per user
 @token_required
 def delete_template(user, template_id):
     try:
@@ -587,6 +592,7 @@ def delete_template(user, template_id):
 
 # Find and remove duplicate templates
 @templates_bp.route('/api/templates/cleanup-duplicates', methods=['POST'])
+@rate_limit('heavy_operation', 10, 600, per_user=True)  # 10 cleanup operations per 10 minutes per user
 @token_required
 def cleanup_duplicate_templates(user):
     try:

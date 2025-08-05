@@ -159,7 +159,7 @@ def run_single_test(test_file_path):
                     else:
                         # Check for failure indicators
                         if 'FAILED' in output_upper or 'ERROR' in output_upper:
-                            passed, total = 0, 1
+                            passed, total = 0, 12
                             errors = [line for line in lines if '❌' in line or 'FAILED' in line or 'ERROR' in line][:3]
                         else:
                             # Default case - assume minimal success

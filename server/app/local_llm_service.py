@@ -78,8 +78,7 @@ class LocalLLMService:
         self.pipeline = None
         self.is_initialized = False
         
-        # Create models directory
-        Path(self.model_path).parent.mkdir(parents=True, exist_ok=True)
+        # Models directory will be created when needed (in download_model or initialize)
         
         # Setup logging
         logging.basicConfig(level=logging.INFO)
@@ -122,6 +121,9 @@ class LocalLLMService:
             return False
         
         try:
+            # Create models directory when actually downloading
+            Path(self.model_path).parent.mkdir(parents=True, exist_ok=True)
+            
             self.logger.info(f"📥 Downloading {self.model_name}...")
             self.logger.info("This may take several minutes for the first download...")
             

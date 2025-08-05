@@ -522,6 +522,7 @@ def create_session(user):
 
 # Join a session
 @sessions_bp.route('/api/sessions/join/<session_code>', methods=['POST'])
+@rate_limit('general', 1000, 3600, per_user=True)  # 1000 join attempts per hour per user
 @token_required
 def join_session(user, session_code):
     try:
@@ -620,6 +621,7 @@ def become_host(user, session_id):
 
 # Get LLM generated question
 @sessions_bp.route('/api/sessions/<session_id>/llm-question', methods=['POST'])
+@rate_limit('llm', 30, 3600, per_user=True)  # 30 LLM requests per hour per user
 @token_required
 def get_llm_question(user, session_id):
     try:
@@ -669,6 +671,7 @@ def get_llm_question(user, session_id):
 
 # User submits their own question
 @sessions_bp.route('/api/sessions/<session_id>/add-question', methods=['POST'])
+@rate_limit('question_create', 200, 3600, per_user=True)  # 200 questions per hour per user
 @token_required
 def add_user_question(user, session_id):
     try:
@@ -715,6 +718,7 @@ def add_user_question(user, session_id):
 
 # Send chat message
 @sessions_bp.route('/api/sessions/<session_id>/chat', methods=['POST'])
+@rate_limit('general', 1000, 3600, per_user=True)  # 1000 chat messages per hour per user
 @token_required
 def send_chat_message(user, session_id):
     try:
@@ -799,6 +803,7 @@ def get_session_data(user, session_id):
 
 # Approve/reject questions (host only)
 @sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/approve', methods=['POST'])
+@rate_limit('general', 1000, 3600, per_user=True)  # 1000 approvals per hour per user
 @token_required
 def approve_question(user, session_id, question_id):
     try:
@@ -902,6 +907,7 @@ def list_current_sessions(user):
 
 # Start building a specific question number
 @sessions_bp.route('/api/sessions/<session_id>/questions/<int:question_number>/start', methods=['POST'])
+@rate_limit('general', 1000, 3600, per_user=True)  # 1000 question starts per hour per user
 @token_required
 def start_question_building(user, session_id, question_number):
     try:
@@ -992,6 +998,7 @@ def start_question_building(user, session_id, question_number):
 
 # Update question content (collaborative editing)
 @sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/update', methods=['PUT'])
+@rate_limit('question_create', 200, 3600, per_user=True)  # 200 question updates per hour per user
 @token_required
 def update_question_content(user, session_id, question_id):
     try:
@@ -1079,6 +1086,7 @@ def update_question_content(user, session_id, question_id):
 
 # Generate LLM suggestion for specific question field
 @sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/llm-suggest', methods=['POST'])
+@rate_limit('llm', 30, 3600, per_user=True)  # 30 LLM suggestions per hour per user
 @token_required
 def generate_llm_suggestion(user, session_id, question_id):
     try:
@@ -1337,6 +1345,7 @@ def add_collaboration_note(user, session_id, question_id):
 
 # Add field suggestion (for non-hosts to suggest field changes)
 @sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/suggest', methods=['POST'])
+@rate_limit('general', 1000, 3600, per_user=True)  # 1000 suggestions per hour per user
 @token_required
 def add_field_suggestion(user, session_id, question_id):
     try:
@@ -1577,6 +1586,7 @@ def get_suggestion_history(user, session_id):
 
 # Finalize question (move from queue to ready questions)
 @sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/finalize', methods=['POST'])
+@rate_limit('general', 1000, 3600, per_user=True)  # 1000 finalizations per hour per user
 @token_required
 def finalize_question(user, session_id, question_id):
     try:
@@ -1703,6 +1713,7 @@ def finalize_question(user, session_id, question_id):
 
 # Convert session to template
 @sessions_bp.route('/api/sessions/<session_id>/convert-to-template', methods=['POST'])
+@rate_limit('template_create', 20, 3600, per_user=True)  # 20 template conversions per hour per user
 @token_required
 def convert_session_to_template(user, session_id):
     try:
@@ -1868,6 +1879,7 @@ def check_template_conflicts(user, session_id):
 
 # Update session mode/visibility settings
 @sessions_bp.route('/api/sessions/<session_id>/settings', methods=['PUT'])
+@rate_limit('general', 1000, 3600, per_user=True)  # 1000 settings updates per hour per user
 @token_required
 def update_session_settings(user, session_id):
     try:
@@ -1960,6 +1972,7 @@ def get_session_participants(user, session_id):
 
 # General LLM chat endpoint for session
 @sessions_bp.route('/api/sessions/<session_id>/llm-chat', methods=['POST'])
+@rate_limit('llm', 30, 3600, per_user=True)  # 30 LLM chat requests per hour per user
 @token_required
 def llm_chat(user, session_id):
     try:
@@ -2088,6 +2101,7 @@ def get_chat_history(user, session_id):
 
 # Delete entire session (host only)
 @sessions_bp.route('/api/sessions/<session_id>', methods=['DELETE'])
+@rate_limit('heavy_operation', 10, 600, per_user=True)  # 10 session deletions per 10 minutes per user
 @token_required
 def delete_session(user, session_id):
     try:
@@ -2262,6 +2276,7 @@ def cleanup_user_sessions(user):
 
 # Reset session to fresh state (clear all template data)
 @sessions_bp.route('/api/sessions/<session_id>/reset', methods=['POST'])
+@rate_limit('heavy_operation', 10, 600, per_user=True)  # 10 session resets per 10 minutes per user
 @token_required
 def reset_session(user, session_id):
     try:

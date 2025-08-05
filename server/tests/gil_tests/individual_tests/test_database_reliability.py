@@ -24,9 +24,19 @@ try:
     from pymongo import MongoClient
     from pymongo.errors import ServerSelectionTimeoutError, ConnectionFailure
     PYMONGO_AVAILABLE = True
+    
+    # Test if MongoDB is actually running
+    try:
+        test_client = MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=2000)
+        test_client.admin.command('ping')
+        MONGODB_RUNNING = True
+        test_client.close()
+    except:
+        MONGODB_RUNNING = False
+        
 except ImportError:
-    print("Warning: pymongo not available, running offline database logic tests")
     PYMONGO_AVAILABLE = False
+    MONGODB_RUNNING = False
     
     # Mock pymongo classes for offline testing
     class ConnectionFailure(Exception):
@@ -592,6 +602,11 @@ class DatabaseReliabilityTestSuite:
 
 def run_offline_database_tests():
     """Run database logic tests that don't require a server"""
+    if PYMONGO_AVAILABLE and not MONGODB_RUNNING:
+        log("⚠️  MongoDB not running - testing database logic offline", Colors.YELLOW)
+    elif not PYMONGO_AVAILABLE:
+        log("⚠️  PyMongo not available - testing database logic offline", Colors.YELLOW)
+    
     log("🔒 RUNNING OFFLINE DATABASE LOGIC TESTS", Colors.BOLD + Colors.CYAN)
     log("=" * 50, Colors.CYAN)
     
@@ -700,7 +715,7 @@ def run_offline_database_tests():
 
 def run_all_tests():
     """Run all tests and return standardized format"""
-    if PYMONGO_AVAILABLE and find_running_server():
+    if PYMONGO_AVAILABLE and MONGODB_RUNNING and find_running_server():
         # Run full server tests
         test_suite = DatabaseReliabilityTestSuite()
         return test_suite.run_all_tests()
