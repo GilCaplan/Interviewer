@@ -9,10 +9,11 @@ import sys
 import subprocess
 import time
 from pathlib import Path
-from test_utils import setup_test_environment, Colors, log
 
 # Set up test environment
-setup_test_environment()
+os.environ["TESTING"] = "true"
+os.environ["TEST_MODE"] = "1"
+os.environ["FLASK_ENV"] = "testing"
 
 def run_test_category(test_file, category_name):
     """Run a specific test category"""
@@ -43,8 +44,8 @@ def main():
         ("test_template_building.py", "Template Building"),
         ("test_session_management.py", "Session Management"),
         ("test_session_collaboration.py", "Session Collaboration"),
-        ("test_websocket_collaboration.py", "WebSocket Collaboration"),
         ("test_scaling_and_concurrent_users.py", "Scaling & Concurrency"),
+        ("test_websocket_collaboration.py", "WebSocket Collaboration"),
         ("test_llm_integration.py", "LLM Integration"),
         ("test_security_authentication_consolidated.py", "Security Tests"),
         ("test_system_end_to_end.py", "System/E2E Tests"),
