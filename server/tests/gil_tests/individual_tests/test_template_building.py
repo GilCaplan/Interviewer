@@ -23,7 +23,6 @@ def find_server_url():
     
     for url in urls_to_try:
         try:
-            import requests
             response = requests.get(f'{url}/api/health', timeout=3)
             if response.status_code == 200:
                 return url

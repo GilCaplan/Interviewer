@@ -61,6 +61,17 @@ htmlcov/
 .coverage
 .coverage.*
 
+# Testing
+.pytest_cache/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+_trial_temp/
+test.log
+
 # Docker
 docker-compose.override.yml
 
