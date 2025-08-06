@@ -20,9 +20,9 @@ from datetime import datetime
 # Configuration
 API_URL = "http://localhost:5001"
 WS_URL = "http://localhost:5001"
-NUM_CONCURRENT_USERS = 100
-TEST_DURATION = 60  # seconds
-MESSAGE_FREQUENCY = 5  # messages per second per user
+NUM_CONCURRENT_USERS = 1000
+TEST_DURATION = 120  # seconds
+MESSAGE_FREQUENCY = 2  # messages per second per user (reduced frequency for more users)
 
 class Colors:
     GREEN = '\033[92m'

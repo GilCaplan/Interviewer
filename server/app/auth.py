@@ -4,17 +4,12 @@ import datetime
 import secrets
 import uuid
 from functools import wraps
-from pymongo import MongoClient
 from .config import Config
-from .rate_limiter import rate_limit
+from .database import users_collection, sessions_collection
+from .high_scale_optimizer import extreme_scale_protection
+from .ultra_scale_config import ultra_scale_protection
 
 auth = Blueprint('auth', __name__)
-
-# Connect to MongoDB
-client = MongoClient(Config.MONGO_URI)
-db = client.get_default_database()
-users_collection = db.users
-sessions_collection = db.sessions
 
 
 # Get the current user from JWT token
@@ -187,7 +182,7 @@ def register():
 
 # Login route with rate limiting
 @auth.route('/api/auth/login', methods=['POST'])
-@rate_limit('auth', 10, 900, per_user=False)  # 10 attempts per 15 minutes per client
+@ultra_scale_protection  # Ultra-scale optimization for 1500+ users
 def login():
     try:
         # Basic validation

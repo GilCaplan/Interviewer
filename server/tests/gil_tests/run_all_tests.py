@@ -77,9 +77,15 @@ def run_single_test(test_file_path):
             def timeout_handler(signum, frame):
                 raise TimeoutError("Test execution timed out")
             
-            # Set 30 second timeout per test
+            # Set timeout per test - much longer for extreme scaling tests
+            if '1000' in test_name or 'extreme_scaling' in test_name.lower():
+                timeout_duration = 600  # 10 minutes for 1000-user tests
+            elif 'scaling' in test_name.lower():
+                timeout_duration = 300  # 5 minutes for other scaling tests
+            else:
+                timeout_duration = 30   # 30 seconds for regular tests
             signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(30)
+            signal.alarm(timeout_duration)
             
             try:
                 # Run the test

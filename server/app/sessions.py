@@ -1,7 +1,6 @@
 # server/app/sessions.py
 from flask import Blueprint, request, jsonify, current_app
 from flask_socketio import emit, join_room, leave_room
-from pymongo import MongoClient
 import datetime
 import secrets
 import string
@@ -13,18 +12,42 @@ import hashlib
 from .auth import token_required
 from .config import Config
 from .templates import QUESTION_TYPES, validate_question_data
+from .database import sessions_collection, questions_collection, templates_collection
+from .crash_prevention import CrashPrevention, safe_execute, safe_database_operation
 from .llm_service import LLMService
-from .rate_limiter import rate_limit
+from .performance_config import PerformanceOptimizer
+from .high_scale_optimizer import extreme_scale_protection
+from .ultra_scale_config import ultra_scale_protection
 
 sessions_bp = Blueprint('sessions', __name__)
 
-# MongoDB connection
-client = MongoClient(Config.MONGO_URI)
-db = client.get_default_database()
-sessions_collection = db.simple_sessions  # Fixed collection name
-messages_collection = db.session_messages
-questions_collection = db.session_questions
-users_collection = db.users
+# Apply intelligent throttling for high-load endpoints
+@sessions_bp.before_request
+def intelligent_throttling():
+    """Apply smart throttling based on server load"""
+    import psutil
+    import time
+    
+    # Get current system load
+    cpu_percent = psutil.cpu_percent(interval=0.1)
+    memory_percent = psutil.virtual_memory().percent
+    
+    # Dynamic throttling based on load
+    if cpu_percent > 80 or memory_percent > 85:
+        time.sleep(0.5)  # Higher delay under heavy load
+    elif cpu_percent > 60 or memory_percent > 70:
+        time.sleep(0.2)  # Moderate delay under medium load
+    elif cpu_percent > 40 or memory_percent > 50:
+        time.sleep(0.1)  # Small delay under light load
+
+# Use centralized database connections with crash protection
+from .database import users_collection
+
+# Get additional collections safely
+messages_collection = safe_execute(
+    lambda: users_collection.database.session_messages, 
+    default_return=None
+)
 
 # Mock LLM responses for different subjects
 MOCK_LLM_RESPONSES = {
@@ -451,10 +474,14 @@ def mock_llm_generate_question(subject="general", context="", question_type="ope
 
 # Create a new session with rate limiting
 @sessions_bp.route('/api/sessions/create', methods=['POST'])
-@rate_limit('session_create', 50, 3600, per_user=True)  # 50 sessions per hour per user
+@ultra_scale_protection  # Ultra-scale optimization for 1500+ users
 @token_required
+@CrashPrevention.circuit_breaker('session_create', failure_threshold=100, recovery_timeout=10)  # Ultra-resilient for 1500+ load
 def create_session(user):
     try:
+        # Resource monitoring for crash prevention
+        CrashPrevention.monitor_resources()
+        
         # Basic validation
         if not request.is_json:
             return jsonify({"error": "Content-Type must be application/json"}), 400
@@ -524,9 +551,13 @@ def create_session(user):
 @sessions_bp.route('/api/sessions/join/<session_code>', methods=['POST'])
 @rate_limit('general', 1000, 3600, per_user=True)  # 1000 join attempts per hour per user
 @token_required
+@CrashPrevention.circuit_breaker('session_join', failure_threshold=50, recovery_timeout=20)
 def join_session(user, session_code):
     try:
-        session = sessions_collection.find_one({"session_code": session_code.upper()})
+        session = safe_database_operation(
+            lambda: sessions_collection.find_one({"session_code": session_code.upper()}),
+            default_return=None
+        )
 
         if not session:
             return jsonify({"error": "Session not found"}), 404

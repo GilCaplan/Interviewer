@@ -365,11 +365,11 @@ class ScalingTestSuite:
         log("\n🤝 Testing Multiple Hosts with Shared Sessions", Colors.BOLD + Colors.YELLOW)
         log("-" * 60, Colors.YELLOW)
         
-        # Create many hosts
-        hosts = self.create_test_users(200)
+        # Create extreme number of hosts
+        hosts = self.create_test_users(500)
         
-        self.assert_test(len(hosts) >= 150, "Multi-Host User Creation",
-                        f"Created {len(hosts)}/200 hosts")
+        self.assert_test(len(hosts) >= 400, "Multi-Host User Creation",
+                        f"Created {len(hosts)}/500 hosts")
         
         # First host creates a session, others join as participants then become hosts
         session_results = []
@@ -537,11 +537,11 @@ class ScalingTestSuite:
         log("\n🚀 Testing System Performance Under Load", Colors.BOLD + Colors.YELLOW)
         log("-" * 60, Colors.YELLOW)
         
-        # Create massive load: 200 users, each with their own session
-        load_users = self.create_test_users(200)
+        # Create extreme load: 1000 users, each with their own session
+        load_users = self.create_test_users(1000)
         
-        self.assert_test(len(load_users) >= 150, "Load Test User Creation",
-                        f"Created {len(load_users)}/200 users for load testing")
+        self.assert_test(len(load_users) >= 800, "Load Test User Creation",
+                        f"Created {len(load_users)}/1000 users for load testing")
         
         # Measure session creation time under load
         start_time = time.time()
@@ -568,9 +568,9 @@ class ScalingTestSuite:
             session_time = time.time() - session_start
             return True, questions_created, session_time
         
-        # Execute massive load test
+        # Execute massive load test with high concurrency
         load_results = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=500) as executor:
             futures = [executor.submit(create_loaded_session, user, i) 
                       for i, user in enumerate(load_users)]
             
@@ -590,10 +590,10 @@ class ScalingTestSuite:
         self.assert_test(total_questions >= len(load_users) * 3, "Load Test Question Creation",
                         f"{total_questions} questions created across all sessions")
         
-        self.assert_test(avg_session_time < 5.0, "Session Creation Performance",
+        self.assert_test(avg_session_time < 10.0, "Session Creation Performance",
                         f"Average session creation time: {avg_session_time:.2f}s")
         
-        self.assert_test(total_load_time < 15.0, "Overall Load Test Time",
+        self.assert_test(total_load_time < 60.0, "Overall Load Test Time",
                         f"Total load test completed in {total_load_time:.2f}s")
         
         return True

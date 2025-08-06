@@ -24,6 +24,21 @@ class Config:
     LLM_REQUESTS_PER_MINUTE = int(os.environ.get('LLM_REQUESTS_PER_MINUTE', '15'))
     LLM_REQUESTS_PER_DAY = int(os.environ.get('LLM_REQUESTS_PER_DAY', '1500'))
 
+    # High-Performance Scaling Configuration
+    MAX_CONCURRENT_CONNECTIONS = int(os.environ.get('MAX_CONCURRENT_CONNECTIONS', '2000'))
+    DATABASE_POOL_SIZE = int(os.environ.get('DATABASE_POOL_SIZE', '100'))
+    MAX_OVERFLOW = int(os.environ.get('MAX_OVERFLOW', '200'))
+    POOL_TIMEOUT = int(os.environ.get('POOL_TIMEOUT', '30'))
+    POOL_RECYCLE = int(os.environ.get('POOL_RECYCLE', '3600'))
+    
+    # Thread Pool Configuration
+    MAX_WORKERS = int(os.environ.get('MAX_WORKERS', '500'))
+    THREAD_POOL_SIZE = int(os.environ.get('THREAD_POOL_SIZE', '1000'))
+    
+    # Request Timeout Configuration
+    REQUEST_TIMEOUT = int(os.environ.get('REQUEST_TIMEOUT', '120'))
+    SOCKET_TIMEOUT = int(os.environ.get('SOCKET_TIMEOUT', '60'))
+
     # Logging configuration
     LOG_LEVEL = os.environ.get('LOG_LEVEL') or logging.INFO
 
