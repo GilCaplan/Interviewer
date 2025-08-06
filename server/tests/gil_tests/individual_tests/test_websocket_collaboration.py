@@ -18,11 +18,11 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 # Configuration
-API_URL = "http://localhost:5000"
-WS_URL = "http://localhost:5000"
-NUM_CONCURRENT_USERS = 8
+API_URL = "http://localhost:5001"
+WS_URL = "http://localhost:5001"
+NUM_CONCURRENT_USERS = 100
 TEST_DURATION = 60  # seconds
-MESSAGE_FREQUENCY = 2  # messages per second per user
+MESSAGE_FREQUENCY = 5  # messages per second per user
 
 class Colors:
     GREEN = '\033[92m'
@@ -30,6 +30,7 @@ class Colors:
     YELLOW = '\033[93m'
     BLUE = '\033[94m'
     CYAN = '\033[96m'
+    WHITE = '\033[97m'
     BOLD = '\033[1m'
     END = '\033[0m'
 
@@ -257,12 +258,27 @@ class WebSocketStressTest:
         for i in range(NUM_CONCURRENT_USERS):
             user = WebSocketTestUser(i)
             if user.login():
-                self.users.append(user)
+                # Join the session as a participant
+                if self.join_user_to_session(user):
+                    self.users.append(user)
+                else:
+                    log(f"❌ Failed to join user {i} to session", Colors.RED)
             else:
                 log(f"❌ Failed to create user {i}", Colors.RED)
 
         log(f"✅ Created {len(self.users)} users successfully", Colors.GREEN)
         return len(self.users) > 0
+
+    def join_user_to_session(self, user):
+        """Join a user to the test session"""
+        try:
+            headers = {"Authorization": f"Bearer {user.token}"}
+            response = requests.post(f"{API_URL}/api/sessions/join/{self.session_code}",
+                                   headers=headers)
+            return response.status_code == 200
+        except Exception as e:
+            log(f"❌ Failed to join user to session: {e}", Colors.RED)
+            return False
 
     def connect_users_to_websocket(self):
         """Connect all users to WebSocket and join session"""
@@ -485,10 +501,14 @@ class WebSocketStressTest:
         finally:
             self.cleanup()
 
-if __name__ == "__main__":
+def test_websocket_collaboration():
+    """
+    Test function for WebSocket collaboration functionality
+    Returns True if test passes, False if it fails
+    """
     print(f"\n{Colors.BOLD}{Colors.CYAN}")
     print("╔══════════════════════════════════════════════════════════╗")
-    print("║          WEBSOCKET REAL-TIME STRESS TEST SUITE           ║")
+    print("║          WEBSOCKET COLLABORATION TEST                    ║")
     print("║                                                          ║")
     print(f"║  Users: {NUM_CONCURRENT_USERS:<3} | Duration: {TEST_DURATION:<3}s | Frequency: {MESSAGE_FREQUENCY}/s per user  ║")
     print("╚══════════════════════════════════════════════════════════╝")
@@ -498,6 +518,13 @@ if __name__ == "__main__":
     success = test.run_full_test()
 
     if success:
-        log("\n🎉 WebSocket stress test completed successfully!", Colors.GREEN + Colors.BOLD)
+        log("\n✅ WebSocket collaboration test PASSED!", Colors.GREEN + Colors.BOLD)
+        return True
     else:
-        log("\n💥 WebSocket stress test failed!", Colors.RED + Colors.BOLD)
+        log("\n❌ WebSocket collaboration test FAILED!", Colors.RED + Colors.BOLD)
+        return False
+
+if __name__ == "__main__":
+    import sys
+    success = test_websocket_collaboration()
+    sys.exit(0 if success else 1)

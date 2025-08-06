@@ -6,7 +6,6 @@ import time
 from datetime import datetime, timedelta
 from .config import Config
 from .rate_limiter import rate_limit
-from .local_llm_service import local_llm_service
 
 # Rate limiting for free tier
 class RateLimiter:
@@ -54,8 +53,8 @@ else:
 class LLMService:
     @staticmethod
     def is_available():
-        """Check if any LLM service is available (Gemini or Local)"""
-        return (GEMINI_API_KEY is not None and model is not None) or local_llm_service.is_available()
+        """Check if any LLM service is available (Gemini only)"""
+        return GEMINI_API_KEY is not None and model is not None
     
     @staticmethod
     def get_llm_status():
@@ -65,7 +64,6 @@ class LLMService:
                 "available": GEMINI_API_KEY is not None and model is not None,
                 "has_api_key": GEMINI_API_KEY is not None
             },
-            "local_llm": local_llm_service.get_model_info(),
             "fallback": "mock_responses"
         }
     
@@ -74,8 +72,7 @@ class LLMService:
         """
         Generate a question using best available LLM service:
         1. Gemini API (if available and not rate limited)
-        2. Local Llama model (if available)
-        3. Mock responses (fallback)
+        2. Mock responses (fallback)
         """
         # Try Gemini first if available
         if GEMINI_API_KEY and model:
@@ -105,15 +102,6 @@ class LLMService:
                 print(f"Gemini rate limit exceeded: {error_msg}")
                 # Continue to next fallback
         
-        # Try Local Llama model
-        if local_llm_service.is_available():
-            try:
-                result = local_llm_service.generate_question(question_type, subject, context)
-                result["llm_source"] = "local_llama"
-                return result
-            except Exception as e:
-                print(f"Error with local LLM: {e}")
-                # Continue to fallback
         
         # Final fallback to mock
         result = LLMService._mock_generate_question(subject, context, question_type, question_number)
@@ -403,19 +391,6 @@ class LLMService:
                 print(f"Gemini rate limit exceeded: {error_msg}")
                 # Continue to next fallback
         
-        # Try Local Llama model
-        if local_llm_service.is_available():
-            try:
-                response_text = local_llm_service.chat_with_context(message, context)
-                return {
-                    "response": response_text,
-                    "generated_by": "llama-local",
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "llm_source": "local_llama"
-                }
-            except Exception as e:
-                print(f"Error with local LLM chat: {e}")
-                # Continue to fallback
         
         # Final fallback to mock
         return {

@@ -9,15 +9,6 @@ set -e
 echo "🚀 Starting Interview Platform with LLM Support"
 echo "========================================================"
 
-# Function to check if model is downloaded
-check_model_downloaded() {
-    local model_path="${LOCAL_MODEL_PATH:-./models/llama-1b-instruct}"
-    if [[ -f "$model_path/config.json" && -f "$model_path/tokenizer.json" ]]; then
-        return 0  # Model exists
-    else
-        return 1  # Model missing
-    fi
-}
 
 # Function to display LLM status
 display_llm_status() {
@@ -31,19 +22,20 @@ display_llm_status() {
         echo "❌ Gemini API: No API key provided"
     fi
     
-    # Check Local Model
-    if [[ "$USE_LOCAL_MODEL" == "true" ]]; then
-        if check_model_downloaded; then
-            echo "✅ Local LLM: Model downloaded and ready"
-        else
-            echo "⚠️ Local LLM: Model not downloaded (will download on first use)"
-        fi
-    else
-        echo "❌ Local LLM: Disabled (USE_LOCAL_MODEL=false)"
-    fi
     
     echo "🔄 Fallback: Mock responses always available"
     echo ""
+}
+
+# Function to install additional dependencies
+install_dependencies() {
+    echo "📦 Installing additional dependencies..."
+    
+    # Install SocketIO for WebSocket collaboration tests
+    if [[ -f "./install_socketio.sh" ]]; then
+        echo "🔌 Installing SocketIO dependencies..."
+        bash ./install_socketio.sh
+    fi
 }
 
 # Function to wait for dependencies
@@ -79,22 +71,6 @@ else:
     fi
 }
 
-# Function to pre-warm local LLM (optional)
-prewarm_local_llm() {
-    if [[ "$USE_LOCAL_MODEL" == "true" && "$PREWARM_LOCAL_MODEL" == "true" ]]; then
-        echo "🔥 Pre-warming local LLM model..."
-        python -c "
-from app.local_llm_service import local_llm_service
-try:
-    if local_llm_service.initialize_model():
-        print('✅ Local LLM pre-warmed successfully')
-    else:
-        print('⚠️ Local LLM pre-warm failed - will initialize on first use')
-except Exception as e:
-    print(f'⚠️ Local LLM pre-warm error: {e}')
-" || echo "⚠️ Pre-warm failed - continuing anyway"
-    fi
-}
 
 # Main startup sequence
 main() {
@@ -105,11 +81,11 @@ main() {
     # Display LLM configuration
     display_llm_status
     
+    # Install additional dependencies
+    install_dependencies
+    
     # Wait for dependencies
     wait_for_dependencies
-    
-    # Pre-warm model if requested
-    prewarm_local_llm
     
     echo "🎯 Starting Flask application..."
     echo "========================================================"

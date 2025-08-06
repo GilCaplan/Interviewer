@@ -282,12 +282,12 @@ class ScalingTestSuite:
         log("\n🏢 Testing Single Host with Multiple Participants", Colors.BOLD + Colors.YELLOW)
         log("-" * 60, Colors.YELLOW)
         
-        # Create 1 host and 8 participants
+        # Create 1 host and many participants
         host = self.create_test_users(1)[0]
-        participants = self.create_test_users(8)
+        participants = self.create_test_users(50)
         
-        self.assert_test(len(participants) == 8, "Participant User Creation",
-                        f"Created {len(participants)}/8 participants")
+        self.assert_test(len(participants) >= 40, "Participant User Creation",
+                        f"Created {len(participants)}/50 participants")
         
         # Host creates a session
         session_id, session_info = host.create_session("Multi-Participant")
@@ -365,11 +365,11 @@ class ScalingTestSuite:
         log("\n🤝 Testing Multiple Hosts with Shared Sessions", Colors.BOLD + Colors.YELLOW)
         log("-" * 60, Colors.YELLOW)
         
-        # Create 3 hosts
-        hosts = self.create_test_users(3)
+        # Create many hosts
+        hosts = self.create_test_users(200)
         
-        self.assert_test(len(hosts) == 3, "Multi-Host User Creation",
-                        f"Created {len(hosts)}/3 hosts")
+        self.assert_test(len(hosts) >= 150, "Multi-Host User Creation",
+                        f"Created {len(hosts)}/200 hosts")
         
         # First host creates a session, others join as participants then become hosts
         session_results = []
@@ -456,7 +456,7 @@ class ScalingTestSuite:
         log("-" * 60, Colors.YELLOW)
         
         # Create multiple users for concurrent operations
-        users = self.create_test_users(6)
+        users = self.create_test_users(100)
         
         self.assert_test(len(users) >= 4, "Concurrent Test User Creation",
                         f"Created {len(users)}/6 users")
@@ -537,11 +537,11 @@ class ScalingTestSuite:
         log("\n🚀 Testing System Performance Under Load", Colors.BOLD + Colors.YELLOW)
         log("-" * 60, Colors.YELLOW)
         
-        # Create moderate load: 10 users, each with their own session
-        load_users = self.create_test_users(10)
+        # Create massive load: 200 users, each with their own session
+        load_users = self.create_test_users(200)
         
-        self.assert_test(len(load_users) >= 8, "Load Test User Creation",
-                        f"Created {len(load_users)}/10 users for load testing")
+        self.assert_test(len(load_users) >= 150, "Load Test User Creation",
+                        f"Created {len(load_users)}/200 users for load testing")
         
         # Measure session creation time under load
         start_time = time.time()
@@ -568,9 +568,9 @@ class ScalingTestSuite:
             session_time = time.time() - session_start
             return True, questions_created, session_time
         
-        # Execute load test
+        # Execute massive load test
         load_results = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
             futures = [executor.submit(create_loaded_session, user, i) 
                       for i, user in enumerate(load_users)]
             

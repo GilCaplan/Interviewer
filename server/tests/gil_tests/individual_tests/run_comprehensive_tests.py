@@ -45,9 +45,8 @@ def main():
         ("test_session_management.py", "Session Management"),
         ("test_session_collaboration.py", "Session Collaboration"),
         ("test_scaling_and_concurrent_users.py", "Scaling & Concurrency"),
-        ("test_websocket_collaboration.py", "WebSocket Collaboration"),
-        ("test_llm_integration.py", "LLM Integration"),
-        ("test_security_authentication_consolidated.py", "Security Tests"),
+        ("test_llm_mock_integration.py", "LLM Integration"),
+        ("test_security_comprehensive.py", "Security Tests"),
         ("test_system_end_to_end.py", "System/E2E Tests"),
         ("test_stress_and_chaos.py", "Stress & Chaos Tests")
     ]

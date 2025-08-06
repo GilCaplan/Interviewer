@@ -2,8 +2,8 @@ Flask==2.3.3
 Flask-CORS==4.0.0
 Flask-SocketIO==5.3.6
 pymongo==4.5.0
-python-socketio[client]==5.8.0
-python-engineio==4.9.0
+python-socketio[client]==5.13.0
+python-engineio==4.12.2
 PyJWT==2.8.0
 python-dotenv==1.0.0
 openai==0.28.1
@@ -13,9 +13,3 @@ eventlet==0.33.3
 gunicorn==21.2.0
 redis==5.0.1
 
-# Local LLM Support
-torch>=2.0.0
-transformers>=4.35.0
-accelerate>=0.20.0
-huggingface-hub>=0.16.0
-bitsandbytes>=0.41.0
