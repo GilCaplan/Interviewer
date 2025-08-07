@@ -76,25 +76,35 @@ class CriticalEdgeCasesTestSuite:
                 log(f"   {details}", Colors.RED)
     
     def setup_test_user(self):
-        """Create a single test user for all tests to avoid rate limiting"""
+        """Create a single test user for all tests with retry logic"""
         username = f"edge_test_user_{uuid.uuid4().hex[:8]}"
-        try:
-            response = requests.post(f"{API_URL}/api/auth/login",
-                                   json={"username": username},
-                                   timeout=10)
-            
-            if response.status_code == 200:
-                auth_data = response.json()
-                self.test_user = {
-                    "username": username,
-                    "token": auth_data.get("token"),
-                    "user_id": auth_data.get("user", {}).get("user_id")
-                }
-                return True
-            return False
-        except Exception as e:
-            log(f"Test user setup failed: {e}", Colors.RED)
-            return False
+        
+        for attempt in range(3):  # Try up to 3 times
+            try:
+                response = requests.post(f"{API_URL}/api/auth/login",
+                                       json={"username": username},
+                                       timeout=15)
+                
+                if response.status_code == 200:
+                    auth_data = response.json()
+                    self.test_user = {
+                        "username": username,
+                        "token": auth_data.get("token"),
+                        "user_id": auth_data.get("user", {}).get("user_id")
+                    }
+                    return True
+                else:
+                    log(f"User setup attempt {attempt + 1}: Login returned {response.status_code}", Colors.YELLOW)
+                    if attempt < 2:  # Don't sleep after last attempt
+                        time.sleep(2)
+                        
+            except Exception as e:
+                log(f"User setup attempt {attempt + 1}: Exception {type(e).__name__}", Colors.YELLOW)
+                if attempt < 2:  # Don't sleep after last attempt
+                    time.sleep(2)
+        
+        log("Failed to setup test user after 3 attempts", Colors.RED)
+        return False
     
     def test_boundary_conditions(self):
         log("\n📏 Testing Boundary Conditions", Colors.BOLD + Colors.YELLOW)

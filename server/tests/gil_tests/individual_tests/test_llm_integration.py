@@ -125,33 +125,40 @@ class LLMIntegrationTestSuite:
             return False
     
     def setup_test_user(self):
-        """Set up test user and session"""
+        """Set up test user and session with retry logic"""
         log("\n🏗️ Setting Up Test Environment", Colors.BOLD + Colors.YELLOW)
         log("-" * 40, Colors.YELLOW)
         
-        # Create test user
+        # Create test user with retry logic
         username = f"llm_test_user_{str(uuid.uuid4())[:8]}"
         login_data = {"username": username}
         
-        try:
-            response = requests.post(f"{API_URL}/api/auth/login", 
-                                   json=login_data, timeout=10)
-            
-            if response.status_code == 200:
-                user_data = response.json()
-                self.test_user = {
-                    "user_id": user_data.get("user_id"),
-                    "username": username,
-                    "token": user_data.get("token"),
-                    "headers": {"Authorization": f"Bearer {user_data.get('token')}"}
-                }
-                user_created = True
-                log(f"   User: {username}", Colors.WHITE)
-            else:
-                user_created = False
+        user_created = False
+        for attempt in range(3):  # Try up to 3 times
+            try:
+                response = requests.post(f"{API_URL}/api/auth/login", 
+                                       json=login_data, timeout=15)
                 
-        except Exception:
-            user_created = False
+                if response.status_code == 200:
+                    user_data = response.json()
+                    self.test_user = {
+                        "user_id": user_data.get("user_id"),
+                        "username": username,
+                        "token": user_data.get("token"),
+                        "headers": {"Authorization": f"Bearer {user_data.get('token')}"}
+                    }
+                    user_created = True
+                    log(f"   User: {username}", Colors.WHITE)
+                    break
+                else:
+                    log(f"   Attempt {attempt + 1}: Login returned {response.status_code}", Colors.YELLOW)
+                    if attempt < 2:  # Don't sleep after last attempt
+                        time.sleep(2)  # Wait before retry
+                    
+            except Exception as e:
+                log(f"   Attempt {attempt + 1}: Exception {type(e).__name__}", Colors.YELLOW)
+                if attempt < 2:  # Don't sleep after last attempt
+                    time.sleep(2)  # Wait before retry
         
         self.assert_test(user_created, "Test User Creation",
                         f"User: {username}" if user_created else "Failed to create user")
@@ -159,27 +166,35 @@ class LLMIntegrationTestSuite:
         if not user_created:
             return False
         
-        # Create test session for LLM testing
+        # Create test session for LLM testing with retry logic
         session_data = {
             "session_name": "LLM Integration Test Session",
             "session_description": "Testing comprehensive LLM integration"
         }
         
-        try:
-            response = requests.post(f"{API_URL}/api/sessions/create",
-                                   json=session_data,
-                                   headers=self.test_user["headers"],
-                                   timeout=10)
-            
-            if response.status_code in [200, 201]:
-                session_info = response.json().get("session", {})
-                self.test_session_id = session_info.get("session_id")
-                session_created = self.test_session_id is not None
-            else:
-                session_created = False
+        session_created = False
+        for attempt in range(3):  # Try up to 3 times
+            try:
+                response = requests.post(f"{API_URL}/api/sessions/create",
+                                       json=session_data,
+                                       headers=self.test_user["headers"],
+                                       timeout=15)
                 
-        except Exception:
-            session_created = False
+                if response.status_code in [200, 201]:
+                    session_info = response.json().get("session", {})
+                    self.test_session_id = session_info.get("session_id")
+                    session_created = self.test_session_id is not None
+                    if session_created:
+                        break
+                else:
+                    log(f"   Session attempt {attempt + 1}: Returned {response.status_code}", Colors.YELLOW)
+                    if attempt < 2:  # Don't sleep after last attempt
+                        time.sleep(2)  # Wait before retry
+                    
+            except Exception as e:
+                log(f"   Session attempt {attempt + 1}: Exception {type(e).__name__}", Colors.YELLOW)
+                if attempt < 2:  # Don't sleep after last attempt
+                    time.sleep(2)  # Wait before retry
         
         self.assert_test(session_created, "LLM Test Session Creation",
                         f"Session ID: {self.test_session_id[:8]}..." if session_created else "Failed")

@@ -6,8 +6,9 @@ import uuid
 from functools import wraps
 from .config import Config
 from .database import users_collection, sessions_collection
-from .high_scale_optimizer import extreme_scale_protection
-from .ultra_scale_config import ultra_scale_protection
+# Production optimization imports removed for Docker-only setup
+from .password_utils import hash_session_password, verify_session_password
+from .rate_limiter import rate_limit
 
 auth = Blueprint('auth', __name__)
 
@@ -136,7 +137,7 @@ def register():
         user = {
             'username': username,
             'email': email,
-            'password': password,  # In production, hash this
+            'password': hash_session_password(password),
             'created_at': datetime.datetime.utcnow(),
             'user_id': str(uuid.uuid4()),
             'is_guest': False
@@ -182,7 +183,7 @@ def register():
 
 # Login route with rate limiting
 @auth.route('/api/auth/login', methods=['POST'])
-@ultra_scale_protection  # Ultra-scale optimization for 1500+ users
+# Production optimization decorator removed
 def login():
     try:
         # Basic validation
@@ -227,6 +228,14 @@ def login():
                 'is_guest': username.startswith('Guest_')
             }
             users_collection.insert_one(user)
+        else:
+            # If user exists and has a password (registered user), verify it
+            if user.get('password') and not user.get('is_guest', False):
+                provided_password = data.get('password', '')
+                if not provided_password:
+                    return jsonify({'message': 'Password required for registered user'}), 400
+                if not verify_session_password(provided_password, user['password']):
+                    return jsonify({'message': 'Invalid credentials'}), 401
 
         # Create session
         session_id = str(uuid.uuid4())

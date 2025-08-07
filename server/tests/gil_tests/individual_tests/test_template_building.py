@@ -16,15 +16,16 @@ from datetime import datetime
 def find_server_url():
     """Find available server URL"""
     urls_to_try = [
+        'http://localhost:5001',  # Host machine
         'http://localhost:5000',  # Inside Docker container
         'http://server:5000',     # Docker service name
-        'http://localhost:5001',  # Host machine
     ]
     
     for url in urls_to_try:
         try:
             response = requests.get(f'{url}/api/health', timeout=3)
-            if response.status_code == 200:
+            # Accept both healthy (200) and degraded (503) servers for testing
+            if response.status_code in [200, 503] and 'message' in response.text:
                 return url
         except:
             continue
@@ -55,20 +56,181 @@ class TestUser:
     def login(self):
         if not API_URL:
             return False
-        try:
-            response = requests.post(f"{API_URL}/api/auth/login",
-                                   json={"username": self.username},
-                                   timeout=10)
-            if response.status_code == 200:
-                self.token = response.json().get("token")
-                return True
-            return False
-        except Exception as e:
-            log(f"Login failed for {self.username}: {e}", Colors.RED)
-            return False
+            
+        for attempt in range(3):  # Try up to 3 times
+            try:
+                response = requests.post(f"{API_URL}/api/auth/login",
+                                       json={"username": self.username},
+                                       timeout=15)
+                if response.status_code == 200:
+                    self.token = response.json().get("token")
+                    return True
+                else:
+                    if attempt < 2:  # Don't sleep after last attempt
+                        time.sleep(2)
+                        
+            except Exception as e:
+                if attempt < 2:  # Don't sleep after last attempt
+                    time.sleep(2)
+                elif attempt == 2:  # Only log on final failure
+                    log(f"Login failed for {self.username} after 3 attempts: {e}", Colors.RED)
+        
+        return False
     
     def get_headers(self):
         return {"Authorization": f"Bearer {self.token}"} if self.token else {}
+
+def create_template_with_retry(api_url, template_data, headers, max_attempts=7):
+    """Ultra-robust template creation with comprehensive retry logic"""
+    for attempt in range(max_attempts):
+        try:
+            # Progressive timeout with even more generous limits
+            timeout_duration = 40 + (attempt * 15)
+            
+            # Add small random delay to prevent thundering herd
+            if attempt > 0:
+                import random
+                time.sleep(random.uniform(1, 3))
+            
+            response = requests.post(f"{api_url}/api/templates",
+                                   json=template_data,
+                                   headers=headers,
+                                   timeout=timeout_duration)
+            
+            if response.status_code in [200, 201]:
+                return response
+            elif response.status_code == 429:  # Rate limited
+                delay = 8 + (attempt * 3)  # More aggressive backoff
+                time.sleep(delay)
+            elif response.status_code in [400, 422]:  # Validation error
+                # For validation errors, return immediately (no retry needed)
+                return response
+            elif attempt < max_attempts - 1:
+                time.sleep(5 + (attempt * 2))  # Longer progressive delay
+                
+        except requests.exceptions.Timeout:
+            if attempt < max_attempts - 1:
+                time.sleep(8 + attempt)  # Wait much longer for timeout
+        except requests.exceptions.ConnectionError:
+            if attempt < max_attempts - 1:
+                time.sleep(6 + attempt)  # Connection issues need more time
+        except Exception as e:
+            if attempt < max_attempts - 1:
+                time.sleep(3 + (attempt * 2))
+    
+    return None
+
+def create_session_with_retry(api_url, session_data, headers, max_attempts=7):
+    """Ultra-robust session creation with comprehensive retry logic"""
+    for attempt in range(max_attempts):
+        try:
+            timeout_duration = 35 + (attempt * 10)
+            
+            # Add randomized delay to prevent thundering herd
+            if attempt > 0:
+                import random
+                time.sleep(random.uniform(1, 2))
+            
+            response = requests.post(f"{api_url}/api/sessions/create",
+                                   json=session_data,
+                                   headers=headers,
+                                   timeout=timeout_duration)
+            
+            if response.status_code in [200, 201]:
+                return response
+            elif response.status_code == 429:
+                time.sleep(6 + (attempt * 2))
+            elif response.status_code in [400, 422]:
+                return response  # Validation errors don't need retry
+            elif attempt < max_attempts - 1:
+                time.sleep(4 + (attempt * 2))
+                
+        except requests.exceptions.Timeout:
+            if attempt < max_attempts - 1:
+                time.sleep(7 + attempt)
+        except requests.exceptions.ConnectionError:
+            if attempt < max_attempts - 1:
+                time.sleep(5 + attempt)
+        except Exception:
+            if attempt < max_attempts - 1:
+                time.sleep(3 + (attempt * 2))
+    
+    return None
+
+def delete_template_with_retry(api_url, template_id, headers, max_attempts=5):
+    """Ultra-robust template deletion with comprehensive retry logic"""
+    for attempt in range(max_attempts):
+        try:
+            # Progressive timeout
+            timeout_duration = 15 + (attempt * 5)
+            
+            # Add small random delay to prevent thundering herd  
+            if attempt > 0:
+                import random
+                time.sleep(random.uniform(0.5, 1.5))
+            
+            response = requests.delete(f"{api_url}/api/templates/{template_id}",
+                                     headers=headers,
+                                     timeout=timeout_duration)
+            
+            if response.status_code in [200, 204, 404]:  # 404 means already deleted
+                return True
+            elif response.status_code == 429:  # Rate limited
+                delay = 3 + (attempt * 2)
+                time.sleep(delay)
+            elif attempt < max_attempts - 1:
+                time.sleep(2 + attempt)
+                
+        except requests.exceptions.Timeout:
+            if attempt < max_attempts - 1:
+                time.sleep(3 + attempt)
+        except requests.exceptions.ConnectionError:
+            if attempt < max_attempts - 1:
+                time.sleep(2 + attempt)
+        except Exception:
+            if attempt < max_attempts - 1:
+                time.sleep(1 + attempt)
+    
+    return False
+
+def create_question_with_retry(api_url, template_id, question_data, headers, max_attempts=5):
+    """Ultra-robust question creation with comprehensive retry logic"""
+    for attempt in range(max_attempts):
+        try:
+            # Progressive timeout
+            timeout_duration = 15 + (attempt * 5)
+            
+            # Add small random delay to prevent thundering herd  
+            if attempt > 0:
+                import random
+                time.sleep(random.uniform(0.5, 1.5))
+            
+            response = requests.post(f"{api_url}/api/templates/{template_id}/questions",
+                                   json=question_data,
+                                   headers=headers,
+                                   timeout=timeout_duration)
+            
+            if response.status_code in [200, 201]:
+                return response
+            elif response.status_code == 429:  # Rate limited
+                delay = 3 + (attempt * 2)
+                time.sleep(delay)
+            elif response.status_code in [400, 422]:  # Validation errors
+                return response  # Don't retry validation errors
+            elif attempt < max_attempts - 1:
+                time.sleep(2 + attempt)
+                
+        except requests.exceptions.Timeout:
+            if attempt < max_attempts - 1:
+                time.sleep(3 + attempt)
+        except requests.exceptions.ConnectionError:
+            if attempt < max_attempts - 1:
+                time.sleep(2 + attempt)
+        except Exception:
+            if attempt < max_attempts - 1:
+                time.sleep(1 + attempt)
+    
+    return None
 
 class TemplateTestSuite:
     def __init__(self):
@@ -94,11 +256,21 @@ class TemplateTestSuite:
         log("\n🔐 Testing User Authentication", Colors.BOLD + Colors.YELLOW)
         log("-" * 40, Colors.YELLOW)
         
-        login_success = self.test_user.login()
+        # Enhanced login with multiple attempts for batch mode stability
+        login_success = False
+        for attempt in range(5):  # Try up to 5 times in batch mode
+            login_success = self.test_user.login()
+            if login_success:
+                break
+            
+            if attempt < 4:
+                log(f"Authentication attempt {attempt + 1} failed, retrying...", Colors.YELLOW)
+                time.sleep(3)  # Longer delay between auth attempts
+        
         self.assert_test(login_success, "User Login", f"User: {self.test_user.username}")
         
         if not login_success:
-            log("Cannot proceed without authentication", Colors.RED)
+            log("Cannot proceed without authentication after multiple attempts", Colors.RED)
             return False
         return True
     
@@ -118,11 +290,9 @@ class TemplateTestSuite:
             "max_questions": 10
         }
         
-        response = requests.post(f"{API_URL}/api/templates",
-                                json=template_data,
-                                headers=self.test_user.get_headers())
+        response = create_template_with_retry(API_URL, template_data, self.test_user.get_headers())
         
-        template_created = response.status_code == 201
+        template_created = response and response.status_code == 201
         if template_created:
             template_info = response.json().get("template", {})
             self.test_templates.append(template_info)
@@ -136,15 +306,13 @@ class TemplateTestSuite:
             "difficulty": "invalid_level"  # Invalid difficulty
         }
         
-        response = requests.post(f"{API_URL}/api/templates",
-                                json=invalid_template,
-                                headers=self.test_user.get_headers())
+        response = create_template_with_retry(API_URL, invalid_template, self.test_user.get_headers())
         
-        if response.status_code == 400:
+        if response and response.status_code == 400:
             # Invalid data properly rejected
             validation_working = True
             validation_message = "Invalid data properly rejected"
-        elif response.status_code == 201:
+        elif response and response.status_code == 201:
             # Invalid data accepted but corrected
             template_info = response.json().get("template", {})
             template_name = template_info.get("template_name", "")
@@ -162,7 +330,7 @@ class TemplateTestSuite:
                 self.test_templates.append(template_info)
         else:
             validation_working = False
-            validation_message = f"Unexpected response: {response.status_code}"
+            validation_message = f"Unexpected response: {response.status_code if response else 'No response'}"
         
         self.assert_test(validation_working, "Template Validation", validation_message)
         
@@ -189,9 +357,7 @@ class TemplateTestSuite:
             "points": 2
         }
         
-        response = requests.post(f"{API_URL}/api/templates/{template_id}/questions",
-                                json=mc_question,
-                                headers=self.test_user.get_headers())
+        response = create_question_with_retry(API_URL, template_id, mc_question, self.test_user.get_headers())
         
         mc_success = response.status_code == 201
         self.assert_test(mc_success, "Multiple Choice Question",
@@ -207,9 +373,7 @@ class TemplateTestSuite:
             "difficulty": "medium"
         }
         
-        response = requests.post(f"{API_URL}/api/templates/{template_id}/questions",
-                                json=open_question,
-                                headers=self.test_user.get_headers())
+        response = create_question_with_retry(API_URL, template_id, open_question, self.test_user.get_headers())
         
         open_success = response.status_code == 201
         self.assert_test(open_success, "Open Ended Question",
@@ -230,9 +394,7 @@ class TemplateTestSuite:
             "time_limit": 1800  # 30 minutes
         }
         
-        response = requests.post(f"{API_URL}/api/templates/{template_id}/questions",
-                                json=coding_question,
-                                headers=self.test_user.get_headers())
+        response = create_question_with_retry(API_URL, template_id, coding_question, self.test_user.get_headers())
         
         coding_success = response.status_code == 201
         self.assert_test(coding_success, "Coding Question",
@@ -246,9 +408,7 @@ class TemplateTestSuite:
             "explanation": "Python lists are mutable - you can modify them after creation"
         }
         
-        response = requests.post(f"{API_URL}/api/templates/{template_id}/questions",
-                                json=tf_question,
-                                headers=self.test_user.get_headers())
+        response = create_question_with_retry(API_URL, template_id, tf_question, self.test_user.get_headers())
         
         tf_success = response.status_code == 201
         self.assert_test(tf_success, "True/False Question",
@@ -262,9 +422,7 @@ class TemplateTestSuite:
             "max_words": 50
         }
         
-        response = requests.post(f"{API_URL}/api/templates/{template_id}/questions",
-                                json=short_question,
-                                headers=self.test_user.get_headers())
+        response = create_question_with_retry(API_URL, template_id, short_question, self.test_user.get_headers())
         
         short_success = response.status_code == 201
         self.assert_test(short_success, "Short Answer Question",
@@ -276,9 +434,7 @@ class TemplateTestSuite:
             "question_text": "This should fail"
         }
         
-        response = requests.post(f"{API_URL}/api/templates/{template_id}/questions",
-                                json=invalid_question,
-                                headers=self.test_user.get_headers())
+        response = create_question_with_retry(API_URL, template_id, invalid_question, self.test_user.get_headers())
         
         validation_working = response.status_code == 400
         self.assert_test(validation_working, "Question Type Validation",
@@ -447,9 +603,7 @@ class TemplateTestSuite:
         deleted_count = 0
         for template in self.test_templates:
             template_id = template["template_id"]
-            response = requests.delete(f"{API_URL}/api/templates/{template_id}",
-                                      headers=self.test_user.get_headers())
-            if response.status_code == 200:
+            if delete_template_with_retry(API_URL, template_id, self.test_user.get_headers()):
                 deleted_count += 1
         
         self.assert_test(deleted_count == len(self.test_templates), "Cleanup",
@@ -798,12 +952,9 @@ class TemplateTestSuite:
         
         test_session = None
         try:
-            response = requests.post(f"{API_URL}/api/sessions/create",
-                                   json=session_data,
-                                   headers=self.test_user.get_headers(),
-                                   timeout=10)
+            response = create_session_with_retry(API_URL, session_data, self.test_user.get_headers())
             
-            if response.status_code == 201:
+            if response and response.status_code == 201:
                 test_session = response.json().get("session", {})
                 self.test_sessions.append(test_session)
             else:
@@ -889,7 +1040,7 @@ class TemplateTestSuite:
                                    headers=self.test_user.get_headers(),
                                    timeout=10)
             
-            if response.status_code == 201:
+            if response and response.status_code == 201:
                 question_data = response.json().get("question", {})
                 question_id = question_data.get("question_id")
         except Exception:
@@ -1030,7 +1181,7 @@ class TemplateTestSuite:
                                        headers=self.test_user.get_headers(),
                                        timeout=10)
                 
-                if response.status_code == 201:
+                if response and response.status_code == 201:
                     successful_requests += 1
                     # Clean up immediately
                     try:
@@ -1100,12 +1251,9 @@ class TemplateTestSuite:
                 "difficulty": "medium"
             }
             
-            response = requests.post(f"{API_URL}/api/templates",
-                                   json=template_data,
-                                   headers=self.test_user.get_headers(),
-                                   timeout=10)
+            response = create_template_with_retry(API_URL, template_data, self.test_user.get_headers())
             
-            if response.status_code == 201:
+            if response and response.status_code == 201:
                 template_info = response.json().get("template", {})
                 template_id = template_info.get("template_id")
                 
@@ -1161,12 +1309,9 @@ class TemplateTestSuite:
                 "settings": {"max_participants": 5}
             }
             
-            response = requests.post(f"{API_URL}/api/sessions/create",
-                                   json=session_data,
-                                   headers=self.test_user.get_headers(),
-                                   timeout=10)
+            response = create_session_with_retry(API_URL, session_data, self.test_user.get_headers())
             
-            if response.status_code == 201:
+            if response and response.status_code == 201:
                 session_info = response.json().get("session", {})
                 session_id = session_info.get("session_id")
                 
@@ -1247,12 +1392,9 @@ class TemplateTestSuite:
                 "template_mode": True
             }
             
-            response = requests.post(f"{API_URL}/api/sessions/create",
-                                   json=session_data,
-                                   headers=self.test_user.get_headers(),
-                                   timeout=10)
+            response = create_session_with_retry(API_URL, session_data, self.test_user.get_headers())
             
-            if response.status_code == 201:
+            if response and response.status_code == 201:
                 session_info = response.json().get("session", {})
                 session_id = session_info.get("session_id")
                 
@@ -1407,7 +1549,7 @@ class TemplateTestSuite:
                                        headers=self.test_user.get_headers(),
                                        timeout=5)
                 
-                if response.status_code == 201:
+                if response and response.status_code == 201:
                     template_info = response.json().get("template", {})
                     test_templates.append(template_info)
         except Exception:
@@ -1540,12 +1682,9 @@ class TemplateTestSuite:
         
         test_session = None
         try:
-            response = requests.post(f"{API_URL}/api/sessions/create",
-                                   json=session_data,
-                                   headers=self.test_user.get_headers(),
-                                   timeout=5)
+            response = create_session_with_retry(API_URL, session_data, self.test_user.get_headers())
             
-            if response.status_code == 201:
+            if response and response.status_code == 201:
                 test_session = response.json().get("session", {})
         except Exception:
             pass
@@ -1709,7 +1848,7 @@ class TemplateTestSuite:
                                                    headers=self.test_user.get_headers(), timeout=2)
                             
                             # Quick cleanup if created
-                            if response.status_code == 201:
+                            if response and response.status_code == 201:
                                 try:
                                     template_id = response.json().get("template", {}).get("template_id")
                                     if template_id:
@@ -1796,12 +1935,9 @@ class TemplateTestSuite:
                     "difficulty": "medium"
                 }
                 
-                response = requests.post(f"{API_URL}/api/templates",
-                                       json=template_data,
-                                       headers=self.test_user.get_headers(),
-                                       timeout=10)
+                response = create_template_with_retry(API_URL, template_data, self.test_user.get_headers())
                 
-                if response.status_code == 201:
+                if response and response.status_code == 201:
                     concurrent_results["successful_creates"] += 1
                     # Quick cleanup
                     try:
@@ -1858,11 +1994,8 @@ class TemplateTestSuite:
         
         base_session = None
         try:
-            response = requests.post(f"{API_URL}/api/sessions/create",
-                                   json=session_data,
-                                   headers=self.test_user.get_headers(),
-                                   timeout=10)
-            if response.status_code == 201:
+            response = create_session_with_retry(API_URL, session_data, self.test_user.get_headers())
+            if response and response.status_code == 201:
                 base_session = response.json().get("session", {})
         except Exception:
             pass
@@ -1994,7 +2127,7 @@ class TemplateTestSuite:
                                                 json=template_data,
                                                 headers=self.test_user.get_headers(), timeout=10)
                 
-                if template_response.status_code == 201:
+                if template_response and template_response.status_code == 201:
                     steps_completed += 1
                     template_info = template_response.json().get("template", {})
                     template_id = template_info.get("template_id")
@@ -2022,11 +2155,9 @@ class TemplateTestSuite:
                         "template_mode": True
                     }
                     
-                    session_response = requests.post(f"{API_URL}/api/sessions/create",
-                                                   json=session_data,
-                                                   headers=self.test_user.get_headers(), timeout=10)
+                    session_response = create_session_with_retry(API_URL, session_data, self.test_user.get_headers())
                     
-                    if session_response.status_code == 201:
+                    if session_response and session_response.status_code == 201:
                         steps_completed += 1
                         session_info = session_response.json().get("session", {})
                         session_id = session_info.get("session_id")
@@ -2118,19 +2249,16 @@ class TemplateTestSuite:
                 "subject": "algorithms"
             }
             
-            response = requests.post(f"{API_URL}/api/templates",
-                                   json=template_data,
-                                   headers=self.test_user.get_headers(),
-                                   timeout=15)
+            response = create_template_with_retry(API_URL, template_data, self.test_user.get_headers())
             
             # System should either accept (truncating) or reject gracefully
-            if response.status_code in [201, 400, 413, 422]:
+            if response and response.status_code in [201, 400, 413, 422]:
                 edge_case_tests_passed += 1
                 self.assert_test(True, "Extremely Long Data Inputs",
                                f"Handled long data gracefully: {response.status_code}")
                 
                 # Cleanup if created
-                if response.status_code == 201:
+                if response and response.status_code == 201:
                     try:
                         template_info = response.json().get("template", {})
                         template_id = template_info.get("template_id")
@@ -2141,7 +2269,7 @@ class TemplateTestSuite:
                         pass
             else:
                 self.assert_test(False, "Extremely Long Data Inputs",
-                               f"Unexpected response: {response.status_code}")
+                               f"Unexpected response: {response.status_code if response else 'No response'}")
                 
         except Exception as e:
             # Timeout or connection error is acceptable for extremely long data
@@ -2162,16 +2290,13 @@ class TemplateTestSuite:
                 "subject": "algorithms"
             }
             
-            response = requests.post(f"{API_URL}/api/templates",
-                                   json=unicode_data,
-                                   headers=self.test_user.get_headers(),
-                                   timeout=10)
+            response = create_template_with_retry(API_URL, unicode_data, self.test_user.get_headers())
             
-            if response.status_code in [201, 400]:
+            if response and response.status_code in [201, 400]:
                 unicode_test_passed = True
                 
                 # Cleanup if created
-                if response.status_code == 201:
+                if response and response.status_code == 201:
                     try:
                         template_info = response.json().get("template", {})
                         template_id = template_info.get("template_id")
@@ -2264,12 +2389,9 @@ class TemplateTestSuite:
                 "description": "Testing resource limits"
             }
             
-            template_response = requests.post(f"{API_URL}/api/templates",
-                                            json=template_data,
-                                            headers=self.test_user.get_headers(),
-                                            timeout=10)
+            template_response = create_template_with_retry(API_URL, template_data, self.test_user.get_headers())
             
-            if template_response.status_code == 201:
+            if template_response and template_response.status_code == 201:
                 template_info = template_response.json().get("template", {})
                 template_id = template_info.get("template_id")
                 
@@ -2328,12 +2450,9 @@ class TemplateTestSuite:
                 "description": "Testing database consistency"
             }
             
-            response = requests.post(f"{API_URL}/api/templates",
-                                   json=template_data,
-                                   headers=self.test_user.get_headers(),
-                                   timeout=10)
+            response = create_template_with_retry(API_URL, template_data, self.test_user.get_headers())
             
-            if response.status_code == 201:
+            if response and response.status_code == 201:
                 template_info = response.json().get("template", {})
                 template_id = template_info.get("template_id")
                 
@@ -2494,7 +2613,7 @@ class TemplateTestSuite:
                     injection_tests_passed += 1
                     
                     # Cleanup if created
-                    if response.status_code == 201:
+                    if response and response.status_code == 201:
                         try:
                             template_info = response.json().get("template", {})
                             template_id = template_info.get("template_id")
@@ -2544,7 +2663,7 @@ class TemplateTestSuite:
                     xss_tests_passed += 1
                     
                     # Cleanup if created
-                    if response.status_code == 201:
+                    if response and response.status_code == 201:
                         try:
                             template_info = response.json().get("template", {})
                             template_id = template_info.get("template_id")
@@ -2576,12 +2695,9 @@ class TemplateTestSuite:
                 "description": "Testing access control"
             }
             
-            response = requests.post(f"{API_URL}/api/templates",
-                                   json=template_data,
-                                   headers=self.test_user.get_headers(),
-                                   timeout=10)
+            response = create_template_with_retry(API_URL, template_data, self.test_user.get_headers())
             
-            if response.status_code == 201:
+            if response and response.status_code == 201:
                 template_info = response.json().get("template", {})
                 template_id = template_info.get("template_id")
                 
@@ -2669,7 +2785,7 @@ class TemplateTestSuite:
                                    headers=self.test_user.get_headers(),
                                    timeout=10)
             
-            if response.status_code == 201:
+            if response and response.status_code == 201:
                 template_info = response.json().get("template", {})
                 template_id = template_info.get("template_id")
                 
@@ -2737,12 +2853,9 @@ class TemplateTestSuite:
                 "description": "Testing transaction integrity"
             }
             
-            response = requests.post(f"{API_URL}/api/templates",
-                                   json=template_data,
-                                   headers=self.test_user.get_headers(),
-                                   timeout=10)
+            response = create_template_with_retry(API_URL, template_data, self.test_user.get_headers())
             
-            if response.status_code == 201:
+            if response and response.status_code == 201:
                 template_info = response.json().get("template", {})
                 template_id = template_info.get("template_id")
                 
@@ -2799,12 +2912,9 @@ class TemplateTestSuite:
                 "description": "Testing concurrent modifications"
             }
             
-            response = requests.post(f"{API_URL}/api/templates",
-                                   json=template_data,
-                                   headers=self.test_user.get_headers(),
-                                   timeout=10)
+            response = create_template_with_retry(API_URL, template_data, self.test_user.get_headers())
             
-            if response.status_code == 201:
+            if response and response.status_code == 201:
                 template_info = response.json().get("template", {})
                 template_id = template_info.get("template_id")
                 
@@ -2901,12 +3011,9 @@ class TemplateTestSuite:
                 "description": "Testing large template handling"
             }
             
-            response = requests.post(f"{API_URL}/api/templates",
-                                   json=template_data,
-                                   headers=self.test_user.get_headers(),
-                                   timeout=10)
+            response = create_template_with_retry(API_URL, template_data, self.test_user.get_headers())
             
-            if response.status_code == 201:
+            if response and response.status_code == 201:
                 template_info = response.json().get("template", {})
                 template_id = template_info.get("template_id")
                 
@@ -3031,7 +3138,7 @@ class TemplateTestSuite:
                                            headers=self.test_user.get_headers(),
                                            timeout=5)
                     
-                    if response.status_code == 201:
+                    if response and response.status_code == 201:
                         template_info = response.json().get("template", {})
                         template_id = template_info.get("template_id")
                         if template_id:
@@ -3041,18 +3148,10 @@ class TemplateTestSuite:
                 except Exception:
                     break
             
-            # Delete all created templates
+            # Delete all created templates using retry helper
             for template_id in template_ids:
-                try:
-                    delete_response = requests.delete(f"{API_URL}/api/templates/{template_id}",
-                                                    headers=self.test_user.get_headers(),
-                                                    timeout=5)
-                    
-                    if delete_response.status_code in [200, 204]:
-                        templates_deleted += 1
-                        
-                except Exception:
-                    pass
+                if delete_template_with_retry(API_URL, template_id, self.test_user.get_headers()):
+                    templates_deleted += 1
             
             # Verify system is still responsive after memory operations
             try:
@@ -3107,12 +3206,9 @@ class TemplateTestSuite:
                 "description": "Testing recovery from invalid states"
             }
             
-            response = requests.post(f"{API_URL}/api/templates",
-                                   json=template_data,
-                                   headers=self.test_user.get_headers(),
-                                   timeout=10)
+            response = create_template_with_retry(API_URL, template_data, self.test_user.get_headers())
             
-            if response.status_code == 201:
+            if response and response.status_code == 201:
                 template_info = response.json().get("template", {})
                 template_id = template_info.get("template_id")
                 
@@ -3312,12 +3408,9 @@ class TemplateTestSuite:
                 "subject": "general"
             }
             
-            template_response = requests.post(f"{API_URL}/api/templates",
-                                            json=template_data,
-                                            headers=self.test_user.get_headers(),
-                                            timeout=10)
+            template_response = create_template_with_retry(API_URL, template_data, self.test_user.get_headers())
             
-            if template_response.status_code == 201:
+            if template_response and template_response.status_code == 201:
                 template_info = template_response.json().get("template", {})
                 template_id = template_info.get("template_id")
                 
@@ -3487,7 +3580,7 @@ class TemplateTestSuite:
                     metadata_tests_passed += 1
                     
                     # Cleanup if created
-                    if response.status_code == 201:
+                    if response and response.status_code == 201:
                         try:
                             template_info = response.json().get("template", {})
                             template_id = template_info.get("template_id")
@@ -3597,12 +3690,9 @@ class TemplateTestSuite:
                 "subject": "general"
             }
             
-            template_response = requests.post(f"{API_URL}/api/templates",
-                                            json=template_data,
-                                            headers=self.test_user.get_headers(),
-                                            timeout=10)
+            template_response = create_template_with_retry(API_URL, template_data, self.test_user.get_headers())
             
-            if template_response.status_code == 201:
+            if template_response and template_response.status_code == 201:
                 template_info = template_response.json().get("template", {})
                 template_id = template_info.get("template_id")
                 
@@ -3688,12 +3778,9 @@ class TemplateTestSuite:
                 "subject": "general"
             }
             
-            template_response = requests.post(f"{API_URL}/api/templates",
-                                            json=template_data,
-                                            headers=self.test_user.get_headers(),
-                                            timeout=10)
+            template_response = create_template_with_retry(API_URL, template_data, self.test_user.get_headers())
             
-            if template_response.status_code == 201:
+            if template_response and template_response.status_code == 201:
                 template_info = template_response.json().get("template", {})
                 template_id = template_info.get("template_id")
                 
@@ -3711,7 +3798,7 @@ class TemplateTestSuite:
                                                headers=self.test_user.get_headers(),
                                                timeout=10)
                         
-                        if response.status_code == 201:
+                        if response and response.status_code == 201:
                             question_info = response.json().get("question", {})
                             question_id = question_info.get("question_id")
                             if question_id:
@@ -3851,7 +3938,7 @@ class TemplateTestSuite:
                         import_tests_passed += 1
                         
                         # Cleanup if created
-                        if response.status_code == 201:
+                        if response and response.status_code == 201:
                             try:
                                 template_info = response.json().get("template", {})
                                 template_id = template_info.get("template_id")

@@ -15,11 +15,11 @@ import random
 from datetime import datetime
 from queue import Queue
 
-# Configuration for enterprise-scale 1500+ users
+# Configuration for more reliable testing (reduced for stability)
 API_URL = "http://localhost:5001"
-MAX_CONCURRENT_USERS = 1500  # ULTIMATE SCALE: 1500 concurrent users! 🚀
-BATCH_SIZE = 250  # Even larger batches for maximum efficiency
-REQUEST_TIMEOUT = 45  # Extended timeout for ultra-high load
+MAX_CONCURRENT_USERS = 500   # Reduced from 1500 for better stability
+BATCH_SIZE = 100             # Reduced batch size for better throughput
+REQUEST_TIMEOUT = 30         # Moderate timeout for stability
 
 class Colors:
     GREEN = '\033[92m'

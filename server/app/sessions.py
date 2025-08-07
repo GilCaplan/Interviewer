@@ -12,12 +12,12 @@ import hashlib
 from .auth import token_required
 from .config import Config
 from .templates import QUESTION_TYPES, validate_question_data
+from .password_utils import hash_session_password, verify_session_password
+from .rate_limiter import rate_limit
 from .database import sessions_collection, questions_collection, templates_collection
 from .crash_prevention import CrashPrevention, safe_execute, safe_database_operation
 from .llm_service import LLMService
-from .performance_config import PerformanceOptimizer
-from .high_scale_optimizer import extreme_scale_protection
-from .ultra_scale_config import ultra_scale_protection
+# Production optimization imports removed for Docker-only setup
 
 sessions_bp = Blueprint('sessions', __name__)
 
@@ -134,48 +134,6 @@ def safe_emit(event, data, room=None, namespace='/'):
         current_app.logger.warning(f"WebSocket emit failed (likely test environment): {str(e)}")
     except Exception as e:
         current_app.logger.warning(f"WebSocket emit failed: {str(e)}")
-
-
-def hash_session_password(password):
-    """Hash a session password using SHA-256 with salt"""
-    if not password:
-        return None
-    
-    # Generate a random salt
-    salt = secrets.token_hex(16)  # 32-character hex string
-    
-    # Create hash using SHA-256
-    password_bytes = password.encode('utf-8')
-    salt_bytes = salt.encode('utf-8')
-    hash_obj = hashlib.sha256(password_bytes + salt_bytes)
-    password_hash = hash_obj.hexdigest()
-    
-    # Store salt and hash together, separated by '$'
-    return f"{salt}${password_hash}"
-
-
-def verify_session_password(password, stored_hash):
-    """Verify a session password against its hash"""
-    if not password or not stored_hash:
-        return False
-    
-    try:
-        # Split stored hash into salt and hash
-        if '$' not in stored_hash:
-            return False
-        
-        salt, expected_hash = stored_hash.split('$', 1)
-        
-        # Hash the provided password with the stored salt
-        password_bytes = password.encode('utf-8')
-        salt_bytes = salt.encode('utf-8')
-        hash_obj = hashlib.sha256(password_bytes + salt_bytes)
-        actual_hash = hash_obj.hexdigest()
-        
-        # Compare hashes using secure comparison
-        return secrets.compare_digest(expected_hash, actual_hash)
-    except (ValueError, TypeError, AttributeError):
-        return False
 
 
 def clean_session_for_response(session):
@@ -474,7 +432,7 @@ def mock_llm_generate_question(subject="general", context="", question_type="ope
 
 # Create a new session with rate limiting
 @sessions_bp.route('/api/sessions/create', methods=['POST'])
-@ultra_scale_protection  # Ultra-scale optimization for 1500+ users
+# Production optimization decorator removed
 @token_required
 @CrashPrevention.circuit_breaker('session_create', failure_threshold=100, recovery_timeout=10)  # Ultra-resilient for 1500+ load
 def create_session(user):

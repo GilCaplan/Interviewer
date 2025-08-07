@@ -73,21 +73,40 @@ Comprehensive input validation testing covering:
 
 ## Running Tests
 
+### Prerequisites
+```bash
+# Start the application first (required for all tests)
+docker-compose up --build
+
+# Or if application is already running:
+docker-compose up
+```
+
 ### Quick Test Run
 ```bash
+# Navigate to test directory
+cd server/tests/gil_tests
+
 # Run individual test file
-python test_template_building.py
+python individual_tests/test_template_building.py
 
 # Run LLM integration tests
-python test_llm_integration.py
+python individual_tests/test_llm_integration.py
 
 # Run environment setup validation
-python test_environment_setup.py
+python individual_tests/test_environment_setup.py
 ```
 
 ### Comprehensive Test Suite
 ```bash
-# Run all tests with comprehensive reporting
+# Make sure application is running first
+docker-compose up --build
+
+# Navigate to test directory and run all tests
+cd server/tests/gil_tests
+python run_all_tests.py
+
+# Alternative: Legacy comprehensive runner
 python run_comprehensive_tests.py
 ```
 

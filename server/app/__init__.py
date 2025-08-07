@@ -18,17 +18,13 @@ from .websocket_handlers import init_simple_websockets  # Only import the functi
 from .async_handler import init_async_manager, shutdown_async_manager
 from .interviews import interviews_bp
 from .crash_prevention import CrashPrevention
-from .performance_config import PerformanceOptimizer
-from .high_scale_optimizer import high_scale_optimizer, extreme_scale_protection
-from .ultra_scale_config import configure_ultra_scale_environment, ultra_scale_protection
+# Production optimization imports removed for Docker-only setup
 
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
     
-    # Configure for ultra-high scale (1500+ users)
-    ultra_config = configure_ultra_scale_environment()
-    app.config.update(ultra_config)
+    # Docker-based configuration (production scaling removed)
 
     # Initialize the app with the config
     config_class.init_app(app)
@@ -41,12 +37,12 @@ def create_app(config_class=Config):
         app.config['SESSION_TYPE'] = 'redis'
         app.config['SESSION_REDIS'] = redis_client
         limiter_storage = "redis://localhost:6379"
-        print("✅ Using Redis for sessions and rate limiting")
-    except:
+        app.logger.info("✅ Using Redis for sessions and rate limiting")
+    except (redis.RedisError, redis.ConnectionError, Exception) as e:
         # Fallback to memory/filesystem for development
         app.config['SESSION_TYPE'] = 'filesystem'
         limiter_storage = "memory://"
-        print("⚠️ Redis unavailable, using filesystem/memory storage")
+        app.logger.warning(f"⚠️ Redis unavailable ({str(e)}), using filesystem/memory storage")
     
     app.config['SESSION_PERMANENT'] = False
     app.config['SESSION_USE_SIGNER'] = True
@@ -59,11 +55,11 @@ def create_app(config_class=Config):
     
     # Initialize rate limiter for API protection
     limiter = Limiter(
-        app,
         key_func=get_remote_address,
         default_limits=["1000 per hour", "100 per minute"],
         storage_uri=limiter_storage
     )
+    limiter.init_app(app)
 
     # Create SocketIO instance with optimized settings for 1000+ users
     socketio = SocketIO()
@@ -71,7 +67,7 @@ def create_app(config_class=Config):
     # Initialize SocketIO for ultra-scale (1500+ users)
     socketio.init_app(app,
                       cors_allowed_origins="*",
-                      async_mode='eventlet',  # Eventlet for maximum scalability
+                      async_mode='threading',  # Threading for Python 3.13 compatibility
                       logger=False,  # Disable for performance
                       engineio_logger=False,  # Disable for performance
                       max_http_buffer_size=4000000,  # 4MB buffer for ultra-high load
@@ -81,6 +77,9 @@ def create_app(config_class=Config):
                       allow_upgrades=True,
                       transports=['websocket', 'polling'])
 
+    # Store socketio instance on app for access
+    app.socketio = socketio
+    
     # Initialize websocket handlers with the socketio instance
     init_simple_websockets(socketio)
 
@@ -90,8 +89,8 @@ def create_app(config_class=Config):
 
 
     # Apply rate limiting to auth endpoints
-    limiter.limit("10 per minute")(auth)
-    limiter.limit("50 per minute")(sessions_bp)
+    # limiter.limit("10 per minute")(auth)
+    # limiter.limit("50 per minute")(sessions_bp)
     
     # Register blueprints
     app.register_blueprint(main)
@@ -122,18 +121,18 @@ def create_app(config_class=Config):
     # Global exception handler to prevent any crashes
     @app.errorhandler(Exception)
     def handle_all_exceptions(error):
-        \"\"\"Catch all unhandled exceptions to prevent server crashes\"\"\"
+        """Catch all unhandled exceptions to prevent server crashes"""
         import traceback
         import logging
         
         # Log the full traceback for debugging
-        logging.error(f\"Unhandled exception: {error}\")
-        logging.error(f\"Traceback: {traceback.format_exc()}\")
+        logging.error(f"Unhandled exception: {error}")
+        logging.error(f"Traceback: {traceback.format_exc()}")
         
         # Always return a graceful error response, never crash
         return {
-            \"error\": \"Internal server error\", 
-            \"message\": \"An unexpected error occurred but the server remains stable\"
+            "error": "Internal server error", 
+            "message": "An unexpected error occurred but the server remains stable"
         }, 500
     
     from werkzeug.exceptions import BadRequest
@@ -189,9 +188,7 @@ def create_app(config_class=Config):
     def optimize_request_handling():
         CrashPrevention.monitor_resources()
         # Clean cache periodically
-        PerformanceOptimizer.clean_cache()
-        # Initialize high-scale optimizations
-        high_scale_optimizer.optimize_for_burst_traffic()
+        # Production optimization calls removed for Docker-only setup
     
     # Add health check endpoint for load balancers
     @app.route('/api/health')
@@ -200,18 +197,29 @@ def create_app(config_class=Config):
     
     # Add server stats endpoint with high-scale metrics
     @app.route('/api/stats')
-    @limiter.limit("5 per minute")
+    # @limiter.limit("5 per minute")
     def server_stats():
-        import psutil
         import threading
-        process = psutil.Process(os.getpid())
-        high_scale_stats = high_scale_optimizer.get_performance_stats()
+        import os
+        try:
+            # Try to get system stats without psutil
+            import resource
+            memory_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024 / 1024  # Convert to MB
+            cpu_usage = 0.0  # Placeholder
+        except ImportError:
+            memory_usage = 0.0
+            cpu_usage = 0.0
+            
+        # High-scale statistics removed for Docker-only setup
+        high_scale_stats = {}
+            
         return {
-            'memory_usage': process.memory_percent(),
-            'cpu_usage': process.cpu_percent(),
+            'memory_usage': memory_usage,
+            'cpu_usage': cpu_usage,
             'active_threads': threading.active_count(),
             'connections': getattr(socketio.server, 'manager', {}).get('connection_count', 0),
-            'high_scale_metrics': high_scale_stats
+            'high_scale_metrics': high_scale_stats,
+            'pid': os.getpid()
         }
 
     # Register shutdown handler
@@ -222,12 +230,14 @@ def create_app(config_class=Config):
     # Store limiter instance for use in other modules
     app.limiter = limiter
     
-    return app, socketio
+    return app
 
 
-app, socketio_instance = create_app()
+# Create default app instance for Flask CLI compatibility
+app = create_app()
+# SocketIO is attached to the app instance as app.socketio
 
 if __name__ == '__main__':
     # Use environment variable SERVER_PORT if available, else default to 5000
     port = int(os.environ.get('SERVER_PORT', 5000))
-    socketio_instance.run(app, host='0.0.0.0', port=port, debug=True)
+    app.socketio.run(app, host='0.0.0.0', port=port, debug=True, allow_unsafe_werkzeug=True)

@@ -1,12 +1,13 @@
 import os
 import logging
+import secrets
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'you-will-never-guess'
+    SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
     MONGO_URI = os.environ.get('MONGO_URI') or 'mongodb://localhost:27017/interview-assistant'
     
     # LLM Configuration
@@ -26,7 +27,7 @@ class Config:
 
     # High-Performance Scaling Configuration
     MAX_CONCURRENT_CONNECTIONS = int(os.environ.get('MAX_CONCURRENT_CONNECTIONS', '2000'))
-    DATABASE_POOL_SIZE = int(os.environ.get('DATABASE_POOL_SIZE', '100'))
+    DATABASE_POOL_SIZE = int(os.environ.get('DATABASE_POOL_SIZE', '200'))  # Match ultra_scale_config
     MAX_OVERFLOW = int(os.environ.get('MAX_OVERFLOW', '200'))
     POOL_TIMEOUT = int(os.environ.get('POOL_TIMEOUT', '30'))
     POOL_RECYCLE = int(os.environ.get('POOL_RECYCLE', '3600'))
