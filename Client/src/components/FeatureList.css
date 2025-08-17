@@ -15,8 +15,9 @@
 
 .features-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 30px;
+  padding: 0 10px;
 }
 
 .feature-link {
@@ -86,5 +87,18 @@
 @media (max-width: 768px) {
   .features-list {
     grid-template-columns: 1fr;
+    gap: 25px;
+    padding: 0 5px;
+  }
+}
+
+@media (max-width: 480px) {
+  .features-list {
+    gap: 20px;
+    padding: 0;
+  }
+  
+  .feature-card {
+    padding: 16px;
   }
 }

@@ -10,19 +10,87 @@
   margin-top: 20px;
 }
 
+/* Template Card Wrapper */
+.template-card-wrapper {
+  position: relative;
+}
+
 .template-card {
   background: #ffffff;
   border: 1px solid #ddd;
   padding: 16px;
-  border-radius: 8px;
+  border-radius: 8px 8px 0 0;
   box-shadow: 0 2px 5px rgba(0,0,0,0.08);
-  transition: transform 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   cursor: pointer;
+  margin-bottom: 0;
 }
 
 .template-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
+
+.template-card-content {
+  width: 100%;
+}
+
+/* Template Actions */
+.template-card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border: 1px solid #ddd;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  justify-content: flex-end;
+}
+
+.action-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.view-btn {
+  background: #4a90e2;
+  color: white;
+}
+
+.view-btn:hover {
+  background: #357abd;
+}
+
+.pdf-btn {
+  background: #28a745;
+  color: white;
+}
+
+.pdf-btn:hover {
+  background: #218838;
+}
+
+.debug-btn {
+  background: #ff9800;
+  color: white;
+}
+
+.debug-btn:hover {
+  background: #f57c00;
+}
+
 
 .template-card h3 {
   margin-bottom: 10px;
@@ -47,17 +115,69 @@
   font-size: 16px;
 }
 
-.template-controls button {
-  padding: 10px 20px;
-  border-radius: 6px;
-  border: none;
-  background-color: #0d6efd;
-  color: white;
-  font-size: 16px;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
+/* Loading and error states */
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-size: 1.1rem;
 }
 
-.template-controls button:hover {
-  background-color: #0b5ed7; /* slightly darker on hover */
+.error-message {
+  background: #fff5f5;
+  border: 1px solid #fed7d7;
+  color: #c53030;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin: 20px 0;
+  text-align: center;
 }
+
+/* Template stats */
+.template-stats {
+  margin: 10px 0;
+  color: #666;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* No templates message */
+.no-templates {
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+  grid-column: 1 / -1;
+}
+
+.no-templates p {
+  margin: 10px 0;
+  font-size: 1.1rem;
+}
+
+/* Template description */
+.template-description {
+  color: #555;
+  font-style: italic;
+  font-size: 0.9rem;
+  margin-top: 10px;
+  border-top: 1px solid #eee;
+  padding-top: 10px;
+}
+
+/* Public badge */
+.public-badge {
+  background: #4CAF50;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.template-card {
+  position: relative;
+}
+

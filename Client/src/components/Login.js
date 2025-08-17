@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { validateUsername } from '../utils/inputValidation';
+import { getApiUrl } from '../utils/authUtils';
 
 function Login() {
   const [username, setUsername] = useState('');
@@ -12,8 +14,10 @@ function Login() {
   const handleLogin = async (e) => {
     e.preventDefault();
 
-    if (!username.trim()) {
-      setError('Username cannot be empty');
+    // Validate username
+    const validation = validateUsername(username);
+    if (!validation.isValid) {
+      setError(validation.errors[0]);
       return;
     }
 
@@ -21,15 +25,15 @@ function Login() {
     setError('');
 
     try {
-      // Get API URL from environment or use default
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      // Use cleaned username
+      const cleanUsername = validation.cleanValue;
 
-      const response = await fetch(`${apiUrl}/api/auth/login`, {
+      const response = await fetch(`${getApiUrl()}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username }),
+        body: JSON.stringify({ username: cleanUsername }),
         credentials: 'include' // Important for cookies
       });
 
@@ -40,13 +44,7 @@ function Login() {
 
       const data = await response.json();
 
-      // Store the user data in localStorage
-      localStorage.setItem('user', JSON.stringify({
-        username: data.username,
-        sessionToken: data.token
-      }));
-
-      // Call the login function from AuthContext
+      // Use the AuthContext login function which handles storage
       login({
         username: data.username,
         sessionToken: data.token

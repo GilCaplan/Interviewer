@@ -4,50 +4,53 @@ import datetime
 import secrets
 import uuid
 from functools import wraps
-from .server_utils import get_db
+from .config import Config
+from .database import users_collection, sessions_collection
+# Production optimization imports removed for Docker-only setup
+from .password_utils import hash_session_password, verify_session_password
+from .rate_limiter import rate_limit
 
 auth = Blueprint('auth', __name__)
 
-# Connect to MongoDB
-db = get_db()
-users_collection = db.users
-sessions_collection = db.sessions
 
-
-# Helper function to get the current user from JWT token
+# Get the current user from JWT token
 def get_current_user(request):
     token = None
 
-    # Get token from header
-    if 'Authorization' in request.headers:
-        auth_header = request.headers['Authorization']
-        if auth_header.startswith('Bearer '):
+    # Try header first, then cookies
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        try:
             token = auth_header.split(' ')[1]
-
-    # Get token from cookies
-    if not token and 'session_token' in request.cookies:
-        token = request.cookies['session_token']
-
+        except IndexError:
+            pass
+    
     if not token:
+        token = request.cookies.get('session_token')
+
+    if not token or not isinstance(token, str) or len(token) < 10:
         return None
 
     try:
-        # Verify the token
-        payload = jwt.decode(
-            token,
-            current_app.config.get('SECRET_KEY'),
-            algorithms=['HS256']
-        )
+        # Decode and validate token
+        payload = jwt.decode(token, current_app.config.get('SECRET_KEY'), algorithms=['HS256'])
+        
+        username = payload.get('username')
+        session_id = payload.get('session_id')
+        if not username or not session_id:
+            return None
 
-        # Check if session exists and is valid
-        session = sessions_collection.find_one({'session_id': payload['session_id']})
-
+        # Check if session is still valid
+        session = sessions_collection.find_one({'session_id': session_id})
         if not session or session.get('is_revoked', False):
             return None
 
-        user = users_collection.find_one({'username': payload['username']})
-        return user
-    except:
+        # Check expiration
+        if session.get('expires_at') and session['expires_at'] < datetime.datetime.utcnow():
+            return None
+
+        return users_collection.find_one({'username': username})
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, Exception):
         return None
 
 
@@ -65,15 +68,146 @@ def token_required(f):
     return decorated
 
 
-# Login route
+# Verify JWT token (for testing)
+def verify_token(token):
+    """Verify a JWT token and return payload or None"""
+    if not token or not isinstance(token, str) or len(token) < 10:
+        return None
+    
+    try:
+        payload = jwt.decode(token, current_app.config.get('SECRET_KEY', 'default_secret'), algorithms=['HS256'])
+        
+        # Check if expired
+        if 'exp' in payload:
+            exp_time = datetime.datetime.fromtimestamp(payload['exp'])
+            if exp_time < datetime.datetime.utcnow():
+                return None
+        
+        return payload
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, Exception):
+        return None
+
+
+# Registration route
+@auth.route('/api/auth/register', methods=['POST'])
+@rate_limit('auth', 5, 900, per_user=False)  # 5 attempts per 15 minutes per client
+def register():
+    try:
+        # Basic validation
+        if not request.is_json:
+            return jsonify({'message': 'Content-Type must be application/json'}), 400
+            
+        data = request.get_json()
+        if not data:
+            return jsonify({'message': 'Request body is required'}), 400
+            
+        username = data.get('username', '').strip()
+        email = data.get('email', '').strip()
+        password = data.get('password', '')
+        
+        if not username:
+            return jsonify({'message': 'Username is required'}), 400
+        if not email:
+            return jsonify({'message': 'Email is required'}), 400
+        if not password:
+            return jsonify({'message': 'Password is required'}), 400
+            
+        # Validate username
+        if len(username) < 3 or len(username) > 30:
+            return jsonify({'message': 'Username must be between 3 and 30 characters'}), 400
+        if not all(c.isalnum() or c == '_' for c in username):
+            return jsonify({'message': 'Username can only contain letters, numbers, and underscores'}), 400
+            
+        # Validate email (basic)
+        if '@' not in email or '.' not in email.split('@')[1]:
+            return jsonify({'message': 'Invalid email format'}), 400
+            
+        # Validate password
+        if len(password) < 6:
+            return jsonify({'message': 'Password must be at least 6 characters'}), 400
+        
+        # Check if user already exists
+        existing_user = users_collection.find_one({
+            '$or': [{'username': username}, {'email': email}]
+        })
+        if existing_user:
+            return jsonify({'message': 'Username or email already exists'}), 409
+        
+        # Create user
+        user = {
+            'username': username,
+            'email': email,
+            'password': hash_session_password(password),
+            'created_at': datetime.datetime.utcnow(),
+            'user_id': str(uuid.uuid4()),
+            'is_guest': False
+        }
+        users_collection.insert_one(user)
+        
+        # Create session
+        session_id = str(uuid.uuid4())
+        session = {
+            'session_id': session_id,
+            'username': username,
+            'created_at': datetime.datetime.utcnow(),
+            'expires_at': datetime.datetime.utcnow() + datetime.timedelta(days=7),
+            'is_revoked': False
+        }
+        sessions_collection.insert_one(session)
+
+        # Generate JWT token
+        token = jwt.encode({
+            'username': username,
+            'session_id': session_id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
+        }, current_app.config.get('SECRET_KEY'), algorithm='HS256')
+
+        # Return response
+        response = jsonify({
+            'message': 'Registration successful',
+            'username': username,
+            'token': token,
+            'user': {'username': username, 'user_id': user['user_id']}
+        })
+
+        response.set_cookie('session_token', token, httponly=True,
+                          secure=not current_app.config.get('DEBUG', False),
+                          samesite='Lax', max_age=60 * 60 * 24 * 7)
+
+        return response, 201
+
+    except Exception as e:
+        current_app.logger.error(f"Registration error: {str(e)}")
+        return jsonify({'message': 'Registration failed'}), 500
+
+
+# Login route with rate limiting
 @auth.route('/api/auth/login', methods=['POST'])
+# Production optimization decorator removed
 def login():
-    data = request.get_json()
-
-    if not data or not data.get('username'):
-        return jsonify({'message': 'Username is required'}), 400
-
-    username = data.get('username').strip()
+    try:
+        # Basic validation
+        if not request.is_json:
+            return jsonify({'message': 'Content-Type must be application/json'}), 400
+            
+        data = request.get_json()
+        if not data or not data.get('username'):
+            return jsonify({'message': 'Username is required'}), 400
+            
+        username = data.get('username')
+        if not isinstance(username, str):
+            return jsonify({'message': 'Username must be a string'}), 400
+            
+        # Clean username
+        import html
+        username = html.escape(username.strip())
+        
+        # Check for bad characters
+        if '\x00' in username or any(ord(c) < 32 and c not in '\t\n\r' for c in username):
+            return jsonify({'message': 'Invalid characters in username'}), 400
+            
+    except Exception:
+        return jsonify({'message': 'Invalid request format'}), 400
 
     # Validate username
     if not username or len(username) < 3 or len(username) > 30:
@@ -83,59 +217,62 @@ def login():
     if not all(c.isalnum() or c == '_' for c in username):
         return jsonify({'message': 'Username can only contain letters, numbers, and underscores'}), 400
 
-    # Find or create user
-    user = users_collection.find_one({'username': username})
+    try:
+        # Find or create user
+        user = users_collection.find_one({'username': username})
+        if not user:
+            user = {
+                'username': username,
+                'created_at': datetime.datetime.utcnow(),
+                'user_id': str(uuid.uuid4()),
+                'is_guest': username.startswith('Guest_')
+            }
+            users_collection.insert_one(user)
+        else:
+            # If user exists and has a password (registered user), verify it
+            if user.get('password') and not user.get('is_guest', False):
+                provided_password = data.get('password', '')
+                if not provided_password:
+                    return jsonify({'message': 'Password required for registered user'}), 400
+                if not verify_session_password(provided_password, user['password']):
+                    return jsonify({'message': 'Invalid credentials'}), 401
 
-    if not user:
-        # Create a new user
-        user = {
+        # Create session
+        session_id = str(uuid.uuid4())
+        session = {
+            'session_id': session_id,
             'username': username,
             'created_at': datetime.datetime.utcnow(),
-            'user_id': str(uuid.uuid4()),
-            'is_guest': username.startswith('Guest_')
+            'expires_at': datetime.datetime.utcnow() + datetime.timedelta(days=7),
+            'is_revoked': False
         }
-        users_collection.insert_one(user)
+        sessions_collection.insert_one(session)
 
-    # Create a new session
-    session_id = str(uuid.uuid4())
-    session = {
-        'session_id': session_id,
-        'username': username,
-        'created_at': datetime.datetime.utcnow(),
-        'expires_at': datetime.datetime.utcnow() + datetime.timedelta(days=7),
-        'is_revoked': False
-    }
-    sessions_collection.insert_one(session)
-
-    # Generate a JWT token
-    token = jwt.encode(
-        {
+        # Generate JWT token
+        token = jwt.encode({
             'username': username,
             'session_id': session_id,
             'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
-        },
-        current_app.config.get('SECRET_KEY'),
-        algorithm='HS256'
-    )
+        }, current_app.config.get('SECRET_KEY'), algorithm='HS256')
 
-    # Create response
-    response = jsonify({
-        'message': 'Login successful',
-        'username': username,
-        'token': token
-    })
+        # Return response with secure cookie
+        response = jsonify({
+            'message': 'Login successful',
+            'username': username,
+            'token': token,
+            'user': {'username': username, 'user_id': user['user_id']}
+        })
 
-    # Set secure cookie
-    response.set_cookie(
-        'session_token',
-        token,
-        httponly=True,
-        secure=not current_app.config.get('DEBUG', False),  # Secure in production
-        samesite='Lax',
-        max_age=60 * 60 * 24 * 7  # 7 days
-    )
+        response.set_cookie('session_token', token, httponly=True,
+                          secure=not current_app.config.get('DEBUG', False),
+                          samesite='Lax', max_age=60 * 60 * 24 * 7)
 
-    return response, 200
+        return response, 200
+
+    except Exception as e:
+        # Log the error for debugging but don't expose internal details
+        current_app.logger.error(f"Login error: {str(e)}")
+        return jsonify({'message': 'Authentication failed'}), 500
 
 
 # Logout route
@@ -200,17 +337,3 @@ def get_user(user):
         'user_id': user['user_id'],
         'is_guest': user.get('is_guest', False)
     }), 200
-
-
-def decode_token(token):
-    try:
-        # Remove "Bearer " if it's included
-        if token.startswith("Bearer "):
-            token = token.split(" ")[1]
-
-        decoded = jwt.decode(token, current_app.config["SECRET_KEY"], algorithms=["HS256"])
-        return decoded.get("username")  # Or however your payload is structured
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
-        return None

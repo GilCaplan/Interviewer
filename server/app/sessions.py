@@ -1,538 +1,2426 @@
 # server/app/sessions.py
 from flask import Blueprint, request, jsonify, current_app
 from flask_socketio import emit, join_room, leave_room
-from pymongo import MongoClient
 import datetime
 import secrets
 import string
 import uuid
 import random
-from .auth import token_required, decode_token
+import re
+import html
+import hashlib
+from .auth import token_required
 from .config import Config
+from .templates import QUESTION_TYPES, validate_question_data
+from .password_utils import hash_session_password, verify_session_password
+from .rate_limiter import rate_limit
+from .database import sessions_collection, questions_collection, templates_collection
+from .crash_prevention import CrashPrevention, safe_execute, safe_database_operation
+from .llm_service import LLMService
+# Production optimization imports removed for Docker-only setup
 
 sessions_bp = Blueprint('sessions', __name__)
 
-# MongoDB connection
-client = MongoClient(Config.MONGO_URI)
-db = client.get_default_database()
-sessions_collection = db.simple_sessions  # Fixed collection name
-messages_collection = db.session_messages
-questions_collection = db.session_questions
+# Apply intelligent throttling for high-load endpoints
+@sessions_bp.before_request
+def intelligent_throttling():
+    """Apply smart throttling based on server load"""
+    import psutil
+    import time
+    
+    # Get current system load
+    cpu_percent = psutil.cpu_percent(interval=0.1)
+    memory_percent = psutil.virtual_memory().percent
+    
+    # Dynamic throttling based on load
+    if cpu_percent > 80 or memory_percent > 85:
+        time.sleep(0.5)  # Higher delay under heavy load
+    elif cpu_percent > 60 or memory_percent > 70:
+        time.sleep(0.2)  # Moderate delay under medium load
+    elif cpu_percent > 40 or memory_percent > 50:
+        time.sleep(0.1)  # Small delay under light load
+
+# Use centralized database connections with crash protection
+from .database import users_collection
+
+# Get additional collections safely
+messages_collection = safe_execute(
+    lambda: users_collection.database.session_messages, 
+    default_return=None
+)
 
 # Mock LLM responses for different subjects
 MOCK_LLM_RESPONSES = {
-	"python": [
-		"What is the difference between a list and a tuple in Python?",
-		"Explain the concept of list comprehensions with an example.",
-		"How do you handle exceptions in Python?",
-		"What are decorators and how do you use them?",
-		"Explain the difference between __str__ and __repr__ methods."
-	],
-	"javascript": [
-		"What is the difference between let, const, and var?",
-		"Explain event bubbling and event capturing.",
-		"What are promises and how do they work?",
-		"What is the difference between == and === in JavaScript?",
-		"Explain the concept of closures with an example."
-	],
-	"algorithms": [
-		"Implement a binary search algorithm.",
-		"Explain the time complexity of quicksort.",
-		"What is the difference between BFS and DFS?",
-		"How would you detect a cycle in a linked list?",
-		"Implement a function to reverse a binary tree."
-	],
-	"system_design": [
-		"How would you design a URL shortener like bit.ly?",
-		"Explain how you would design a chat application.",
-		"How would you scale a web application to handle millions of users?",
-		"Design a caching system for a web application.",
-		"How would you design a file storage system like Dropbox?"
-	]
+    "python": [
+        "What is the difference between a list and a tuple in Python?",
+        "Explain the concept of list comprehensions with an example.",
+        "How do you handle exceptions in Python?",
+        "What are decorators and how do you use them?",
+        "Explain the difference between __str__ and __repr__ methods."
+    ],
+    "javascript": [
+        "What is the difference between let, const, and var?",
+        "Explain event bubbling and event capturing.",
+        "What are promises and how do they work?",
+        "What is the difference between == and === in JavaScript?",
+        "Explain the concept of closures with an example."
+    ],
+    "algorithms": [
+        "Implement a binary search algorithm.",
+        "Explain the time complexity of quicksort.",
+        "What is the difference between BFS and DFS?",
+        "How would you detect a cycle in a linked list?",
+        "Implement a function to reverse a binary tree."
+    ],
+    "system_design": [
+        "How would you design a URL shortener like bit.ly?",
+        "Explain how you would design a chat application.",
+        "How would you scale a web application to handle millions of users?",
+        "Design a caching system for a web application.",
+        "How would you design a file storage system like Dropbox?"
+    ]
 }
 
 
 def generate_session_code():
-	"""Generate a 6-character session code"""
-	return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+    """Generate a 6-character session code"""
+    return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
 
 
-def mock_llm_generate_question(subject="general", context=""):
-	"""Mock LLM API that generates questions based on subject"""
-	subject_lower = subject.lower()
-
-	# Find matching subject
-	questions = MOCK_LLM_RESPONSES.get(subject_lower, MOCK_LLM_RESPONSES["python"])
-
-	# Add some randomness and context awareness
-	base_question = random.choice(questions)
-
-	if context:
-		# Simple context awareness
-		if "beginner" in context.lower():
-			base_question = "Beginner level: " + base_question
-		elif "advanced" in context.lower():
-			base_question = "Advanced: " + base_question
-
-	return {
-		"question": base_question,
-		"difficulty": random.choice(["easy", "medium", "hard"]),
-		"type": "multiple_choice" if random.choice([True, False]) else "open_ended",
-		"hints": [
-			"Think about the core concepts",
-			"Consider edge cases",
-			"Try to provide examples"
-		],
-		"generated_by": "mock_llm",
-		"timestamp": datetime.datetime.utcnow().isoformat()
-	}
+def sanitize_text_input(text, max_length=1000):
+    """Sanitize text input to prevent XSS and injection attacks"""
+    if text is None:
+        return ""
+    if not isinstance(text, str):
+        text = str(text)
+    
+    # Remove null bytes and control characters
+    cleaned = ''.join(c for c in text if ord(c) >= 32 or c in '\t\n\r')
+    
+    # HTML escape to prevent XSS
+    cleaned = html.escape(cleaned, quote=True)
+    
+    # Truncate if too long
+    if len(cleaned) > max_length:
+        cleaned = cleaned[:max_length]
+    
+    return cleaned
 
 
-# Create a new session
-@sessions_bp.route('/sessions/create', methods=['POST'])
+def validate_session_code(code):
+    """Validate session code format (6 alphanumeric characters)"""
+    if not isinstance(code, str):
+        return False
+    return len(code) == 6 and code.isalnum()
+
+
+def validate_question_id(question_id):
+    """Validate question ID format (UUID)"""
+    if not isinstance(question_id, str):
+        return False
+    try:
+        uuid.UUID(question_id)
+        return True
+    except ValueError:
+        return False
+
+
+def safe_emit(event, data, room=None, namespace='/'):
+    """Safely emit WebSocket events with error handling for test environments"""
+    try:
+        emit(event, data, room=room, namespace=namespace)
+    except RuntimeError as e:
+        # WebSocket context may not be available in test environment
+        current_app.logger.warning(f"WebSocket emit failed (likely test environment): {str(e)}")
+    except Exception as e:
+        current_app.logger.warning(f"WebSocket emit failed: {str(e)}")
+
+
+def clean_session_for_response(session):
+    """Remove sensitive data from session before sending to client"""
+    if session:
+        # Create a copy to avoid modifying original
+        clean_session = dict(session)
+        # Remove password hash from response
+        clean_session.pop('password_hash', None)
+        clean_session.pop('_id', None)
+        return clean_session
+    return session
+
+
+def clean_user_input(text):
+    """Clean and secure user text input"""
+    if not text or not isinstance(text, str):
+        return ""
+    
+    # Remove control chars (except basic whitespace)
+    text = ''.join(c for c in text if ord(c) >= 32 or c in '\t\n\r')
+    
+    # Prevent DoS with length limit
+    text = text[:10000] if len(text) > 10000 else text
+    
+    # Basic XSS protection
+    text = html.escape(text, quote=True)
+    
+    # Remove common attack patterns
+    bad_patterns = [
+        r'<script.*?</script>', r'javascript:', r'vbscript:', 
+        r'on\w+\s*=', r'<iframe', r'<object', r'<embed',
+        r';\s*(drop|delete|exec)', r'union\s+select'
+    ]
+    
+    for pattern in bad_patterns:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
+    
+    # Clean up path traversal and remaining tags
+    text = re.sub(r'\.\.[\\/]', '', text)
+    text = re.sub(r'<[^>]*>', '', text)
+    
+    return text.strip()
+
+
+def is_valid_session_code(session_code):
+    """Check if session code is valid format"""
+    return (session_code and isinstance(session_code, str) and 
+            re.match(r'^[A-Z0-9]{6}$', session_code.upper()))
+
+
+def is_valid_uuid(question_id):
+    """Check if string is a valid UUID"""
+    if not question_id or not isinstance(question_id, str):
+        return False
+    try:
+        uuid.UUID(question_id)
+        return True
+    except ValueError:
+        return False
+
+
+# Alias for unit tests
+validate_question_id = is_valid_uuid
+
+
+def validate_session_data(data):
+    """Validate and sanitize session creation data with enhanced security"""
+    if not isinstance(data, dict):
+        raise ValueError("Session data must be a dictionary")
+    
+    # Check for suspicious patterns
+    data_str = str(data).lower()
+    suspicious_patterns = [
+        'drop table', 'delete from', 'union select', 'exec ', 'xp_cmdshell',
+        'script>', '<img', 'javascript:', 'onerror=', 'onload=',
+        '../', '..\\', '%2e%2e', 'etc/passwd', 'system32'
+    ]
+    
+    for pattern in suspicious_patterns:
+        if pattern in data_str:
+            raise ValueError(f"Suspicious content detected: {pattern}")
+    
+    clean_data = {}
+    
+    # Title validation with enhanced security
+    title = data.get('title', '')
+    if not isinstance(title, str):
+        title = str(title) if title is not None else ''
+    title = title.strip()
+    
+    if len(title) > 1000:  # Reject extremely long titles
+        raise ValueError("Title too long")
+    
+    if title:
+        clean_data['title'] = clean_user_input(title)[:100]  # Max 100 chars
+    else:
+        clean_data['title'] = 'Untitled Session'
+    
+    # Subject validation with whitelist
+    valid_subjects = ['general', 'python', 'javascript', 'algorithms', 'system_design', 'java', 'react', 'databases']
+    subject = data.get('subject', 'general')
+    if not isinstance(subject, str):
+        subject = 'general'
+    subject = subject.lower().strip()
+    clean_data['subject'] = subject if subject in valid_subjects else 'general'
+    
+    # Description validation with enhanced sanitization
+    description = data.get('description', '')
+    if not isinstance(description, str):
+        description = str(description) if description is not None else ''
+    description = description.strip()
+    
+    if len(description) > 5000:  # Reject extremely long descriptions
+        raise ValueError("Description too long")
+        
+    clean_data['description'] = clean_user_input(description)[:500]  # Max 500 chars
+    
+    # Settings validation with type safety
+    settings = data.get('settings', {})
+    if not isinstance(settings, dict):
+        settings = {}
+    
+    # Helper functions for data conversion
+    def get_int(value, default, min_val, max_val):
+        try:
+            num = int(value) if isinstance(value, (int, float, str)) and str(value).isdigit() else default
+            return max(min_val, min(num, max_val))
+        except:
+            return default
+    
+    def get_bool(value, default):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return bool(value) if isinstance(value, (int, float)) else default
+    
+    # Set limits and features
+    clean_data['max_participants'] = get_int(settings.get('max_participants', 10), 10, 1, 50)
+    clean_data['max_questions'] = get_int(settings.get('max_questions', 20), 20, 1, 100)
+    clean_data['auto_approve_questions'] = get_bool(settings.get('auto_approve_questions', False), False)
+    clean_data['question_numbering'] = get_bool(settings.get('question_numbering', True), True)
+    clean_data['template_mode'] = get_bool(data.get('template_mode', False), False)
+    
+    # Password validation (optional)
+    password = data.get('password', '')
+    if password:
+        if not isinstance(password, str):
+            raise ValueError("Password must be a string")
+        password = password.strip()
+        
+        # Password security requirements
+        if len(password) < 4:
+            raise ValueError("Password must be at least 4 characters long")
+        if len(password) > 50:
+            raise ValueError("Password too long (max 50 characters)")
+            
+        # Check for suspicious patterns in password
+        if any(pattern in password.lower() for pattern in ['script>', '<img', 'javascript:', 'drop table']):
+            raise ValueError("Invalid characters in password")
+            
+        clean_data['password'] = password
+    else:
+        clean_data['password'] = None
+    
+    return clean_data
+
+
+def validate_question_content(field_name, field_value, question_type):
+    """Validate and sanitize question content"""
+    if not isinstance(field_name, str) or not field_name.strip():
+        return None, "Invalid field name"
+    
+    # Get allowed fields for this question type
+    if question_type not in QUESTION_TYPES:
+        return None, f"Invalid question type: {question_type}"
+    
+    type_config = QUESTION_TYPES[question_type]
+    allowed_fields = type_config['required_fields'] + type_config['optional_fields']
+    
+    if field_name not in allowed_fields:
+        return None, f"Field '{field_name}' not allowed for question type '{question_type}'"
+    
+    # Sanitize based on field type
+    if field_name in ['question_text', 'explanation', 'sample_answer', 'starter_code', 'solution']:
+        # Text fields
+        if isinstance(field_value, str):
+            sanitized_value = clean_user_input(field_value)
+            if len(sanitized_value) > 5000:  # Max 5000 chars for text fields
+                return None, "Text content too long (max 5000 characters)"
+            return sanitized_value, None
+        else:
+            return "", None
+    
+    elif field_name in ['options', 'expected_keywords', 'grading_criteria']:
+        # Array fields
+        if isinstance(field_value, list):
+            sanitized_array = []
+            for item in field_value[:20]:  # Max 20 items
+                if isinstance(item, str):
+                    sanitized_item = clean_user_input(item)
+                    if sanitized_item and len(sanitized_item) <= 200:  # Max 200 chars per item
+                        sanitized_array.append(sanitized_item)
+            return sanitized_array, None
+        else:
+            return [], None
+    
+    elif field_name == 'correct_answer':
+        # Special handling for correct_answer based on question type
+        if question_type == 'true_false':
+            return bool(field_value), None
+        elif question_type == 'multiple_choice' and isinstance(field_value, str):
+            return clean_user_input(field_value)[:200], None
+        else:
+            return clean_user_input(str(field_value))[:200], None
+    
+    elif field_name in ['max_words', 'time_limit']:
+        # Numeric fields
+        try:
+            num_value = int(field_value)
+            return max(1, min(num_value, 10000)), None  # Between 1 and 10000
+        except (ValueError, TypeError):
+            return 1, None
+    
+    elif field_name == 'language':
+        # Programming language field
+        valid_languages = ['python', 'javascript', 'java', 'cpp', 'c', 'go', 'rust']
+        lang = str(field_value).lower().strip()
+        return lang if lang in valid_languages else 'python', None
+    
+    else:
+        # Default string sanitization
+        return clean_user_input(str(field_value))[:1000], None
+
+
+def mock_llm_generate_question(subject="general", context="", question_type="open_ended", question_number=1):
+    """Enhanced mock LLM API that generates structured questions based on type and context"""
+    subject_lower = subject.lower()
+
+    # Find matching subject
+    questions = MOCK_LLM_RESPONSES.get(subject_lower, MOCK_LLM_RESPONSES["python"])
+
+    # Add some randomness and context awareness
+    base_question = random.choice(questions)
+
+    if context:
+        # Simple context awareness
+        if "beginner" in context.lower():
+            base_question = "Beginner level: " + base_question
+        elif "advanced" in context.lower():
+            base_question = "Advanced: " + base_question
+        if "question " + str(question_number) in context.lower():
+            base_question = f"Question {question_number}: " + base_question
+
+    # Generate type-specific content
+    question_data = {
+        "question_text": base_question,
+        "difficulty": random.choice(["easy", "medium", "hard"]),
+        "type": question_type,
+        "hints": [
+            "Think about the core concepts",
+            "Consider edge cases",
+            "Try to provide examples"
+        ],
+        "generated_by": "mock_llm",
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }
+
+    # Add type-specific fields
+    if question_type == "multiple_choice":
+        # Generate sample options based on subject
+        if subject_lower == "python":
+            question_data["options"] = ["True", "False", "It depends", "None of the above"]
+            question_data["correct_answer"] = "True"
+        else:
+            question_data["options"] = ["Option A", "Option B", "Option C", "Option D"]
+            question_data["correct_answer"] = "Option A"
+        question_data["explanation"] = "This is the correct answer because..."
+    
+    elif question_type == "true_false":
+        question_data["correct_answer"] = random.choice([True, False])
+        question_data["explanation"] = "This statement is correct/incorrect because..."
+    
+    elif question_type == "coding":
+        question_data["language"] = subject_lower if subject_lower in ["python", "javascript", "java"] else "python"
+        question_data["starter_code"] = "# Write your solution here\ndef solution():\n    pass"
+        question_data["solution"] = "# Sample solution\ndef solution():\n    return 'implemented'"
+    
+    elif question_type == "short_answer":
+        question_data["expected_keywords"] = ["key", "concept", "important"]
+        question_data["max_words"] = 50
+    
+    return question_data
+
+
+# Create a new session with rate limiting
+@sessions_bp.route('/api/sessions/create', methods=['POST'])
+# Production optimization decorator removed
 @token_required
+@CrashPrevention.circuit_breaker('session_create', failure_threshold=100, recovery_timeout=10)  # Ultra-resilient for 1500+ load
 def create_session(user):
-	try:
-		data = request.get_json() or {}
+    try:
+        # Resource monitoring for crash prevention
+        CrashPrevention.monitor_resources()
+        
+        # Basic validation
+        if not request.is_json:
+            return jsonify({"error": "Content-Type must be application/json"}), 400
+            
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid JSON payload"}), 400
+            
+        # Clean and validate the input
+        try:
+            clean_data = validate_session_data(data)
+        except (ValueError, TypeError) as e:
+            current_app.logger.warning(f"Bad session data from {user.get('username', 'unknown')}: {str(e)}")
+            return jsonify({"error": "Invalid session data"}), 400
 
-		# Generate unique session code
-		session_code = generate_session_code()
-		while sessions_collection.find_one({"session_code": session_code}):
-			session_code = generate_session_code()
+        # Generate unique session code
+        session_code = generate_session_code()
+        while sessions_collection.find_one({"session_code": session_code}):
+            session_code = generate_session_code()
 
-		session_data = {
-			"session_id": str(uuid.uuid4()),
-			"session_code": session_code,
-			"title": data.get('title', f"Question Session {session_code}"),
-			"subject": data.get('subject', 'general'),
-			"description": data.get('description', ''),
-			"host_id": user["user_id"],
-			"host_username": user["username"],
-			"participants": [user["username"]],
-			"created_at": datetime.datetime.utcnow(),
-			"updated_at": datetime.datetime.utcnow(),
-			"status": "active",
-			"settings": {
-				"max_participants": data.get('max_participants', 10),
-				"allow_llm": data.get('allow_llm', True),
-				"allow_user_questions": data.get('allow_user_questions', True),
-				"auto_approve_questions": data.get('auto_approve_questions', False)
-			}
-		}
+        # Handle password protection
+        password_hash = hash_session_password(clean_data['password']) if clean_data['password'] else None
 
-		result = sessions_collection.insert_one(session_data)
+        session_data = {
+            "session_id": str(uuid.uuid4()),
+            "session_code": session_code,
+            "title": clean_data['title'],
+            "subject": clean_data['subject'],
+            "description": clean_data['description'],
+            "host_id": user["user_id"],
+            "host_username": user["username"],
+            "participants": [user["username"]],
+            "created_at": datetime.datetime.utcnow(),
+            "updated_at": datetime.datetime.utcnow(),
+            "status": "active",
+            "template_mode": clean_data['template_mode'],
+            "settings": {
+                "max_participants": clean_data['max_participants'],
+                "max_questions": clean_data['max_questions'],
+                "auto_approve_questions": clean_data['auto_approve_questions'],
+                "question_numbering": clean_data['question_numbering'],
+                "viewing_mode": "suggestions_only"  # Default viewing mode: view_only, suggestions_only
+            },
+            "template_data": {
+                "current_question_number": 0,
+                "questions_queue": [],
+                "ready_questions": []
+            },
+            "password_hash": password_hash,
+            "is_password_protected": password_hash is not None
+        }
 
-		# Remove MongoDB ObjectId for response
-		session_data.pop('_id', None)
+        sessions_collection.insert_one(session_data)
 
-		return jsonify({
-			"message": "Session created successfully",
-			"session": session_data
-		}), 201
+        # Return clean session data (no password hash)
+        return jsonify({
+            "message": "Session created successfully",
+            "session": clean_session_for_response(session_data)
+        }), 201
 
-	except Exception as e:
-		current_app.logger.error(f"Error creating session: {str(e)}")
-		return jsonify({"error": "Failed to create session"}), 500
-
-
-@sessions_bp.route('/sessions/start_from_template/<template_id>', methods=['POST'])
-@token_required
-def start_session_from_template(user, template_id):
-	try:
-		from .config import Config
-
-		auth_header = request.headers.get("Authorization")
-		token = auth_header.replace("Bearer ", "").strip()
-		if not token:
-			return jsonify({"error": "Missing token"}), 401
-
-		username = decode_token(token)  # or however you decode
-		if not username:
-			return jsonify({"error": "Invalid token"}), 403
-
-		# Get the template
-		client = MongoClient(Config.MONGO_URI)
-		db = client.get_default_database()
-		templates_collection = db.templates
-
-		# Fetch the template
-		from bson import ObjectId
-		template = templates_collection.find_one({"_id": ObjectId(template_id)})
-		if not template:
-			return jsonify({"error": "Template not found"}), 404
-
-		session_code = generate_session_code()
-
-		# Create a session
-		session_data = {
-			"session_code": session_code,
-			"title": template.get("template_name", f"Template Session {session_code}"),
-			"subject": template.get("subject", "general"),
-			"description": f"Session based on template: {template.get('template_name', '')}",
-			"host_id": user["user_id"],
-			"host_username": user["username"],
-			"participants": [user["username"]],
-			"created_at": datetime.datetime.utcnow(),
-			"updated_at": datetime.datetime.utcnow(),
-			"status": "active",
-			"settings": {
-				"max_participants": 10,
-				"allow_llm": False,
-				"allow_user_questions": False,
-				"auto_approve_questions": True
-			}
-		}
-		session_id = sessions_collection.insert_one(session_data).inserted_id
-
-		# Copy questions to session_questions
-		for q in template.get("questions", []):
-			question_data = {
-				"question_id": str(uuid.uuid4()),
-				"session_id": session_id,
-				"question_text": q.get("question_text", ""),
-				"choices": q.get("choices", []),
-				"correct_answer": q.get("correct_answer", ""),
-				"difficulty": template.get("difficulty", "medium"),
-				"type": q.get("type", "multiple_choice"),
-				"hints": [],
-				"source": "template",
-				"created_by": template.get("created_by", "unknown"),
-				"created_at": datetime.datetime.utcnow(),
-				"status": "approved",
-				"subject": template.get("subject", "general")
-			}
-			questions_collection.insert_one(question_data)
-
-		return jsonify({
-			"message": "Session started from template",
-			"session_id": session_id,
-			"session_code": session_code
-		}), 201
-
-	except Exception as e:
-		current_app.logger.error(f"Error starting session from template: {str(e)}")
-		return jsonify({"error": "Failed to start session from template"}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error creating session: {str(e)}")
+        return jsonify({"error": "Failed to create session"}), 500
 
 
 # Join a session
 @sessions_bp.route('/api/sessions/join/<session_code>', methods=['POST'])
+@rate_limit('general', 1000, 3600, per_user=True)  # 1000 join attempts per hour per user
 @token_required
+@CrashPrevention.circuit_breaker('session_join', failure_threshold=50, recovery_timeout=20)
 def join_session(user, session_code):
-	try:
-		session = sessions_collection.find_one({"session_code": session_code.upper()})
+    try:
+        session = safe_database_operation(
+            lambda: sessions_collection.find_one({"session_code": session_code.upper()}),
+            default_return=None
+        )
 
-		if not session:
-			return jsonify({"error": "Session not found"}), 404
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
 
-		if session["status"] != "active":
-			return jsonify({"error": "Session is not active"}), 400
+        if session["status"] != "active":
+            return jsonify({"error": "Session is not active"}), 400
 
-		# Check if user is already in session
-		if user["username"] not in session["participants"]:
-			# Check participant limit
-			if len(session["participants"]) >= session["settings"]["max_participants"]:
-				return jsonify({"error": "Session is full"}), 400
+        # Check password if session is password protected
+        if session.get("is_password_protected", False):
+            data = request.get_json() if request.is_json else {}
+            provided_password = data.get('password', '').strip()
+            
+            if not provided_password:
+                return jsonify({
+                    "error": "Password required", 
+                    "password_required": True
+                }), 401
+            
+            stored_hash = session.get("password_hash")
+            if not stored_hash or not verify_session_password(provided_password, stored_hash):
+                return jsonify({
+                    "error": "Invalid password",
+                    "password_required": True
+                }), 401
 
-			# Add user to session
-			sessions_collection.update_one(
-				{"session_code": session_code.upper()},
-				{
-					"$push": {"participants": user["username"]},
-					"$set": {"updated_at": datetime.datetime.utcnow()}
-				}
-			)
+        # Check if user is already in session
+        if user["username"] not in session["participants"]:
+            # Check participant limit
+            if len(session["participants"]) >= session["settings"]["max_participants"]:
+                return jsonify({"error": "Session is full"}), 400
 
-		# Get updated session
-		updated_session = sessions_collection.find_one({"session_code": session_code.upper()})
-		updated_session.pop('_id', None)
+            # Add user to session
+            sessions_collection.update_one(
+                {"session_code": session_code.upper()},
+                {
+                    "$push": {"participants": user["username"]},
+                    "$set": {"updated_at": datetime.datetime.utcnow()}
+                }
+            )
 
-		return jsonify({
-			"message": "Joined session successfully",
-			"session": updated_session
-		}), 200
+        # Get updated session
+        updated_session = sessions_collection.find_one({"session_code": session_code.upper()})
+        clean_updated_session = clean_session_for_response(updated_session)
 
-	except Exception as e:
-		current_app.logger.error(f"Error joining session: {str(e)}")
-		return jsonify({"error": "Failed to join session"}), 500
+        return jsonify({
+            "message": "Joined session successfully",
+            "session": clean_updated_session
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error joining session: {str(e)}")
+        return jsonify({"error": "Failed to join session"}), 500
 
 
 # Become host (take over hosting)
 @sessions_bp.route('/api/sessions/<session_id>/become-host', methods=['POST'])
 @token_required
 def become_host(user, session_id):
-	try:
-		session = sessions_collection.find_one({"session_id": session_id})
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
 
-		if not session:
-			return jsonify({"error": "Session not found"}), 404
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
 
-		if user["username"] not in session["participants"]:
-			return jsonify({"error": "You must be a participant to become host"}), 400
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "You must be a participant to become host"}), 400
 
-		# Update host
-		sessions_collection.update_one(
-			{"session_id": session_id},
-			{
-				"$set": {
-					"host_id": user["user_id"],
-					"host_username": user["username"],
-					"updated_at": datetime.datetime.utcnow()
-				}
-			}
-		)
+        # Update host
+        sessions_collection.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    "host_id": user["user_id"],
+                    "host_username": user["username"],
+                    "updated_at": datetime.datetime.utcnow()
+                }
+            }
+        )
 
-		# Broadcast host change to all participants
-		emit('host_changed', {
-			'new_host': user["username"],
-			'timestamp': datetime.datetime.utcnow().isoformat()
-		}, room=session_id, namespace='/')
+        # Broadcast host change to all participants
+        safe_emit('host_changed', {
+            'new_host': user["username"],
+            'timestamp': datetime.datetime.utcnow().isoformat()
+        }, room=session_id)
 
-		return jsonify({"message": f"{user['username']} is now the host"}), 200
+        return jsonify({"message": f"{user['username']} is now the host"}), 200
 
-	except Exception as e:
-		current_app.logger.error(f"Error changing host: {str(e)}")
-		return jsonify({"error": "Failed to change host"}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error changing host: {str(e)}")
+        return jsonify({"error": "Failed to change host"}), 500
 
 
 # Get LLM generated question
 @sessions_bp.route('/api/sessions/<session_id>/llm-question', methods=['POST'])
+@rate_limit('llm', 30, 3600, per_user=True)  # 30 LLM requests per hour per user
 @token_required
 def get_llm_question(user, session_id):
-	try:
-		session = sessions_collection.find_one({"session_id": session_id})
+    try:
+        # Input validation
+        session = sessions_collection.find_one({"session_id": session_id})
 
-		if not session:
-			return jsonify({"error": "Session not found"}), 404
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
 
-		if user["username"] not in session["participants"]:
-			return jsonify({"error": "Access denied"}), 403
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
 
-		if not session["settings"]["allow_llm"]:
-			return jsonify({"error": "LLM questions are disabled for this session"}), 400
+        # Parse request data safely
+        try:
+            data = request.get_json() or {}
+        except Exception as parse_error:
+            return jsonify({"error": "Invalid JSON data"}), 400
+            
+        subject = str(data.get('subject', session.get('subject', 'general')))[:100]  # Limit length
+        context = str(data.get('context', ''))[:1000]  # Limit context length
+        question_type = str(data.get('question_type', 'open_ended'))[:50]
 
-		data = request.get_json() or {}
-		subject = data.get('subject', session.get('subject', 'general'))
-		context = data.get('context', '')
+        # Generate question using mock LLM with enhanced error handling
+        try:
+            llm_response = mock_llm_generate_question(subject, context, question_type)
+            
+            # Validate LLM response
+            if not isinstance(llm_response, dict) or not llm_response.get("question_text"):
+                raise ValueError("Invalid LLM response format")
+                
+        except Exception as llm_error:
+            # Fallback to basic question if LLM fails
+            current_app.logger.warning(f"LLM generation failed, using fallback: {str(llm_error)}")
+            llm_response = {
+                "question_text": f"Basic {subject} question: Explain a key concept in {subject}.",
+                "difficulty": "medium",
+                "type": question_type,
+                "hints": ["Consider the fundamentals", "Think about practical examples"],
+                "generated_by": "fallback",
+                "timestamp": datetime.datetime.utcnow().isoformat()
+            }
 
-		# Generate question using mock LLM
-		llm_response = mock_llm_generate_question(subject, context)
+        # Save question to database with enhanced validation
+        question_data = {
+            "question_id": str(uuid.uuid4()),
+            "session_id": session_id,
+            "question_text": str(llm_response.get("question_text", "Sample question"))[:2000],
+            "difficulty": str(llm_response.get("difficulty", "medium"))[:20],
+            "type": str(llm_response.get("type", "open_ended"))[:50],
+            "hints": llm_response.get("hints", [])[:5] if isinstance(llm_response.get("hints"), list) else [],
+            "source": "llm",
+            "created_by": "mock_llm",
+            "created_at": datetime.datetime.utcnow(),
+            "status": "pending",  # Host needs to approve
+            "subject": subject
+        }
 
-		# Save question to database
-		question_data = {
-			"question_id": str(uuid.uuid4()),
-			"session_id": session_id,
-			"question_text": llm_response["question"],
-			"difficulty": llm_response["difficulty"],
-			"type": llm_response["type"],
-			"hints": llm_response["hints"],
-			"source": "llm",
-			"created_by": "mock_llm",
-			"created_at": datetime.datetime.utcnow(),
-			"status": "pending",  # Host needs to approve
-			"subject": subject
-		}
+        # Insert with error handling
+        try:
+            questions_collection.insert_one(question_data.copy())
+            question_data.pop('_id', None)
+        except Exception as db_error:
+            current_app.logger.error(f"Database error saving question: {str(db_error)}")
+            # Continue without saving to DB, but return the question data
+            question_data.pop('_id', None)
 
-		questions_collection.insert_one(question_data)
-		question_data.pop('_id', None)
+        return jsonify({
+            "message": "LLM question generated successfully",
+            "question": question_data,
+            "success": True
+        }), 200
 
-		return jsonify({
-			"message": "LLM question generated",
-			"question": question_data
-		}), 200
-
-	except Exception as e:
-		current_app.logger.error(f"Error generating LLM question: {str(e)}")
-		return jsonify({"error": "Failed to generate question"}), 500
+    except Exception as e:
+        current_app.logger.error(f"Critical error in LLM question generation: {str(e)}")
+        
+        # Return safe fallback response instead of 500
+        fallback_question = {
+            "question_id": str(uuid.uuid4()),
+            "session_id": session_id,
+            "question_text": "Tell me about your experience with software development.",
+            "difficulty": "medium",
+            "type": "open_ended",
+            "hints": ["Consider your projects", "Think about challenges faced"],
+            "source": "fallback",
+            "created_by": "system",
+            "created_at": datetime.datetime.utcnow(),
+            "status": "pending",
+            "subject": "general"
+        }
+        
+        return jsonify({
+            "message": "Question generated (fallback mode)",
+            "question": fallback_question,
+            "success": True
+        }), 200
 
 
 # User submits their own question
 @sessions_bp.route('/api/sessions/<session_id>/add-question', methods=['POST'])
+@rate_limit('question_create', 200, 3600, per_user=True)  # 200 questions per hour per user
 @token_required
 def add_user_question(user, session_id):
-	try:
-		session = sessions_collection.find_one({"session_id": session_id})
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
 
-		if not session:
-			return jsonify({"error": "Session not found"}), 404
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
 
-		if user["username"] not in session["participants"]:
-			return jsonify({"error": "Access denied"}), 403
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
 
-		if not session["settings"]["allow_user_questions"]:
-			return jsonify({"error": "User questions are disabled for this session"}), 400
 
-		data = request.get_json() or {}
+        data = request.get_json() or {}
 
-		if not data.get('question_text'):
-			return jsonify({"error": "Question text is required"}), 400
+        if not data.get('question_text'):
+            return jsonify({"error": "Question text is required"}), 400
 
-		question_data = {
-			"question_id": str(uuid.uuid4()),
-			"session_id": session_id,
-			"question_text": data["question_text"],
-			"difficulty": data.get('difficulty', 'medium'),
-			"type": data.get('type', 'open_ended'),
-			"hints": data.get('hints', []),
-			"source": "user",
-			"created_by": user["username"],
-			"created_at": datetime.datetime.utcnow(),
-			"status": "approved" if session["settings"]["auto_approve_questions"] else "pending",
-			"subject": data.get('subject', session.get('subject', 'general'))
-		}
+        question_data = {
+            "question_id": str(uuid.uuid4()),
+            "session_id": session_id,
+            "question_text": data["question_text"],
+            "difficulty": data.get('difficulty', 'medium'),
+            "type": data.get('type', 'open_ended'),
+            "hints": data.get('hints', []),
+            "source": "user",
+            "created_by": user["username"],
+            "created_at": datetime.datetime.utcnow(),
+            "status": "approved" if session["settings"]["auto_approve_questions"] else "pending",
+            "subject": data.get('subject', session.get('subject', 'general'))
+        }
 
-		questions_collection.insert_one(question_data)
-		question_data.pop('_id', None)
+        questions_collection.insert_one(question_data)
+        question_data.pop('_id', None)
 
-		return jsonify({
-			"message": "Question added successfully",
-			"question": question_data
-		}), 201
+        return jsonify({
+            "message": "Question added successfully",
+            "question": question_data
+        }), 201
 
-	except Exception as e:
-		current_app.logger.error(f"Error adding user question: {str(e)}")
-		return jsonify({"error": "Failed to add question"}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error adding user question: {str(e)}")
+        return jsonify({"error": "Failed to add question"}), 500
 
 
 # Send chat message
 @sessions_bp.route('/api/sessions/<session_id>/chat', methods=['POST'])
+@rate_limit('general', 1000, 3600, per_user=True)  # 1000 chat messages per hour per user
 @token_required
 def send_chat_message(user, session_id):
-	try:
-		session = sessions_collection.find_one({"session_id": session_id})
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
 
-		if not session:
-			return jsonify({"error": "Session not found"}), 404
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
 
-		if user["username"] not in session["participants"]:
-			return jsonify({"error": "Access denied"}), 403
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
 
-		data = request.get_json() or {}
-		message_text = data.get('message', '').strip()
+        data = request.get_json() or {}
+        message_text = data.get('message', '').strip()
 
-		if not message_text:
-			return jsonify({"error": "Message cannot be empty"}), 400
+        if not message_text:
+            return jsonify({"error": "Message cannot be empty"}), 400
 
-		message_data = {
-			"message_id": str(uuid.uuid4()),
-			"session_id": session_id,
-			"username": user["username"],
-			"message": message_text,
-			"timestamp": datetime.datetime.utcnow(),
-			"type": data.get('type', 'chat')  # chat, question_suggestion, etc.
-		}
+        message_data = {
+            "message_id": str(uuid.uuid4()),
+            "session_id": session_id,
+            "username": user["username"],
+            "message": message_text,
+            "timestamp": datetime.datetime.utcnow(),
+            "type": data.get('type', 'chat')  # chat, question_suggestion, etc.
+        }
 
-		messages_collection.insert_one(message_data)
-		message_data.pop('_id', None)
+        messages_collection.insert_one(message_data)
+        message_data.pop('_id', None)
 
-		# Broadcast message to all session participants
-		emit('new_message', message_data, room=session_id, namespace='/')
+        # Broadcast message to all session participants
+        safe_emit('new_message', message_data, room=session_id)
 
-		return jsonify({
-			"message": "Message sent",
-			"chat_message": message_data
-		}), 200
+        return jsonify({
+            "message": "Message sent",
+            "chat_message": message_data
+        }), 200
 
-	except Exception as e:
-		current_app.logger.error(f"Error sending message: {str(e)}")
-		return jsonify({"error": "Failed to send message"}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error sending message: {str(e)}")
+        return jsonify({"error": "Failed to send message"}), 500
 
 
 # Get session data (questions, messages, etc.)
 @sessions_bp.route('/api/sessions/<session_id>', methods=['GET'])
 @token_required
 def get_session_data(user, session_id):
-	try:
-		session = sessions_collection.find_one({"session_id": session_id})
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
 
-		if not session:
-			return jsonify({"error": "Session not found"}), 404
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
 
-		if user["username"] not in session["participants"]:
-			return jsonify({"error": "Access denied"}), 403
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
 
-		# Get questions
-		questions = list(questions_collection.find(
-			{"session_id": session_id},
-			{"_id": 0}
-		).sort("created_at", 1))
+        # Get questions
+        questions = list(questions_collection.find(
+            {"session_id": session_id},
+            {"_id": 0}
+        ).sort("created_at", 1))
 
-		# Get recent messages
-		messages = list(messages_collection.find(
-			{"session_id": session_id},
-			{"_id": 0}
-		).sort("timestamp", -1).limit(50))
-		messages.reverse()  # Show chronologically
+        # Get recent messages
+        messages = list(messages_collection.find(
+            {"session_id": session_id},
+            {"_id": 0}
+        ).sort("timestamp", -1).limit(50))
+        messages.reverse()  # Show chronologically
 
-		session.pop('_id', None)
+        # Clean session data for response (remove password hash)
+        clean_session = clean_session_for_response(session)
 
-		return jsonify({
-			"session": session,
-			"questions": questions,
-			"messages": messages
-		}), 200
+        return jsonify({
+            "session": clean_session,
+            "questions": questions,
+            "messages": messages
+        }), 200
 
-	except Exception as e:
-		current_app.logger.error(f"Error getting session data: {str(e)}")
-		return jsonify({"error": "Failed to get session data"}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error getting session data: {str(e)}")
+        return jsonify({"error": "Failed to get session data"}), 500
 
 
 # Approve/reject questions (host only)
 @sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/approve', methods=['POST'])
+@rate_limit('general', 1000, 3600, per_user=True)  # 1000 approvals per hour per user
 @token_required
 def approve_question(user, session_id, question_id):
-	try:
-		session = sessions_collection.find_one({"session_id": session_id})
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
 
-		if not session:
-			return jsonify({"error": "Session not found"}), 404
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
 
-		if session["host_username"] != user["username"]:
-			return jsonify({"error": "Only the host can approve questions"}), 403
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can approve questions"}), 403
 
-		data = request.get_json() or {}
-		action = data.get('action', 'approve')  # approve or reject
+        data = request.get_json() or {}
+        action = data.get('action', 'approve')  # approve or reject
 
-		if action not in ['approve', 'reject']:
-			return jsonify({"error": "Invalid action"}), 400
+        if action not in ['approve', 'reject']:
+            return jsonify({"error": "Invalid action"}), 400
 
-		# Update question status
-		result = questions_collection.update_one(
-			{"question_id": question_id, "session_id": session_id},
-			{"$set": {"status": "approved" if action == "approve" else "rejected"}}
-		)
+        # Update question status
+        result = questions_collection.update_one(
+            {"question_id": question_id, "session_id": session_id},
+            {"$set": {"status": "approved" if action == "approve" else "rejected"}}
+        )
 
-		if result.matched_count == 0:
-			return jsonify({"error": "Question not found"}), 404
+        if result.matched_count == 0:
+            return jsonify({"error": "Question not found"}), 404
 
-		return jsonify({"message": f"Question {action}d successfully"}), 200
+        return jsonify({"message": f"Question {action}d successfully"}), 200
 
-	except Exception as e:
-		current_app.logger.error(f"Error approving question: {str(e)}")
-		return jsonify({"error": "Failed to approve question"}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error approving question: {str(e)}")
+        return jsonify({"error": "Failed to approve question"}), 500
 
 
-# List all active sessions
+# List all active sessions (both /api/sessions and /api/sessions/list for compatibility)
+@sessions_bp.route('/api/sessions', methods=['GET'])
 @sessions_bp.route('/api/sessions/list', methods=['GET'])
 @token_required
 def list_sessions(user):
-	try:
-		# Get sessions where user is a participant
-		user_sessions = list(sessions_collection.find(
-			{"participants": user["username"], "status": "active"},
-			{
-				"_id": 0,
-				"session_id": 1,
-				"session_code": 1,
-				"title": 1,
-				"subject": 1,
-				"host_username": 1,
-				"participants": 1,
-				"created_at": 1
-			}
-		).sort("created_at", -1))
+    try:
+        # Get sessions where user is a participant
+        user_sessions = list(sessions_collection.find(
+            {"participants": user["username"], "status": "active"},
+            {
+                "_id": 0,
+                "session_id": 1,
+                "session_code": 1,
+                "title": 1,
+                "subject": 1,
+                "host_username": 1,
+                "participants": 1,
+                "created_at": 1
+            }
+        ).sort("created_at", -1))
 
-		return jsonify({"sessions": user_sessions}), 200
+        return jsonify({"sessions": user_sessions}), 200
 
-	except Exception as e:
-		current_app.logger.error(f"Error listing sessions: {str(e)}")
-		return jsonify({"error": "Failed to list sessions"}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error listing sessions: {str(e)}")
+        return jsonify({"error": "Failed to list sessions"}), 500
+
+@sessions_bp.route('/api/sessions/current', methods=['GET'])
+@token_required
+def list_current_sessions(user):
+    try:
+        # Get sessions where user is a participant but NOT the host
+        current_sessions = list(sessions_collection.find(
+            {
+                "participants": user["username"], 
+                "host_username": {"$ne": user["username"]},  # Not the host
+                "status": "active"
+            },
+            {
+                "_id": 0,
+                "session_id": 1,
+                "session_code": 1,
+                "title": 1,
+                "subject": 1,
+                "host_username": 1,
+                "participants": 1,
+                "created_at": 1,
+                "status": 1
+            }
+        ).sort("created_at", -1))
+        
+        # Check if user has been removed from any sessions
+        filtered_sessions = []
+        for session in current_sessions:
+            # Check if user is still in participants list (not removed)
+            if user["username"] in session.get("participants", []):
+                # Add is_active field based on status
+                session["is_active"] = session.get("status") == "active"
+                filtered_sessions.append(session)
+        
+        return jsonify({"sessions": filtered_sessions}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error listing current sessions: {str(e)}")
+        return jsonify({"error": "Failed to list current sessions"}), 500
+
+
+# NEW ENDPOINTS FOR STRUCTURED TEMPLATE BUILDING
+
+# Start building a specific question number
+@sessions_bp.route('/api/sessions/<session_id>/questions/<int:question_number>/start', methods=['POST'])
+@rate_limit('general', 1000, 3600, per_user=True)  # 1000 question starts per hour per user
+@token_required
+def start_question_building(user, session_id, question_number):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        # Check viewing mode permissions for non-hosts
+        viewing_mode = session.get("settings", {}).get("viewing_mode", "suggestions_only")
+        is_host = session["host_username"] == user["username"]
+        
+        if not is_host and viewing_mode == "view_only":
+            return jsonify({"error": "This session is in view-only mode. Only the host can create questions."}), 403
+        
+        data = request.get_json() or {}
+        question_type = data.get('type', 'open_ended')
+        
+        if question_type not in QUESTION_TYPES:
+            return jsonify({"error": f"Invalid question type: {question_type}"}), 400
+        
+        # Check if question number is valid
+        max_questions = session["settings"]["max_questions"]
+        if question_number < 1 or question_number > max_questions:
+            return jsonify({"error": f"Question number must be between 1 and {max_questions}"}), 400
+        
+        # Check if question with this number already exists
+        questions_queue = session.get("template_data", {}).get("questions_queue", [])
+        ready_questions = session.get("template_data", {}).get("ready_questions", [])
+        
+        for q in questions_queue + ready_questions:
+            if q.get("question_number") == question_number:
+                return jsonify({"error": f"Question {question_number} already exists"}), 400
+        
+        # Initialize question structure
+        question_structure = {
+            "question_number": question_number,
+            "type": question_type,
+            "status": "building",  # building, ready, finalized
+            "created_by": user["username"],
+            "created_at": datetime.datetime.utcnow(),
+            "question_id": str(uuid.uuid4()),
+            "collaboration_notes": [],
+            "llm_suggestions": [],
+            "user_content": {}
+        }
+        
+        # Add type-specific template fields
+        type_config = QUESTION_TYPES[question_type]
+        for field in type_config['required_fields'] + type_config['optional_fields']:
+            question_structure["user_content"][field] = ""
+        
+        # Update session with new question
+        update_result = sessions_collection.update_one(
+            {"session_id": session_id},
+            {
+                "$push": {"template_data.questions_queue": question_structure},
+                "$set": {
+                    "template_data.current_question_number": question_number,
+                    "updated_at": datetime.datetime.utcnow()
+                }
+            }
+        )
+        
+        # Log update result for debugging
+        current_app.logger.info(f"Question creation update result: matched={update_result.matched_count}, modified={update_result.modified_count}")
+        
+        # Broadcast to all participants
+        safe_emit('question_building_started', {
+            'question_number': question_number,
+            'question_type': question_type,
+            'started_by': user["username"],
+            'question_structure': question_structure
+        }, room=session_id)
+        
+        return jsonify({
+            "message": f"Started building question {question_number}",
+            "question": question_structure
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error starting question building: {str(e)}")
+        return jsonify({"error": "Failed to start question building"}), 500
+
+
+# Update question content (collaborative editing)
+@sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/update', methods=['PUT'])
+@rate_limit('question_create', 200, 3600, per_user=True)  # 200 question updates per hour per user
+@token_required
+def update_question_content(user, session_id, question_id):
+    try:
+        # Validate inputs
+        if not is_valid_uuid(question_id):
+            return jsonify({"error": "Invalid question ID format"}), 400
+        
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        # Check viewing mode permissions for non-hosts
+        viewing_mode = session.get("settings", {}).get("viewing_mode", "suggestions_only")
+        is_host = session["host_username"] == user["username"]
+        
+        if not is_host and viewing_mode == "view_only":
+            return jsonify({"error": "This session is in view-only mode. Only the host can make changes."}), 403
+        
+        data = request.get_json() or {}
+        field_name = data.get('field')
+        field_value = data.get('value')
+        
+        if not field_name:
+            return jsonify({"error": "Field name is required"}), 400
+        
+        # Find the question in the queue
+        questions_queue = session.get("template_data", {}).get("questions_queue", [])
+        question_index = None
+        
+        for i, q in enumerate(questions_queue):
+            if q["question_id"] == question_id:
+                question_index = i
+                break
+        
+        if question_index is None:
+            current_app.logger.error(f"Question {question_id} not found in queue. Available: {[q['question_id'] for q in questions_queue]}")
+            return jsonify({"error": "Question not found in building queue"}), 404
+        
+        current_question = questions_queue[question_index]
+        
+        # Validate and sanitize the field content
+        sanitized_value, error_msg = validate_question_content(field_name, field_value, current_question["type"])
+        
+        if error_msg:
+            return jsonify({"error": error_msg}), 400
+        
+        # Update the field with sanitized value
+        update_path = f"template_data.questions_queue.{question_index}.user_content.{field_name}"
+        sessions_collection.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    update_path: sanitized_value,
+                    f"template_data.questions_queue.{question_index}.updated_at": datetime.datetime.utcnow(),
+                    "updated_at": datetime.datetime.utcnow()
+                }
+            }
+        )
+        
+        current_app.logger.info(f"Updated question {question_id} field '{field_name}' with value: {sanitized_value}")
+        
+        # Broadcast update to all participants
+        safe_emit('question_content_updated', {
+            'question_id': question_id,
+            'question_number': current_question["question_number"],
+            'field': field_name,
+            'value': sanitized_value,
+            'updated_by': user["username"]
+        }, room=session_id)
+        
+        return jsonify({
+            "message": "Question content updated",
+            "field": field_name,
+            "value": sanitized_value
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error updating question content: {str(e)}")
+        return jsonify({"error": "Failed to update question content"}), 500
+
+
+# Generate LLM suggestion for specific question field
+@sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/llm-suggest', methods=['POST'])
+@rate_limit('llm', 30, 3600, per_user=True)  # 30 LLM suggestions per hour per user
+@token_required
+def generate_llm_suggestion(user, session_id, question_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        
+        data = request.get_json() or {}
+        field_name = data.get('field', 'question_text')
+        context = data.get('context', '')
+        num_responses = min(int(data.get('num_responses', 1)), 5)  # Limit to max 5 responses
+        
+        current_app.logger.info(f"LLM suggestion request: field={field_name}, context='{context}', num_responses={num_responses}")
+        
+        # Find the question
+        questions_queue = session.get("template_data", {}).get("questions_queue", [])
+        current_question = None
+        
+        for q in questions_queue:
+            if q["question_id"] == question_id:
+                current_question = q
+                break
+        
+        if not current_question:
+            return jsonify({"error": "Question not found"}), 404
+        
+        # Generate LLM suggestion
+        subject = session.get('subject', 'general')
+        question_type = current_question["type"]
+        question_number = current_question["question_number"]
+        
+        # Build context with existing question content
+        existing_content = current_question.get("user_content", {})
+        full_context = f"{context}. Question {question_number}. Existing content: {existing_content}"
+        
+        # Check if requesting all fields
+        if field_name.lower() == "all":
+            current_app.logger.info(f"Generating suggestions for all fields: type={question_type}, subject={subject}")
+            # Generate suggestions for all key fields at once
+            try:
+                field_suggestions = LLMService.generate_all_field_suggestions(
+                    question_type=question_type,
+                    subject=subject,
+                    context=full_context,
+                    question_number=question_number
+                )
+                
+                suggestions = []
+                
+                # Create individual suggestions for each field
+                for field, suggested_value in field_suggestions.items():
+                    if field in ["llm_source", "generated_by", "timestamp"]:
+                        continue  # Skip metadata fields
+                    
+                    # Skip empty values
+                    if not suggested_value or str(suggested_value).strip() == "":
+                        continue
+                    
+                    suggestion_data = {
+                        "suggestion_id": str(uuid.uuid4()),
+                        "field": field,
+                        "suggested_value": str(suggested_value),  # Ensure it's a string
+                        "current_value": existing_content.get(field, ""),
+                        "author": "AI Assistant",
+                        "timestamp": datetime.datetime.utcnow(),
+                        "status": "pending"
+                    }
+                    
+                    suggestions.append(suggestion_data)
+                    
+                    # Add suggestion to database
+                    sessions_collection.update_one(
+                        {"session_id": session_id, "template_data.questions_queue.question_id": question_id},
+                        {
+                            "$push": {"template_data.questions_queue.$.collaboration_notes": {
+                                "note_id": suggestion_data["suggestion_id"],
+                                "type": "field_suggestion", 
+                                "author": "AI Assistant",
+                                "timestamp": suggestion_data["timestamp"],
+                                "note": f"AI suggests changing '{field}' to: {str(suggested_value)[:100]}{'...' if len(str(suggested_value)) > 100 else ''}",
+                                "suggestion_data": suggestion_data
+                            }},
+                            "$set": {"updated_at": datetime.datetime.utcnow()}
+                        }
+                    )
+                
+                current_app.logger.info(f"Generated {len(suggestions)} suggestions for all fields")
+                
+                if not suggestions:
+                    return jsonify({"error": "No valid field suggestions generated"}), 500
+                
+            except Exception as e:
+                current_app.logger.error(f"Error generating all-field suggestions: {e}")
+                return jsonify({"error": f"Failed to generate all-field suggestions: {str(e)}"}), 500
+        else:
+            # Generate multiple responses for single field (existing behavior)
+            suggestions = []
+            llm_responses = []  # Store all responses for later use
+            
+            for i in range(num_responses):
+                try:
+                    llm_response = LLMService.generate_question(
+                        subject=subject,
+                        context=full_context + f" (Variation {i+1})",
+                        question_type=question_type,
+                        question_number=question_number
+                    )
+                    llm_responses.append(llm_response)
+                    
+                    # Extract the requested field from LLM response
+                    suggested_value = llm_response.get(field_name, f"LLM suggestion for {field_name}")
+                    
+                    # If the field is not directly available, try to get it from question_text as fallback
+                    if not suggested_value or suggested_value == f"LLM suggestion for {field_name}":
+                        suggested_value = llm_response.get("question_text", "No suggestion generated")
+                    
+                    # Debug logging for troubleshooting
+                    current_app.logger.info(f"LLM Response keys: {llm_response.keys()}")
+                    current_app.logger.info(f"Field {field_name} extracted value: {suggested_value[:100]}...")
+                    
+                    # Create suggestion data structure EXACTLY like user suggestions
+                    suggestion_data = {
+                        "suggestion_id": str(uuid.uuid4()),
+                        "field": field_name,
+                        "suggested_value": suggested_value,
+                        "current_value": existing_content.get(field_name, ""),
+                        "author": "AI Assistant",
+                        "timestamp": datetime.datetime.utcnow(),  # Keep as datetime like user suggestions
+                        "status": "pending"  # pending, accepted, rejected
+                    }
+                    
+                    suggestions.append(suggestion_data)
+                    
+                    # Add suggestion EXACTLY like user suggestions
+                    sessions_collection.update_one(
+                        {"session_id": session_id, "template_data.questions_queue.question_id": question_id},
+                        {
+                            "$push": {"template_data.questions_queue.$.collaboration_notes": {
+                                "note_id": suggestion_data["suggestion_id"],
+                                "type": "field_suggestion", 
+                                "author": "AI Assistant",
+                                "timestamp": suggestion_data["timestamp"],  # Use the same timestamp
+                                "note": f"AI suggests changing '{field_name}' to: {suggested_value[:100]}{'...' if len(suggested_value) > 100 else ''}",
+                                "suggestion_data": suggestion_data
+                            }},
+                            "$set": {"updated_at": datetime.datetime.utcnow()}
+                        }
+                    )
+                    
+                except Exception as e:
+                    current_app.logger.error(f"Error generating LLM suggestion {i+1}: {e}")
+                    print(f"Error generating LLM suggestion {i+1}: {e}")
+                    # Create a fallback suggestion so user knows something happened
+                    fallback_suggestion = {
+                        "suggestion_id": str(uuid.uuid4()),
+                        "field": field_name,
+                        "suggested_value": f"Error generating suggestion {i+1}: {str(e)}",
+                        "current_value": existing_content.get(field_name, ""),
+                        "author": "AI Assistant (Error)",
+                        "timestamp": datetime.datetime.utcnow().isoformat(),
+                        "status": "pending"
+                    }
+                    suggestions.append(fallback_suggestion)
+                    continue
+        
+        if not suggestions:
+            return jsonify({"error": "Failed to generate any suggestions"}), 500
+        
+        # Broadcast each suggestion EXACTLY like user suggestions
+        current_app.logger.info(f"Broadcasting {len(suggestions)} suggestions to session {session_id}")
+        for suggestion in suggestions:
+            try:
+                # Convert datetime to string for WebSocket serialization
+                serializable_suggestion = {
+                    **suggestion,
+                    'timestamp': suggestion['timestamp'].isoformat() if isinstance(suggestion['timestamp'], datetime.datetime) else suggestion['timestamp']
+                }
+                
+                # Emit the exact same event as user suggestions
+                safe_emit('field_suggestion_added', {
+                    'question_id': question_id,
+                    'suggestion': serializable_suggestion
+                }, room=session_id)
+                current_app.logger.info(f"Emitted AI suggestion for field {suggestion.get('field', 'unknown')}")
+            except Exception as e:
+                current_app.logger.error(f"Error emitting field_suggestion_added: {e}")
+                print(f"Error emitting field_suggestion_added: {e}")
+        
+        return jsonify({
+            "message": f"{len(suggestions)} LLM suggestions generated",
+            "suggestions": suggestions,
+            "total_generated": len(suggestions)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error generating LLM suggestion: {str(e)}")
+        return jsonify({"error": "Failed to generate LLM suggestion"}), 500
+
+
+# Add collaboration note to question
+@sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/note', methods=['POST'])
+@token_required
+def add_collaboration_note(user, session_id, question_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        data = request.get_json() or {}
+        note_text = data.get('note', '').strip()
+        
+        if not note_text:
+            return jsonify({"error": "Note text is required"}), 400
+        
+        note_data = {
+            "note_id": str(uuid.uuid4()),
+            "note": note_text,
+            "author": user["username"],
+            "timestamp": datetime.datetime.utcnow(),
+            "field_reference": data.get('field_reference')  # Optional: which field this note refers to
+        }
+        
+        # Add note to question
+        sessions_collection.update_one(
+            {"session_id": session_id, "template_data.questions_queue.question_id": question_id},
+            {
+                "$push": {"template_data.questions_queue.$.collaboration_notes": note_data},
+                "$set": {"updated_at": datetime.datetime.utcnow()}
+            }
+        )
+        
+        # Broadcast to participants
+        safe_emit('collaboration_note_added', {
+            'question_id': question_id,
+            'note': note_data
+        }, room=session_id)
+        
+        return jsonify({
+            "message": "Collaboration note added",
+            "note": note_data
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error adding collaboration note: {str(e)}")
+        return jsonify({"error": "Failed to add collaboration note"}), 500
+
+
+# Add field suggestion (for non-hosts to suggest field changes)
+@sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/suggest', methods=['POST'])
+@rate_limit('general', 1000, 3600, per_user=True)  # 1000 suggestions per hour per user
+@token_required
+def add_field_suggestion(user, session_id, question_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        # Check viewing mode permissions for non-hosts
+        viewing_mode = session.get("settings", {}).get("viewing_mode", "suggestions_only")
+        is_host = session["host_username"] == user["username"]
+        
+        if not is_host and viewing_mode == "view_only":
+            return jsonify({"error": "This session is in view-only mode. Suggestions are not allowed."}), 403
+        
+        data = request.get_json() or {}
+        field_name = sanitize_text_input(data.get("field", ""), max_length=50)
+        suggested_value = sanitize_text_input(data.get("suggested_value", ""), max_length=2000)
+        current_value = sanitize_text_input(data.get("current_value", ""), max_length=2000)
+        
+        if not field_name or not suggested_value:
+            return jsonify({"error": "Field name and suggested value are required"}), 400
+        
+        # Create suggestion data structure
+        suggestion_data = {
+            "suggestion_id": str(uuid.uuid4()),
+            "field": field_name,
+            "suggested_value": suggested_value,
+            "current_value": current_value,
+            "author": user["username"],
+            "timestamp": datetime.datetime.utcnow(),
+            "status": "pending"  # pending, accepted, rejected
+        }
+        
+        # Add suggestion to question's collaboration_notes with special type
+        update_result = sessions_collection.update_one(
+            {"session_id": session_id, "template_data.questions_queue.question_id": question_id},
+            {
+                "$push": {"template_data.questions_queue.$.collaboration_notes": {
+                    "note_id": suggestion_data["suggestion_id"],
+                    "type": "field_suggestion",
+                    "author": user["username"],
+                    "timestamp": suggestion_data["timestamp"],
+                    "note": f"Suggests changing '{field_name}' to: {suggested_value}",
+                    "suggestion_data": suggestion_data
+                }},
+                "$set": {"updated_at": datetime.datetime.utcnow()}
+            }
+        )
+        
+        # Log update result for debugging
+        current_app.logger.info(f"Suggestion creation update result: matched={update_result.matched_count}, modified={update_result.modified_count}")
+        
+        if update_result.matched_count == 0:
+            current_app.logger.error(f"Failed to add suggestion for question {question_id} in session {session_id}")
+            return jsonify({"error": "Question not found or not accessible"}), 404
+        
+        # Broadcast suggestion to participants (serialize datetime for WebSocket)
+        serializable_suggestion = {
+            **suggestion_data,
+            'timestamp': suggestion_data['timestamp'].isoformat() if isinstance(suggestion_data['timestamp'], datetime.datetime) else suggestion_data['timestamp']
+        }
+        
+        safe_emit('field_suggestion_added', {
+            'question_id': question_id,
+            'suggestion': serializable_suggestion
+        }, room=session_id)
+        
+        return jsonify({
+            "message": "Field suggestion added",
+            "suggestion": suggestion_data
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error adding field suggestion: {str(e)}")
+        return jsonify({"error": "Failed to add field suggestion"}), 500
+
+
+# Accept or reject field suggestion (host only)
+@sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/suggestions/<suggestion_id>', methods=['PUT'])
+@token_required
+def handle_field_suggestion(user, session_id, question_id, suggestion_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can accept/reject suggestions
+        if user["username"] != session["host_username"]:
+            return jsonify({"error": "Only the session host can handle suggestions"}), 403
+        
+        data = request.get_json() or {}
+        action = data.get("action")  # "accept" or "reject"
+        
+        if action not in ["accept", "reject"]:
+            return jsonify({"error": "Action must be 'accept' or 'reject'"}), 400
+        
+        # Find the question and suggestion
+        questions_queue = session.get("template_data", {}).get("questions_queue", [])
+        question = None
+        suggestion = None
+        
+        for q in questions_queue:
+            if q.get("question_id") == question_id:
+                question = q
+                for note in q.get("collaboration_notes", []):
+                    if (note.get("type") == "field_suggestion" and 
+                        note.get("suggestion_data", {}).get("suggestion_id") == suggestion_id):
+                        suggestion = note.get("suggestion_data")
+                        break
+                break
+        
+        if not question or not suggestion:
+            return jsonify({"error": "Question or suggestion not found"}), 404
+        
+        if suggestion.get("status") != "pending":
+            return jsonify({"error": "Suggestion already handled"}), 400
+        
+        # Update suggestion status
+        update_query = {
+            "session_id": session_id,
+            "template_data.questions_queue.question_id": question_id,
+            "template_data.questions_queue.collaboration_notes.suggestion_data.suggestion_id": suggestion_id
+        }
+        
+        update_data = {
+            "$set": {
+                "template_data.questions_queue.$[q].collaboration_notes.$[note].suggestion_data.status": action,
+                "template_data.questions_queue.$[q].collaboration_notes.$[note].suggestion_data.handled_by": user["username"],
+                "template_data.questions_queue.$[q].collaboration_notes.$[note].suggestion_data.handled_at": datetime.datetime.utcnow(),
+                "updated_at": datetime.datetime.utcnow()
+            }
+        }
+        
+        # If accepting, also update the actual field value
+        if action == "accept":
+            field_path = f"template_data.questions_queue.$[q].user_content.{suggestion['field']}"
+            update_data["$set"][field_path] = suggestion["suggested_value"]
+        
+        update_result = sessions_collection.update_one(
+            update_query,
+            update_data,
+            array_filters=[
+                {"q.question_id": question_id},
+                {"note.suggestion_data.suggestion_id": suggestion_id}
+            ]
+        )
+        
+        # Log update result for debugging
+        current_app.logger.info(f"Suggestion handling update result: matched={update_result.matched_count}, modified={update_result.modified_count}")
+        
+        if update_result.matched_count == 0:
+            current_app.logger.error(f"Failed to update suggestion {suggestion_id} for question {question_id}")
+            return jsonify({"error": "Failed to update suggestion"}), 404
+        
+        # Broadcast the decision to participants
+        safe_emit('field_suggestion_handled', {
+            'question_id': question_id,
+            'suggestion_id': suggestion_id,
+            'action': action,
+            'field': suggestion['field'],
+            'new_value': suggestion['suggested_value'] if action == "accept" else None,
+            'handled_by': user["username"]
+        }, room=session_id)
+        
+        return jsonify({
+            "message": f"Suggestion {action}ed successfully",
+            "suggestion_id": suggestion_id,
+            "action": action
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error handling field suggestion: {str(e)}")
+        return jsonify({"error": "Failed to handle field suggestion"}), 500
+
+
+# Get suggestion history for a session (host only)
+@sessions_bp.route('/api/sessions/<session_id>/suggestions/history', methods=['GET'])
+@token_required
+def get_suggestion_history(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can view suggestion history
+        if user["username"] != session["host_username"]:
+            return jsonify({"error": "Only the session host can view suggestion history"}), 403
+        
+        # Collect all suggestions from all questions
+        suggestion_history = []
+        questions_queue = session.get("template_data", {}).get("questions_queue", [])
+        ready_questions = session.get("template_data", {}).get("ready_questions", [])
+        
+        # Process both queue and ready questions
+        all_questions = questions_queue + ready_questions
+        
+        for question in all_questions:
+            question_number = question.get("question_number", "Unknown")
+            question_id = question.get("question_id")
+            
+            for note in question.get("collaboration_notes", []):
+                if note.get("type") == "field_suggestion":
+                    suggestion_data = note.get("suggestion_data", {})
+                    # Only include suggestions that have been handled (accept or reject)
+                    if suggestion_data.get("status") in ["accept", "reject"]:
+                        suggestion_history.append({
+                            "question_number": question_number,
+                            "question_id": question_id,
+                            "suggestion_id": suggestion_data.get("suggestion_id"),
+                            "field": suggestion_data.get("field"),
+                            "suggested_value": suggestion_data.get("suggested_value"),
+                            "current_value": suggestion_data.get("current_value"),
+                            "author": suggestion_data.get("author"),
+                            "status": suggestion_data.get("status"),
+                            "handled_by": suggestion_data.get("handled_by"),
+                            "timestamp": suggestion_data.get("timestamp"),
+                            "handled_at": suggestion_data.get("handled_at")
+                        })
+        
+        # Sort by handled_at timestamp (most recent first)
+        suggestion_history.sort(key=lambda x: x.get("handled_at", x.get("timestamp", "")), reverse=True)
+        
+        return jsonify({
+            "suggestion_history": suggestion_history,
+            "total_suggestions": len(suggestion_history)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting suggestion history: {str(e)}")
+        return jsonify({"error": "Failed to get suggestion history"}), 500
+
+
+# Finalize question (move from queue to ready questions)
+@sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>/finalize', methods=['POST'])
+@rate_limit('general', 1000, 3600, per_user=True)  # 1000 finalizations per hour per user
+@token_required
+def finalize_question(user, session_id, question_id):
+    try:
+        # Validate inputs
+        if not is_valid_uuid(question_id):
+            return jsonify({"error": "Invalid question ID format"}), 400
+            
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can finalize questions
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can finalize questions"}), 403
+        
+        # Get fresh session data to ensure we have latest state
+        fresh_session = sessions_collection.find_one({"session_id": session_id})
+        if not fresh_session:
+            return jsonify({"error": "Session not found"}), 404
+            
+        # Find and remove question from queue
+        questions_queue = fresh_session.get("template_data", {}).get("questions_queue", [])
+        ready_questions = fresh_session.get("template_data", {}).get("ready_questions", [])
+        
+        # Debug logging
+        current_app.logger.info(f"Finalize attempt - Question ID: {question_id}")
+        current_app.logger.info(f"Questions in queue: {[q.get('question_id') for q in questions_queue]}")
+        current_app.logger.info(f"Questions already ready: {[q.get('question_id') for q in ready_questions]}")
+        
+        question_to_finalize = None
+        updated_queue = []
+        
+        for q in questions_queue:
+            if q.get("question_id") == question_id:
+                question_to_finalize = q
+                current_app.logger.info(f"Found question to finalize: Q{q.get('question_number')}")
+            else:
+                updated_queue.append(q)
+        
+        if not question_to_finalize:
+            # Check if it's already finalized
+            for q in ready_questions:
+                if q.get("question_id") == question_id:
+                    return jsonify({"error": "Question is already finalized"}), 400
+            
+            current_app.logger.error(f"Question {question_id} not found. Available IDs: {[q.get('question_id') for q in questions_queue]}")
+            return jsonify({"error": f"Question not found in building queue. Available questions: {[q.get('question_id') for q in questions_queue]}"}), 404
+        
+        # Validate question completeness with basic checks
+        question_type = question_to_finalize.get("type")
+        user_content = question_to_finalize.get("user_content", {})
+        
+        # Basic validation - at least question_text should exist
+        if not user_content.get("question_text", "").strip():
+            return jsonify({"error": "Question text is required before finalizing"}), 400
+        
+        # Type-specific validation
+        if question_type == "multiple_choice":
+            options = user_content.get("options", [])
+            correct_answer = user_content.get("correct_answer", "")
+            if not options or len([opt for opt in options if opt.strip()]) < 2:
+                return jsonify({"error": "Multiple choice questions need at least 2 options"}), 400
+            if not correct_answer.strip():
+                return jsonify({"error": "Multiple choice questions need a correct answer"}), 400
+        elif question_type == "true_false":
+            correct_answer = user_content.get("correct_answer")
+            if correct_answer is None:
+                return jsonify({"error": "True/false questions need a correct answer"}), 400
+        
+        # Prepare finalized question
+        finalized_question = {
+            "question_id": question_to_finalize["question_id"],
+            "question_number": question_to_finalize["question_number"],
+            "type": question_type,
+            "status": "finalized",
+            "created_by": question_to_finalize["created_by"],
+            "finalized_by": user["username"],
+            "created_at": question_to_finalize["created_at"],
+            "finalized_at": datetime.datetime.utcnow(),
+            "user_content": user_content  # Preserve structure
+        }
+        
+        # Copy all user content fields to top level for easier access
+        for field, value in user_content.items():
+            if field not in finalized_question:
+                finalized_question[field] = value
+        
+        current_app.logger.info(f"Finalizing question {question_id} with content: {user_content}")
+        
+        # Update session: remove from queue, add to ready questions
+        update_result = sessions_collection.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    "template_data.questions_queue": updated_queue,
+                    "updated_at": datetime.datetime.utcnow()
+                },
+                "$push": {"template_data.ready_questions": finalized_question}
+            }
+        )
+        
+        if update_result.modified_count == 0:
+            current_app.logger.error(f"Failed to update session during finalization")
+            return jsonify({"error": "Failed to update session"}), 500
+        
+        current_app.logger.info(f"Successfully finalized question {question_id}")
+        
+        # Broadcast to participants
+        safe_emit('question_finalized', {
+            'question': finalized_question,
+            'finalized_by': user["username"]
+        }, room=session_id)
+        
+        return jsonify({
+            "message": f"Question {question_to_finalize['question_number']} finalized successfully",
+            "question": finalized_question
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error finalizing question: {str(e)}")
+        return jsonify({"error": "Failed to finalize question"}), 500
+
+
+# Convert session to template
+@sessions_bp.route('/api/sessions/<session_id>/convert-to-template', methods=['POST'])
+@rate_limit('template_create', 20, 3600, per_user=True)  # 20 template conversions per hour per user
+@token_required
+def convert_session_to_template(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can convert to template
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can convert session to template"}), 403
+        
+        data = request.get_json() or {}
+        
+        # Get finalized questions
+        ready_questions = session.get("template_data", {}).get("ready_questions", [])
+        
+        if not ready_questions:
+            return jsonify({"error": "No finalized questions to convert"}), 400
+        
+        # Import templates collection
+        from .templates import templates_collection
+        import re
+        
+        template_name = data.get('template_name', session.get('title', 'Converted Template'))
+        
+        # Create template slug for unique identification
+        template_slug = re.sub(r'[^a-zA-Z0-9]+', '-', template_name.lower()).strip('-')
+        template_key = f"{user['user_id']}_{template_slug}"
+        
+        # Check if user wants to replace existing template or create new one
+        replace_existing = data.get('replace_existing', False)
+        existing_template = None
+        
+        if replace_existing:
+            # Look for existing template by same user with same key
+            existing_template = templates_collection.find_one({
+                "created_by_id": user["user_id"],
+                "template_key": template_key
+            })
+        
+        # Create template data
+        template_data = {
+            "template_id": existing_template["template_id"] if existing_template else str(uuid.uuid4()),
+            "template_key": template_key,
+            "template_name": template_name,
+            "description": data.get('description', f"Converted from session {session['session_code']}"),
+            "subject": session.get('subject', 'general'),
+            "sub_subject": data.get('sub_subject', ''),
+            "difficulty": data.get('difficulty', 'medium'),
+            "created_by": user["username"],
+            "created_by_id": user["user_id"],
+            "is_public": data.get('is_public', False),
+            "tags": data.get('tags', []),
+            "metadata": {
+                "created_at": existing_template["metadata"]["created_at"] if existing_template else datetime.datetime.utcnow(),
+                "updated_at": datetime.datetime.utcnow(),
+                "version": existing_template["metadata"]["version"] + 1 if existing_template else 1,
+                "question_count": len(ready_questions),
+                "estimated_time": len(ready_questions) * 3,  # 3 minutes per question estimate
+                "converted_from_session": session_id,
+                "previous_versions": existing_template["metadata"].get("previous_versions", []) + 
+                                   [existing_template["template_id"]] if existing_template else []
+            },
+            "settings": {
+                "max_questions": len(ready_questions),
+                "allow_shuffle": data.get('allow_shuffle', True),
+                "show_hints": data.get('show_hints', True),
+                "time_limit": data.get('time_limit', len(ready_questions) * 3)
+            },
+            "questions": ready_questions
+        }
+        
+        # Save template (replace existing or create new)
+        if existing_template and replace_existing:
+            # Update existing template
+            templates_collection.replace_one(
+                {"template_id": existing_template["template_id"]},
+                template_data
+            )
+            action = "updated"
+        else:
+            # Create new template
+            result = templates_collection.insert_one(template_data)
+            action = "created"
+        
+        template_data.pop('_id', None)
+        
+        # Update session to mark as converted
+        sessions_collection.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    "converted_to_template": template_data["template_id"],
+                    "conversion_date": datetime.datetime.utcnow(),
+                    "updated_at": datetime.datetime.utcnow()
+                }
+            }
+        )
+        
+        return jsonify({
+            "message": f"Template {action} successfully",
+            "template": template_data,
+            "action": action
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error converting session to template: {str(e)}")
+        return jsonify({"error": "Failed to convert session to template"}), 500
+
+
+# Check for existing templates with similar name
+@sessions_bp.route('/api/sessions/<session_id>/check-template-conflicts', methods=['POST'])
+@token_required
+def check_template_conflicts(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can check template conflicts"}), 403
+        
+        data = request.get_json() or {}
+        template_name = data.get('template_name', '')
+        
+        if not template_name:
+            return jsonify({"error": "Template name is required"}), 400
+        
+        # Import templates collection
+        from .templates import templates_collection
+        import re
+        
+        # Create template slug for checking
+        template_slug = re.sub(r'[^a-zA-Z0-9]+', '-', template_name.lower()).strip('-')
+        template_key = f"{user['user_id']}_{template_slug}"
+        
+        # Check for existing templates by same user with same key
+        existing_template = templates_collection.find_one({
+            "created_by_id": user["user_id"],
+            "template_key": template_key
+        })
+        
+        if existing_template:
+            return jsonify({
+                "conflict": True,
+                "existing_template": {
+                    "template_id": existing_template["template_id"],
+                    "template_name": existing_template["template_name"],
+                    "created_at": existing_template["metadata"]["created_at"],
+                    "version": existing_template["metadata"]["version"],
+                    "question_count": existing_template["metadata"]["question_count"]
+                }
+            }), 200
+        else:
+            return jsonify({"conflict": False}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error checking template conflicts: {str(e)}")
+        return jsonify({"error": "Failed to check template conflicts"}), 500
+
+
+# Update session mode/visibility settings
+@sessions_bp.route('/api/sessions/<session_id>/settings', methods=['PUT'])
+@rate_limit('general', 1000, 3600, per_user=True)  # 1000 settings updates per hour per user
+@token_required
+def update_session_settings(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can update settings
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can update session settings"}), 403
+        
+        data = request.get_json() or {}
+        
+        # Updatable settings
+        update_fields = {}
+        if 'viewing_mode' in data:  # view_only, suggestions_only
+            valid_modes = ['view_only', 'suggestions_only']
+            viewing_mode = data['viewing_mode']
+            if viewing_mode in valid_modes:
+                update_fields['settings.viewing_mode'] = viewing_mode
+            else:
+                return jsonify({"error": f"Invalid viewing mode. Must be one of: {', '.join(valid_modes)}"}), 400
+        if 'max_participants' in data:
+            try:
+                max_participants = int(data['max_participants'])
+                if 1 <= max_participants <= 50:
+                    update_fields['settings.max_participants'] = max_participants
+                else:
+                    return jsonify({"error": "Max participants must be between 1 and 50"}), 400
+            except (ValueError, TypeError):
+                return jsonify({"error": "Max participants must be a valid number"}), 400
+        
+        if update_fields:
+            update_fields['updated_at'] = datetime.datetime.utcnow()
+            
+            sessions_collection.update_one(
+                {"session_id": session_id},
+                {"$set": update_fields}
+            )
+            
+            # Broadcast settings update to all participants
+            safe_emit('session_settings_updated', {
+                'session_id': session_id,
+                'settings': data,
+                'updated_by': user["username"]
+            }, room=session_id)
+        
+        return jsonify({"message": "Session settings updated successfully"}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error updating session settings: {str(e)}")
+        return jsonify({"error": "Failed to update session settings"}), 500
+
+
+# Get session participants details
+@sessions_bp.route('/api/sessions/<session_id>/participants', methods=['GET'])
+@token_required
+def get_session_participants(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        # Get participant details from users collection
+        participant_usernames = session.get("participants", [])
+        participant_details = []
+        
+        for username in participant_usernames:
+            user_info = users_collection.find_one({"username": username}, {"_id": 0, "username": 1, "user_id": 1, "is_guest": 1, "created_at": 1})
+            if user_info:
+                user_info['is_host'] = username == session["host_username"]
+                user_info['online'] = True  # TODO: Implement real online status
+                participant_details.append(user_info)
+        
+        return jsonify({
+            "participants": participant_details,
+            "total_count": len(participant_details),
+            "host": session["host_username"]
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting session participants: {str(e)}")
+        return jsonify({"error": "Failed to get session participants"}), 500
+
+
+# General LLM chat endpoint for session
+@sessions_bp.route('/api/sessions/<session_id>/llm-chat', methods=['POST'])
+@rate_limit('llm', 30, 3600, per_user=True)  # 30 LLM chat requests per hour per user
+@token_required
+def llm_chat(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        
+        data = request.get_json() or {}
+        message = data.get('message', '').strip()
+        
+        if not message:
+            return jsonify({"error": "Message is required"}), 400
+        
+        # Build context from session
+        context = f"Session: {session.get('title', 'Untitled')}, Subject: {session.get('subject', 'general')}"
+        
+        # Get LLM response
+        llm_response = LLMService.generate_chat_response(message, context)
+        
+        # Store the chat message
+        chat_data = {
+            "message_id": str(uuid.uuid4()),
+            "session_id": session_id,
+            "user_message": message,
+            "llm_response": llm_response["response"],
+            "username": user["username"],
+            "timestamp": datetime.datetime.utcnow(),
+            "generated_by": llm_response["generated_by"]
+        }
+        
+        # Store in messages collection or session data
+        messages_collection.insert_one(chat_data)
+        
+        # Broadcast to all participants
+        safe_emit('llm_chat_response', {
+            'message_id': chat_data["message_id"],
+            'user_message': message,
+            'llm_response': llm_response["response"],
+            'username': user["username"],
+            'timestamp': chat_data["timestamp"].isoformat()
+        }, room=session_id)
+        
+        return jsonify({
+            "message": "LLM chat response generated",
+            "response": llm_response["response"],
+            "message_id": chat_data["message_id"]
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error with LLM chat: {str(e)}")
+        return jsonify({"error": "Failed to process LLM chat"}), 500
+
+
+# DEBUG: Get detailed session state  
+@sessions_bp.route('/api/sessions/<session_id>/debug', methods=['GET'])
+@token_required
+def debug_session_state(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        template_data = session.get("template_data", {})
+        questions_queue = template_data.get("questions_queue", [])
+        ready_questions = template_data.get("ready_questions", [])
+        
+        debug_info = {
+            "session_id": session_id,
+            "template_data": template_data,
+            "questions_in_queue": len(questions_queue),
+            "questions_ready": len(ready_questions),
+            "queue_question_ids": [q.get("question_id") for q in questions_queue],
+            "queue_question_numbers": [q.get("question_number") for q in questions_queue],
+            "ready_question_ids": [q.get("question_id") for q in ready_questions],
+            "ready_question_numbers": [q.get("question_number") for q in ready_questions],
+            "queue_details": questions_queue,
+            "ready_details": ready_questions
+        }
+        
+        return jsonify({"debug": debug_info}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error debugging session: {str(e)}")
+        return jsonify({"error": "Failed to debug session"}), 500
+
+
+# Get session chat history
+@sessions_bp.route('/api/sessions/<session_id>/chat-history', methods=['GET'])
+@token_required
+def get_chat_history(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] not in session["participants"]:
+            return jsonify({"error": "Access denied"}), 403
+        
+        # Get chat messages for this session
+        chat_messages = list(messages_collection.find(
+            {"session_id": session_id},
+            {"_id": 0}
+        ).sort("timestamp", 1).limit(100))  # Last 100 messages
+        
+        return jsonify({
+            "messages": chat_messages,
+            "total_count": len(chat_messages)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting chat history: {str(e)}")
+        return jsonify({"error": "Failed to get chat history"}), 500
+
+
+# DELETE SESSION AND CLEANUP ENDPOINTS
+
+# Delete entire session (host only)
+@sessions_bp.route('/api/sessions/<session_id>', methods=['DELETE'])
+@rate_limit('heavy_operation', 10, 600, per_user=True)  # 10 session deletions per 10 minutes per user
+@token_required
+def delete_session(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can delete session
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can delete the session"}), 403
+        
+        # Delete session and all related data
+        sessions_collection.delete_one({"session_id": session_id})
+        
+        # Clean up related data
+        messages_collection.delete_many({"session_id": session_id})
+        questions_collection.delete_many({"session_id": session_id})
+        
+        current_app.logger.info(f"Session {session_id} deleted by host {user['username']}")
+        
+        return jsonify({"message": "Session deleted successfully"}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error deleting session: {str(e)}")
+        return jsonify({"error": "Failed to delete session"}), 500
+
+
+# Remove question from session (host only)
+@sessions_bp.route('/api/sessions/<session_id>/questions/<question_id>', methods=['DELETE'])
+@token_required
+def remove_question_from_session(user, session_id, question_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can remove questions
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can remove questions"}), 403
+        
+        template_data = session.get("template_data", {})
+        questions_queue = template_data.get("questions_queue", [])
+        ready_questions = template_data.get("ready_questions", [])
+        
+        # Remove from queue
+        updated_queue = [q for q in questions_queue if q["question_id"] != question_id]
+        
+        # Remove from ready questions
+        updated_ready = [q for q in ready_questions if q["question_id"] != question_id]
+        
+        # Check if question was found and removed
+        if len(updated_queue) == len(questions_queue) and len(updated_ready) == len(ready_questions):
+            return jsonify({"error": "Question not found"}), 404
+        
+        # Update session
+        sessions_collection.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    "template_data.questions_queue": updated_queue,
+                    "template_data.ready_questions": updated_ready,
+                    "updated_at": datetime.datetime.utcnow()
+                }
+            }
+        )
+        
+        # Also remove from questions collection if it exists there
+        questions_collection.delete_one({"question_id": question_id})
+        
+        current_app.logger.info(f"Question {question_id} removed from session {session_id} by {user['username']}")
+        
+        # Broadcast removal to all participants
+        safe_emit('question_removed', {
+            'question_id': question_id,
+            'removed_by': user["username"],
+            'session_id': session_id
+        }, room=session_id)
+        
+        return jsonify({"message": "Question removed successfully"}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error removing question: {str(e)}")
+        return jsonify({"error": "Failed to remove question"}), 500
+
+
+# Clear all questions from session (host only)
+@sessions_bp.route('/api/sessions/<session_id>/questions/clear', methods=['DELETE'])
+@token_required
+def clear_all_questions(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can clear questions
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can clear all questions"}), 403
+        
+        # Clear all questions from session template data
+        sessions_collection.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    "template_data.questions_queue": [],
+                    "template_data.ready_questions": [],
+                    "template_data.current_question_number": 0,
+                    "updated_at": datetime.datetime.utcnow()
+                }
+            }
+        )
+        
+        # Also clear from questions collection
+        questions_collection.delete_many({"session_id": session_id})
+        
+        current_app.logger.info(f"All questions cleared from session {session_id} by {user['username']}")
+        
+        # Broadcast clear to all participants
+        safe_emit('all_questions_cleared', {
+            'cleared_by': user["username"],
+            'session_id': session_id
+        }, room=session_id)
+        
+        return jsonify({"message": "All questions cleared successfully"}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error clearing all questions: {str(e)}")
+        return jsonify({"error": "Failed to clear all questions"}), 500
+
+
+# Delete all user sessions (cleanup for fresh start)
+@sessions_bp.route('/api/sessions/cleanup-user', methods=['DELETE']) 
+@token_required
+def cleanup_user_sessions(user):
+    try:
+        # Get all sessions where user is host or participant
+        user_sessions = list(sessions_collection.find({
+            "$or": [
+                {"host_username": user["username"]},
+                {"participants": user["username"]}
+            ]
+        }))
+        
+        session_ids = [s["session_id"] for s in user_sessions]
+        
+        # Delete all user's sessions
+        sessions_collection.delete_many({
+            "$or": [
+                {"host_username": user["username"]},
+                {"participants": user["username"]}
+            ]
+        })
+        
+        # Clean up related data
+        if session_ids:
+            messages_collection.delete_many({"session_id": {"$in": session_ids}})
+            questions_collection.delete_many({"session_id": {"$in": session_ids}})
+        
+        current_app.logger.info(f"User {user['username']} cleaned up {len(user_sessions)} sessions")
+        
+        return jsonify({
+            "message": f"Cleaned up {len(user_sessions)} sessions",
+            "deleted_sessions": len(user_sessions)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error during user cleanup: {str(e)}")
+        return jsonify({"error": "Failed to cleanup user sessions"}), 500
+
+
+# Reset session to fresh state (clear all template data)
+@sessions_bp.route('/api/sessions/<session_id>/reset', methods=['POST'])
+@rate_limit('heavy_operation', 10, 600, per_user=True)  # 10 session resets per 10 minutes per user
+@token_required
+def reset_session(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Only host can reset session
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can reset the session"}), 403
+        
+        # Reset template data to fresh state
+        fresh_template_data = {
+            "current_question_number": 0,
+            "questions_queue": [],
+            "ready_questions": []
+        }
+        
+        sessions_collection.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    "template_data": fresh_template_data,
+                    "updated_at": datetime.datetime.utcnow()
+                }
+            }
+        )
+        
+        # Clear related data
+        messages_collection.delete_many({"session_id": session_id})
+        questions_collection.delete_many({"session_id": session_id})
+        
+        current_app.logger.info(f"Session {session_id} reset to fresh state by {user['username']}")
+        
+        # Broadcast reset to all participants
+        safe_emit('session_reset', {
+            'reset_by': user["username"],
+            'session_id': session_id
+        }, room=session_id)
+        
+        return jsonify({"message": "Session reset to fresh state successfully"}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error resetting session: {str(e)}")
+        return jsonify({"error": "Failed to reset session"}), 500
+
+
+@sessions_bp.route('/api/sessions/<session_id>/remove-user', methods=['POST'])
+@token_required
+def remove_user_from_session(user, session_id):
+    """Remove a user from a session (host only)"""
+    try:
+        # Get the session
+        session = sessions_collection.find_one({"session_id": session_id})
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Check if current user is the host
+        if session["host_username"] != user["username"]:
+            return jsonify({"error": "Only the host can remove users from the session"}), 403
+        
+        # Get username to remove from request
+        data = request.get_json()
+        username_to_remove = data.get('username')
+        
+        if not username_to_remove:
+            return jsonify({"error": "Username is required"}), 400
+        
+        # Cannot remove the host
+        if username_to_remove == session["host_username"]:
+            return jsonify({"error": "Cannot remove the host from the session"}), 400
+        
+        # Remove user from participants (participants are stored as simple username strings)
+        result = sessions_collection.update_one(
+            {"session_id": session_id},
+            {"$pull": {"participants": username_to_remove}}
+        )
+        
+        if result.modified_count == 0:
+            return jsonify({"error": "User not found in session or already removed"}), 404
+        
+        # Emit WebSocket event to notify about user removal
+        # Broadcast user removal to all participants
+        safe_emit('user_removed_from_session', {
+            'username': username_to_remove,
+            'removed_by': user["username"],
+            'session_id': session_id,
+            'timestamp': datetime.datetime.utcnow().isoformat()
+        }, room=session_id)
+        
+        return jsonify({
+            "message": f"User {username_to_remove} removed from session successfully"
+        })
+        
+    except Exception as e:
+        print(f"Error removing user from session: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@sessions_bp.route('/api/llm/status', methods=['GET'])
+def get_llm_status():
+    """Get the current status of all LLM services"""
+    try:
+        status = LLMService.get_llm_status()
+        return jsonify(status), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

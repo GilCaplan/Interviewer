@@ -14,7 +14,9 @@ import './index.css';
 import './components/Login.css';
 import './components/Questions.css';
 import TemplateDetails from "./components/TemplateDetails";
-import SessionRoom from "./components/SessionRoom";
+import SessionBuilder from './components/SessionBuilder';
+import MockInterviewSession from './components/MockInterviewSession';
+import SessionJoinForm from './components/SessionJoinForm';
 
 // Protected route component
 const ProtectedRoute = ({ children }) => {
@@ -40,7 +42,7 @@ function AppContent() {
 
   useEffect(() => {
     // Use the API URL from environment variables, or fallback to a default
-    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
     // Fetch information from the server with explicit URL
     fetch(`${apiUrl}/api/info`)
@@ -63,6 +65,11 @@ function AppContent() {
 
   // Default features to display if API is not available
   const fallbackFeatures = [
+    {
+      name: "Collaborative Sessions",
+      description: "Create or join secure collaborative sessions to build interview templates together.",
+      route: "/sessions"
+    },
     {
       name: "Practice programming problems",
       description: "Sharpen your coding skills with various programming challenges."
@@ -167,9 +174,14 @@ function AppContent() {
           }
         />
 
-        <Route path="/session/:sessionId" element={<SessionRoom />} />
-
-
+        <Route
+            path="/interview/:sessionId"
+            element={
+              <ProtectedRoute>
+                <MockInterviewSession />
+              </ProtectedRoute>
+          }
+        />
 
         <Route
           path="/feature/:featureId"
@@ -214,6 +226,25 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <CodingChallenge />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Session Management Routes */}
+        <Route
+          path="/sessions"
+          element={
+            <ProtectedRoute>
+              <SessionJoinForm />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/session/:sessionCode"
+          element={
+            <ProtectedRoute>
+              <SessionBuilder />
             </ProtectedRoute>
           }
         />

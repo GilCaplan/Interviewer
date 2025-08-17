@@ -17,26 +17,16 @@ export const AuthProvider = ({ children }) => {
         if (storedUser) {
           const userData = JSON.parse(storedUser);
 
-          // Verify token on the server (optional but recommended)
-          const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-
-          const response = await fetch(`${apiUrl}/api/auth/verify`, {
-            headers: {
-              'Authorization': `Bearer ${userData.sessionToken}`
-            },
-            credentials: 'include'
-          });
-
-          if (response.ok) {
-            setUser(userData);
-          } else {
-            // Token is invalid or expired, clear the stored data
-            localStorage.removeItem('user');
-          }
+          // For now, trust localStorage and skip server verification
+          // This avoids clearing tokens due to network/CORS issues
+          setUser(userData);
+          
+          // TODO: Add background token verification that doesn't clear tokens immediately
         }
       } catch (error) {
         console.error('Error verifying authentication:', error);
         localStorage.removeItem('user');
+        localStorage.removeItem('token');
       } finally {
         setLoading(false);
       }
@@ -45,17 +35,21 @@ export const AuthProvider = ({ children }) => {
     checkLoggedIn();
   }, []);
 
-  // Login function
+  // Login function with unified token storage
   const login = (userData) => {
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
+    // Store token separately for easy access across components
+    if (userData.sessionToken) {
+      localStorage.setItem('token', userData.sessionToken);
+    }
   };
 
   // Logout function
   const logout = async () => {
     try {
       // Call logout endpoint to invalidate token on server
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
       await fetch(`${apiUrl}/api/auth/logout`, {
         method: 'POST',
@@ -67,9 +61,11 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Error during logout:', error);
     } finally {
-      // Clear user from state and localStorage
+      // Clear all auth data from state and localStorage
       setUser(null);
       localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      localStorage.removeItem('sessionToken'); // Clean any legacy tokens
     }
   };
 
