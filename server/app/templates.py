@@ -1,5 +1,5 @@
 # server/app/templates.py
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, Response
 from pymongo import MongoClient, ReturnDocument
 from bson.objectid import ObjectId
 from bson import json_util
@@ -18,26 +18,26 @@ db = client.get_default_database()
 templates_collection = db.templates
 template_questions_collection = db.template_questions
 
+def to_json_response(data, status_code=200):
+    """
+    Serializes a Python dictionary to a Flask JSON Response object,
+    robustly handling database types like ObjectId and datetime.
+    """
+    def default_serializer(o):
+        if isinstance(o, (datetime.datetime, datetime.date)):
+            return o.isoformat()
+        if isinstance(o, ObjectId):
+            return str(o)
+        # This will catch any other non-serializable types
+        raise TypeError(f"Object of type '{type(o).__name__}' is not JSON serializable")
 
-def serialize_document(doc):
-    """
-    Recursively traverses a document (dict or list) and converts
-    non-JSON-serializable types like datetime and ObjectId into strings,
-    while skipping the internal '_id' field.
-    """
-    if isinstance(doc, list):
-        return [serialize_document(item) for item in doc]
-    if isinstance(doc, dict):
-        serialized_dict = {}
-        for key, value in doc.items():
-            if key != '_id':  # Skip the internal MongoDB _id
-                serialized_dict[key] = serialize_document(value)
-        return serialized_dict
-    if isinstance(doc, datetime.datetime):
-        return doc.isoformat()
-    if isinstance(doc, ObjectId):
-        return str(doc)
-    return doc
+    try:
+        json_string = json.dumps(data, default=default_serializer)
+        return Response(json_string, status=status_code, mimetype='application/json')
+    except Exception as e:
+        current_app.logger.error(f"CRITICAL: Failed to serialize data to JSON: {str(e)}")
+        error_response = json.dumps({"error": "Internal Server Error: Failed to serialize response.", "reason": str(e)})
+        return Response(error_response, status=500, mimetype='application/json')
 
 # Question types and their schemas
 QUESTION_TYPES = {
@@ -254,12 +254,11 @@ def create_template(user):
             template_data["metadata"]["question_count"] = len(validated_questions)
         
         result = templates_collection.insert_one(template_data)
-        template_data.pop('_id', None)
         
-        return jsonify({
+        return to_json_response({
             "message": "Template created successfully",
             "template": template_data
-        }), 201
+        }, status_code=201)
         
     except Exception as e:
         current_app.logger.error(f"Error creating template: {str(e)}")
@@ -305,9 +304,8 @@ def get_templates(user):
             query,
         ).sort("metadata.created_at", -1))
 
-        # Use the robust custom serializer before returning as JSON
-        serialized_templates = serialize_document(templates)
-        return jsonify({"templates": serialized_templates}), 200
+        # Use the robust JSON response function
+        return to_json_response({"templates": templates})
         
     except Exception as e:
         current_app.logger.error(f"Error fetching templates: {str(e)}")
@@ -322,7 +320,7 @@ def get_template(user, template_id):
         template = templates_collection.find_one({"template_id": template_id})
         
         if not template:
-            return jsonify({"error": "Template not found"}), 404
+            return to_json_response({"error": "Template not found"}, status_code=404)
         
         # Check access permissions
         # Use .get() for safe access to prevent KeyErrors on older/malformed documents
@@ -330,15 +328,17 @@ def get_template(user, template_id):
         owner_id = template.get('created_by_id') # This can be None
         current_user_id = user.get("user_id") # This can be None
         if not is_public and owner_id != current_user_id:
-            return jsonify({"error": "Access denied"}), 403
+            return to_json_response({"error": "Access denied"}, status_code=403)
         
-        # Use the robust custom serializer before returning as JSON
-        serialized_template = serialize_document(template)
-        return jsonify({"template": serialized_template}), 200
+        # Use the robust JSON response function
+        return to_json_response({"template": template})
         
     except Exception as e:
-        current_app.logger.error(f"Error fetching template: {str(e)}")
-        return jsonify({"error": "Failed to fetch template"}), 500
+        # This is a foolproof error handler
+        current_app.logger.error(f"Error fetching template details: {str(e)}")
+        error_payload = {"error": "Failed to fetch template details. Status: 500", "reason": str(e)}
+        error_json_string = json.dumps(error_payload)
+        return Response(error_json_string, status=500, mimetype='application/json')
 
 
 # Update template metadata
@@ -385,13 +385,11 @@ def update_template(user, template_id):
             return_document=ReturnDocument.AFTER
         )
         
-        # Use the robust custom serializer before returning as JSON
-        serialized_template = serialize_document(updated_template)
-        
-        return jsonify({
+        # Use the robust JSON response function
+        return to_json_response({
             "message": "Template updated successfully",
-            "template": serialized_template
-        }), 200
+            "template": updated_template
+        })
         
     except Exception as e:
         current_app.logger.error(f"Error updating template: {str(e)}")
