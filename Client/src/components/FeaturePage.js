@@ -71,7 +71,7 @@ function FeaturePage({ features }) {
                 try {
                   const token = localStorage.getItem('token');
                   if (!token) {
-                    alert('Please login first');
+                    console.warn('User not logged in, cannot create template.');
                     return;
                   }
 
@@ -99,10 +99,9 @@ function FeaturePage({ features }) {
                   }
 
                   const data = await response.json();
-                  alert(`✅ Template created successfully! ID: ${data.template.template_id}`);
+                  console.log(`✅ Template created successfully! ID: ${data.template.template_id}`);
                 } catch (error) {
                   console.error("❌ Error creating template:", error);
-                  alert(`Failed to create template: ${error.message}`);
                 }
               }}
               className="feature-action-btn"
@@ -112,19 +111,6 @@ function FeaturePage({ features }) {
             </button>
           </div>
           <p>Coming soon: AI-powered feedback on your answers.</p>
-        </>
-      );
-    } else if (name.includes('behavior')) {
-      return (
-        <>
-          <p>Master the art of behavioral interviews with practice questions and guidance.</p>
-          <ul>
-            <li>STAR method response templates</li>
-            <li>Questions about teamwork and leadership</li>
-            <li>Conflict resolution scenarios</li>
-            <li>Questions about your strengths and weaknesses</li>
-          </ul>
-          <p>Coming soon: Video response recording and analysis.</p>
         </>
       );
     } else if (name.includes('case')) {

@@ -1,6 +1,6 @@
 # server/app/templates.py
 from flask import Blueprint, request, jsonify, current_app
-from pymongo import MongoClient
+from pymongo import MongoClient, ReturnDocument
 from bson.objectid import ObjectId
 from bson import json_util
 import json
@@ -102,8 +102,8 @@ QUESTION_TYPES = {
 
 DIFFICULTY_LEVELS = ['easy', 'medium', 'hard']
 SUBJECTS = [
-    'algorithms', 'data_structures', 'system_design', 'python', 'javascript', 
-    'java', 'react', 'databases', 'networking', 'behavioral', 'general'
+    'algorithms', 'data_structures', 'system_design', 'python', 'javascript',
+    'java', 'react', 'databases', 'networking', 'general'
 ]
 
 
@@ -378,16 +378,19 @@ def update_template(user, template_id):
         update_fields['metadata.updated_at'] = datetime.datetime.utcnow()
         update_fields['metadata.version'] = template['metadata']['version'] + 1
         
-        templates_collection.update_one(
+        # Use find_one_and_update to update and return the document in a single atomic operation
+        updated_template = templates_collection.find_one_and_update(
             {"template_id": template_id},
-            {"$set": update_fields}
+            {"$set": update_fields},
+            return_document=ReturnDocument.AFTER
         )
         
-        updated_template = templates_collection.find_one({"template_id": template_id}, {"_id": 0})
+        # Use the robust custom serializer before returning as JSON
+        serialized_template = serialize_document(updated_template)
         
         return jsonify({
             "message": "Template updated successfully",
-            "template": updated_template
+            "template": serialized_template
         }), 200
         
     except Exception as e:

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import io from 'socket.io-client';
 import { getApiUrl, getAuthToken } from '../utils/authUtils';
+import { fetchApi } from '../utils/api'; // Import the new utility
 import './SessionBuilder.css';
 
 // Sub-components for the 3 screens
@@ -411,63 +412,19 @@ const SessionBuilder = () => {
       
     } catch (err) {
       console.error('Error starting question:', err);
-      alert('Failed to start question: ' + err.message);
     }
   };
 
   const handleUpdateQuestion = async (questionId, field, value) => {
     console.log('handleUpdateQuestion called:', { questionId, field, value, sessionId: session?.session_id });
-    
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      
-      // Get token with fallback
-      let authToken = localStorage.getItem('token');
-      if (!authToken && user?.sessionToken) {
-        authToken = user.sessionToken;
-      }
-      
-      console.log('Update request params:', { 
-        sessionId: session?.session_id, 
-        hasToken: !!authToken,
-        apiUrl 
-      });
-      
-      const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/questions/${questionId}/update`, {
+      await fetchApi(`/api/sessions/${session.session_id}/questions/${questionId}/update`, {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({ field, value }),
-        credentials: 'include'
       });
-
-      if (!response.ok) {
-        let errorMessage = `HTTP ${response.status}`;
-        try {
-          const errorData = await response.text();
-          console.error('Update question failed:', response.status, errorData);
-          
-          if (errorData) {
-            try {
-              const errorJson = JSON.parse(errorData);
-              errorMessage = errorJson.error || errorData;
-            } catch (parseError) {
-              errorMessage = errorData;
-            }
-          }
-        } catch (readError) {
-          console.error('Could not read error response:', readError);
-        }
-        
-        throw new Error(errorMessage);
-      }
-      
       console.log('Question update successful');
     } catch (err) {
       console.error('Error updating question:', err);
-      alert('Failed to update question: ' + err.message);
     }
   };
 
@@ -521,7 +478,6 @@ const SessionBuilder = () => {
       console.log('Question finalized successfully');
     } catch (err) {
       console.error('Error finalizing question:', err);
-      alert('Failed to finalize question: ' + err.message);
     }
   };
 
@@ -552,11 +508,8 @@ const SessionBuilder = () => {
       
       const data = await response.json();
       console.log('LLM suggestion response:', data);
-      const count = data.total_generated || data.suggestions?.length || numResponses;
-      alert(`Generated ${count} AI suggestion${count > 1 ? 's' : ''} for ${field}. Check the template editor to accept/reject them.`);
     } catch (err) {
       console.error('Error requesting LLM suggestion:', err);
-      alert('Failed to get LLM suggestion: ' + err.message);
     }
   };
 
@@ -646,15 +599,14 @@ const SessionBuilder = () => {
 
       if (response.ok) {
         const data = await response.json();
-        alert(`Successfully cleaned up ${data.deleted_sessions} sessions. Redirecting to home...`);
+        console.log(`Successfully cleaned up ${data.deleted_sessions} sessions.`);
         navigate('/');
       } else {
         const errorData = await response.text();
-        alert('Failed to cleanup sessions: ' + errorData);
+        console.error('Failed to cleanup sessions: ' + errorData);
       }
     } catch (err) {
       console.error('Error cleaning up sessions:', err);
-      alert('Failed to cleanup sessions: ' + err.message);
     }
   };
 
@@ -680,15 +632,14 @@ const SessionBuilder = () => {
       });
 
       if (response.ok) {
-        alert('Session deleted successfully. Redirecting to home...');
+        console.log('Session deleted successfully.');
         navigate('/');
       } else {
         const errorData = await response.text();
-        alert('Failed to delete session: ' + errorData);
+        console.error('Failed to delete session: ' + errorData);
       }
     } catch (err) {
       console.error('Error deleting session:', err);
-      alert('Failed to delete session: ' + err.message);
     }
   };
 
@@ -724,14 +675,13 @@ const SessionBuilder = () => {
           return newSet;
         });
         
-        alert(`${username} has been removed from the session.`);
+        console.log(`${username} has been removed from the session.`);
       } else {
         const errorData = await response.json();
-        alert('Failed to remove user: ' + (errorData.error || 'Unknown error'));
+        console.error('Failed to remove user: ' + (errorData.error || 'Unknown error'));
       }
     } catch (err) {
       console.error('Error removing user from session:', err);
-      alert('Failed to remove user: ' + err.message);
     }
   };
 

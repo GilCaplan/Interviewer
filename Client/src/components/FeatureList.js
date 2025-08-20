@@ -3,6 +3,11 @@ import { Link } from 'react-router-dom';
 import './FeatureList.css';
 
 function FeatureList({ features }) {
+  // Filter out the unwanted features: "Behavioral questions" and "More Coming Soon"
+  const filteredFeatures = features.filter(feature =>
+    !feature.name.toLowerCase().includes('behavioral questions') &&
+    !feature.name.toLowerCase().includes('more coming soon')
+  );
   // Group features into rows of 3 for better layout
   const chunkArray = (array, size) => {
     const result = [];
@@ -12,7 +17,7 @@ function FeatureList({ features }) {
     return result;
   };
 
-  const featureRows = chunkArray(features, 3);
+  const featureRows = chunkArray(filteredFeatures, 3); // Use filtered features here
 
   return (
     <div className="feature-list-container">
@@ -22,7 +27,7 @@ function FeatureList({ features }) {
       </p>
 
       <div className="features-list">
-        {features.map((feature, index) => (
+        {filteredFeatures.map((feature, index) => ( // Map over filtered features
           <Link
             to={feature.route || `/feature/${index}`}
             key={index}
@@ -64,8 +69,6 @@ function getFeatureIcon(featureName) {
     return '🧩';
   } else if (name.includes('interview question')) {
     return '❓';
-  } else if (name.includes('behavioral')) {
-    return '🗣️';
   } else if (name.includes('case stud')) {
     return '📊';
   } else if (name.includes('mock')) {

@@ -21,25 +21,6 @@ from .llm_service import LLMService
 
 sessions_bp = Blueprint('sessions', __name__)
 
-# Apply intelligent throttling for high-load endpoints
-@sessions_bp.before_request
-def intelligent_throttling():
-    """Apply smart throttling based on server load"""
-    import psutil
-    import time
-    
-    # Get current system load
-    cpu_percent = psutil.cpu_percent(interval=0.1)
-    memory_percent = psutil.virtual_memory().percent
-    
-    # Dynamic throttling based on load
-    if cpu_percent > 80 or memory_percent > 85:
-        time.sleep(0.5)  # Higher delay under heavy load
-    elif cpu_percent > 60 or memory_percent > 70:
-        time.sleep(0.2)  # Moderate delay under medium load
-    elif cpu_percent > 40 or memory_percent > 50:
-        time.sleep(0.1)  # Small delay under light load
-
 # Use centralized database connections with crash protection
 from .database import users_collection
 
