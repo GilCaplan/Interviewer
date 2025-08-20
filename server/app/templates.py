@@ -2,6 +2,8 @@
 from flask import Blueprint, request, jsonify, current_app
 from pymongo import MongoClient
 from bson.objectid import ObjectId
+from bson import json_util
+import json
 import datetime
 import uuid
 from .auth import token_required
@@ -15,6 +17,27 @@ client = MongoClient(Config.MONGO_URI)
 db = client.get_default_database()
 templates_collection = db.templates
 template_questions_collection = db.template_questions
+
+
+def serialize_document(doc):
+    """
+    Recursively traverses a document (dict or list) and converts
+    non-JSON-serializable types like datetime and ObjectId into strings,
+    while skipping the internal '_id' field.
+    """
+    if isinstance(doc, list):
+        return [serialize_document(item) for item in doc]
+    if isinstance(doc, dict):
+        serialized_dict = {}
+        for key, value in doc.items():
+            if key != '_id':  # Skip the internal MongoDB _id
+                serialized_dict[key] = serialize_document(value)
+        return serialized_dict
+    if isinstance(doc, datetime.datetime):
+        return doc.isoformat()
+    if isinstance(doc, ObjectId):
+        return str(doc)
+    return doc
 
 # Question types and their schemas
 QUESTION_TYPES = {
@@ -266,18 +289,25 @@ def get_templates(user):
         if created_by:
             query['created_by'] = created_by
         else:
+            # Safely get user_id to prevent crashes if token is malformed
+            user_id = user.get("user_id")
             # By default, show public templates + user's own templates
-            query['$or'] = [
-                {'is_public': True},
-                {'created_by_id': user["user_id"]}
-            ]
+            if user_id:
+                query['$or'] = [
+                    {'is_public': True},
+                    {'created_by_id': user_id}
+                ]
+            else:
+                # If user_id is not available, only show public templates
+                query['is_public'] = True
         
         templates = list(templates_collection.find(
             query,
-            {'_id': 0}
         ).sort("metadata.created_at", -1))
-        
-        return jsonify({"templates": templates}), 200
+
+        # Use the robust custom serializer before returning as JSON
+        serialized_templates = serialize_document(templates)
+        return jsonify({"templates": serialized_templates}), 200
         
     except Exception as e:
         current_app.logger.error(f"Error fetching templates: {str(e)}")
@@ -289,16 +319,22 @@ def get_templates(user):
 @token_required
 def get_template(user, template_id):
     try:
-        template = templates_collection.find_one({"template_id": template_id}, {"_id": 0})
+        template = templates_collection.find_one({"template_id": template_id})
         
         if not template:
             return jsonify({"error": "Template not found"}), 404
         
         # Check access permissions
-        if not template['is_public'] and template['created_by_id'] != user["user_id"]:
+        # Use .get() for safe access to prevent KeyErrors on older/malformed documents
+        is_public = template.get('is_public', False)
+        owner_id = template.get('created_by_id') # This can be None
+        current_user_id = user.get("user_id") # This can be None
+        if not is_public and owner_id != current_user_id:
             return jsonify({"error": "Access denied"}), 403
         
-        return jsonify({"template": template}), 200
+        # Use the robust custom serializer before returning as JSON
+        serialized_template = serialize_document(template)
+        return jsonify({"template": serialized_template}), 200
         
     except Exception as e:
         current_app.logger.error(f"Error fetching template: {str(e)}")

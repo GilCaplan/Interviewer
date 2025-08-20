@@ -226,7 +226,7 @@ def create_app(config_class=Config):
     @app.teardown_appcontext
     def shutdown_async_on_teardown(exception):
         shutdown_async_manager()
-
+    
     # Store limiter instance for use in other modules
     app.limiter = limiter
     

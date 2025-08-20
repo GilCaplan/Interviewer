@@ -222,6 +222,10 @@ const SessionBuilder = () => {
       
       if (socket) {
         console.log('Cleaning up socket connection');
+        // Tell the server we are leaving the room for proper cleanup
+        if (session?.session_id) {
+          socket.emit('leave_session', session.session_id);
+        }
         socket.off(); // Remove all listeners
         socket.disconnect();
         setSocket(null);
@@ -237,129 +241,26 @@ const SessionBuilder = () => {
   }, []);
 
   const setupSocketListeners = (socket) => {
-    socket.on('question_building_started', (data) => {
-      console.log('WebSocket: Question building started', data);
-      setQuestions(prev => [...prev, data.question_structure]);
-    });
+    // This single, unified handler is the ONLY source of truth for session and question state.
+    // It replaces all previous, specific handlers like 'question_finalized', 'field_suggestion_added', etc.
+    // This prevents race conditions and ensures the client UI always matches the server state.
+    socket.on('session_updated', (updatedSession) => {
+      console.log('WebSocket: Received full session update', updatedSession);
+      if (isMountedRef.current && updatedSession) {
+        // Update the main session state object
+        setSession(updatedSession);
 
-    socket.on('question_content_updated', (data) => {
-      console.log('WebSocket: Question content updated', data);
-      setQuestions(prev => 
-        prev.map(q => 
-          q.question_id === data.question_id 
-            ? { ...q, user_content: { ...q.user_content, [data.field]: data.value }}
-            : q
-        )
-      );
-    });
+        // Update the derived questions state from the new, authoritative session data
+        const templateData = updatedSession.template_data || {};
+        const allQuestions = [
+          ...(templateData.questions_queue || []),
+          ...(templateData.ready_questions || [])
+        ];
+        setQuestions(allQuestions);
 
-    socket.on('question_finalized', (data) => {
-      setQuestions(prev => 
-        prev.map(q => 
-          q.question_id === data.question.question_id 
-            ? { ...data.question, status: 'finalized' }
-            : q
-        )
-      );
-    });
-
-    socket.on('llm_suggestion_generated', (data) => {
-      setChatMessages(prev => [...prev, {
-        id: data.suggestion.suggestion_id,
-        type: 'llm_suggestion',
-        content: data.suggestion.suggested_value,
-        field: data.suggestion.field,
-        question_id: data.question_id,
-        timestamp: new Date(),
-        username: 'LLM Assistant'
-      }]);
-    });
-
-    socket.on('collaboration_note_added', (data) => {
-      setChatMessages(prev => [...prev, {
-        id: data.note.note_id,
-        type: 'collaboration_note',
-        content: data.note.note,
-        question_id: data.question_id,
-        timestamp: new Date(data.note.timestamp),
-        username: data.note.author
-      }]);
-    });
-
-    socket.on('field_suggestion_added', (data) => {
-      console.log('WebSocket: Field suggestion added', data);
-      console.log('Suggestion data structure:', {
-        hasQuestionId: !!data.question_id,
-        hasSuggestion: !!data.suggestion,
-        author: data.suggestion?.author,
-        field: data.suggestion?.field,
-        hasValue: !!data.suggestion?.suggested_value,
-        valueLength: data.suggestion?.suggested_value?.length || 0,
-        timestamp: data.suggestion?.timestamp
-      });
-      if (data.suggestion?.author === 'AI Assistant') {
-        console.log('🤖 AI Suggestion content:', data.suggestion?.suggested_value);
-        console.log('🤖 AI Suggestion full data:', JSON.stringify(data.suggestion, null, 2));
+        // The `participants` and `chatMessages` are handled by separate API calls/events
+        // to keep this main update focused and efficient.
       }
-      // Update questions to include new suggestion in collaboration_notes
-      setQuestions(prev => 
-        prev.map(q => 
-          q.question_id === data.question_id 
-            ? { 
-                ...q, 
-                collaboration_notes: [
-                  ...(q.collaboration_notes || []),
-                  {
-                    note_id: data.suggestion.suggestion_id,
-                    type: 'field_suggestion',
-                    author: data.suggestion.author,
-                    timestamp: data.suggestion.timestamp,
-                    note: `${data.suggestion.author === 'AI Assistant' ? 'AI suggests' : 'Suggests'} changing '${data.suggestion.field}' to: ${data.suggestion.suggested_value}`,
-                    suggestion_data: data.suggestion
-                  }
-                ]
-              }
-            : q
-        )
-      );
-    });
-
-    socket.on('field_suggestion_handled', (data) => {
-      console.log('WebSocket: Field suggestion handled', data);
-      // Update question content if accepted and update suggestion status
-      setQuestions(prev => 
-        prev.map(q => {
-          if (q.question_id === data.question_id) {
-            let updatedQuestion = { ...q };
-            
-            // If accepted, update the field value
-            if (data.action === 'accept' && data.new_value !== null) {
-              updatedQuestion.user_content = {
-                ...updatedQuestion.user_content,
-                [data.field]: data.new_value
-              };
-            }
-            
-            // Update suggestion status in collaboration_notes
-            updatedQuestion.collaboration_notes = (updatedQuestion.collaboration_notes || []).map(note => 
-              note.suggestion_data?.suggestion_id === data.suggestion_id
-                ? {
-                    ...note,
-                    suggestion_data: {
-                      ...note.suggestion_data,
-                      status: data.action,
-                      handled_by: data.handled_by,
-                      handled_at: new Date()
-                    }
-                  }
-                : note
-            );
-            
-            return updatedQuestion;
-          }
-          return q;
-        })
-      );
     });
 
     // Listen for the correct WebSocket events from backend

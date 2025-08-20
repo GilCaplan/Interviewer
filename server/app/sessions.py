@@ -136,16 +136,32 @@ def safe_emit(event, data, room=None, namespace='/'):
         current_app.logger.warning(f"WebSocket emit failed: {str(e)}")
 
 
-def clean_session_for_response(session):
-    """Remove sensitive data from session before sending to client"""
-    if session:
-        # Create a copy to avoid modifying original
-        clean_session = dict(session)
-        # Remove password hash from response
-        clean_session.pop('password_hash', None)
-        clean_session.pop('_id', None)
-        return clean_session
-    return session
+def clean_session_for_response(session_data):
+    """
+    Recursively removes sensitive data and serializes non-JSON-compatible types
+    (like ObjectId and datetime) for API responses and WebSocket events.
+    """
+    if not session_data:
+        return None
+
+    # Use a recursive helper to serialize the data
+    def serialize_value(value):
+        if isinstance(value, list):
+            return [serialize_value(item) for item in value]
+        if isinstance(value, dict):
+            return {k: serialize_value(v) for k, v in value.items()}
+        if isinstance(value, datetime.datetime):
+            return value.isoformat()
+        # Add ObjectId serialization if you use it in responses
+        # from bson import ObjectId
+        # if isinstance(value, ObjectId):
+        #     return str(value)
+        return value
+
+    # Remove top-level sensitive keys and then serialize
+    session_data.pop('password_hash', None)
+    session_data.pop('_id', None)
+    return serialize_value(session_data)
 
 
 def clean_user_input(text):
@@ -1017,13 +1033,10 @@ def start_question_building(user, session_id, question_number):
         # Log update result for debugging
         current_app.logger.info(f"Question creation update result: matched={update_result.matched_count}, modified={update_result.modified_count}")
         
-        # Broadcast to all participants
-        safe_emit('question_building_started', {
-            'question_number': question_number,
-            'question_type': question_type,
-            'started_by': user["username"],
-            'question_structure': question_structure
-        }, room=session_id)
+        # Fetch the entire updated session and broadcast it
+        updated_session = sessions_collection.find_one({"session_id": session_id})
+        clean_updated_session = clean_session_for_response(updated_session)
+        safe_emit('session_updated', clean_updated_session, room=session_id)
         
         return jsonify({
             "message": f"Started building question {question_number}",
@@ -1103,14 +1116,10 @@ def update_question_content(user, session_id, question_id):
         
         current_app.logger.info(f"Updated question {question_id} field '{field_name}' with value: {sanitized_value}")
         
-        # Broadcast update to all participants
-        safe_emit('question_content_updated', {
-            'question_id': question_id,
-            'question_number': current_question["question_number"],
-            'field': field_name,
-            'value': sanitized_value,
-            'updated_by': user["username"]
-        }, room=session_id)
+        # Fetch the entire updated session and broadcast it
+        updated_session = sessions_collection.find_one({"session_id": session_id})
+        clean_updated_session = clean_session_for_response(updated_session)
+        safe_emit('session_updated', clean_updated_session, room=session_id)
         
         return jsonify({
             "message": "Question content updated",
@@ -1299,25 +1308,11 @@ def generate_llm_suggestion(user, session_id, question_id):
         if not suggestions:
             return jsonify({"error": "Failed to generate any suggestions"}), 500
         
-        # Broadcast each suggestion EXACTLY like user suggestions
-        current_app.logger.info(f"Broadcasting {len(suggestions)} suggestions to session {session_id}")
-        for suggestion in suggestions:
-            try:
-                # Convert datetime to string for WebSocket serialization
-                serializable_suggestion = {
-                    **suggestion,
-                    'timestamp': suggestion['timestamp'].isoformat() if isinstance(suggestion['timestamp'], datetime.datetime) else suggestion['timestamp']
-                }
-                
-                # Emit the exact same event as user suggestions
-                safe_emit('field_suggestion_added', {
-                    'question_id': question_id,
-                    'suggestion': serializable_suggestion
-                }, room=session_id)
-                current_app.logger.info(f"Emitted AI suggestion for field {suggestion.get('field', 'unknown')}")
-            except Exception as e:
-                current_app.logger.error(f"Error emitting field_suggestion_added: {e}")
-                print(f"Error emitting field_suggestion_added: {e}")
+        # After adding suggestions, fetch the entire updated session and broadcast it
+        updated_session = sessions_collection.find_one({"session_id": session_id})
+        clean_updated_session = clean_session_for_response(updated_session)
+        safe_emit('session_updated', clean_updated_session, room=session_id)
+        current_app.logger.info(f"Emitted session_updated after generating {len(suggestions)} AI suggestions.")
         
         return jsonify({
             "message": f"{len(suggestions)} LLM suggestions generated",
@@ -1366,11 +1361,10 @@ def add_collaboration_note(user, session_id, question_id):
             }
         )
         
-        # Broadcast to participants
-        safe_emit('collaboration_note_added', {
-            'question_id': question_id,
-            'note': note_data
-        }, room=session_id)
+        # Fetch the entire updated session and broadcast it
+        updated_session = sessions_collection.find_one({"session_id": session_id})
+        clean_updated_session = clean_session_for_response(updated_session)
+        safe_emit('session_updated', clean_updated_session, room=session_id)
         
         return jsonify({
             "message": "Collaboration note added",
@@ -1445,16 +1439,10 @@ def add_field_suggestion(user, session_id, question_id):
             current_app.logger.error(f"Failed to add suggestion for question {question_id} in session {session_id}")
             return jsonify({"error": "Question not found or not accessible"}), 404
         
-        # Broadcast suggestion to participants (serialize datetime for WebSocket)
-        serializable_suggestion = {
-            **suggestion_data,
-            'timestamp': suggestion_data['timestamp'].isoformat() if isinstance(suggestion_data['timestamp'], datetime.datetime) else suggestion_data['timestamp']
-        }
-        
-        safe_emit('field_suggestion_added', {
-            'question_id': question_id,
-            'suggestion': serializable_suggestion
-        }, room=session_id)
+        # Fetch the entire updated session and broadcast it
+        updated_session = sessions_collection.find_one({"session_id": session_id})
+        clean_updated_session = clean_session_for_response(updated_session)
+        safe_emit('session_updated', clean_updated_session, room=session_id)
         
         return jsonify({
             "message": "Field suggestion added",
@@ -1544,15 +1532,10 @@ def handle_field_suggestion(user, session_id, question_id, suggestion_id):
             current_app.logger.error(f"Failed to update suggestion {suggestion_id} for question {question_id}")
             return jsonify({"error": "Failed to update suggestion"}), 404
         
-        # Broadcast the decision to participants
-        safe_emit('field_suggestion_handled', {
-            'question_id': question_id,
-            'suggestion_id': suggestion_id,
-            'action': action,
-            'field': suggestion['field'],
-            'new_value': suggestion['suggested_value'] if action == "accept" else None,
-            'handled_by': user["username"]
-        }, room=session_id)
+        # Fetch the entire updated session and broadcast it
+        updated_session = sessions_collection.find_one({"session_id": session_id})
+        clean_updated_session = clean_session_for_response(updated_session)
+        safe_emit('session_updated', clean_updated_session, room=session_id)
         
         return jsonify({
             "message": f"Suggestion {action}ed successfully",
@@ -1734,11 +1717,10 @@ def finalize_question(user, session_id, question_id):
         
         current_app.logger.info(f"Successfully finalized question {question_id}")
         
-        # Broadcast to participants
-        safe_emit('question_finalized', {
-            'question': finalized_question,
-            'finalized_by': user["username"]
-        }, room=session_id)
+        # Fetch the entire updated session and broadcast it to all clients
+        updated_session = sessions_collection.find_one({"session_id": session_id})
+        clean_updated_session = clean_session_for_response(updated_session)
+        safe_emit('session_updated', clean_updated_session, room=session_id)
         
         return jsonify({
             "message": f"Question {question_to_finalize['question_number']} finalized successfully",
@@ -2214,12 +2196,10 @@ def remove_question_from_session(user, session_id, question_id):
         
         current_app.logger.info(f"Question {question_id} removed from session {session_id} by {user['username']}")
         
-        # Broadcast removal to all participants
-        safe_emit('question_removed', {
-            'question_id': question_id,
-            'removed_by': user["username"],
-            'session_id': session_id
-        }, room=session_id)
+        # Fetch the entire updated session and broadcast it to all clients
+        updated_session = sessions_collection.find_one({"session_id": session_id})
+        clean_updated_session = clean_session_for_response(updated_session)
+        safe_emit('session_updated', clean_updated_session, room=session_id)
         
         return jsonify({"message": "Question removed successfully"}), 200
         
