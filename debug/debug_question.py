@@ -3,7 +3,7 @@ import requests
 import uuid
 
 # Test the specific failing scenario
-API_URL = 'http://localhost:5001'
+API_URL = 'http://localhost:5000'
 
 # Create user
 username = f'debug_user_{uuid.uuid4().hex[:8]}'

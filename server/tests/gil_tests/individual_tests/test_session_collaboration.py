@@ -27,7 +27,7 @@ def find_server_url():
     urls_to_try = [
         'http://localhost:5000',  # Inside Docker container
         'http://server:5000',     # Docker service name
-        'http://localhost:5001',  # Host machine
+        'http://localhost:5000',  # Host machine
     ]
     
     for url in urls_to_try:

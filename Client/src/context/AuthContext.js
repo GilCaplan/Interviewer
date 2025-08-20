@@ -49,7 +49,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       // Call logout endpoint to invalidate token on server
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
       await fetch(`${apiUrl}/api/auth/logout`, {
         method: 'POST',

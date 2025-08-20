@@ -32,7 +32,7 @@ os.environ['FLASK_ENV'] = 'testing'
 def check_server_ready(max_attempts=10, delay=2):
     """Check if test server is ready and responsive"""
     urls_to_try = [
-        'http://localhost:5001/api/health',
+        'http://localhost:5000/api/health',
         'http://localhost:5000/api/health',
     ]
     
@@ -166,7 +166,7 @@ def cleanup_between_tests():
         import gc
         
         urls_to_try = [
-            'http://localhost:5001',
+            'http://localhost:5000',
             'http://localhost:5000',
         ]
         

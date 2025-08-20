@@ -10,8 +10,8 @@ from .rate_limiter import rate_limit
 # Rate limiting for free tier
 class RateLimiter:
     def __init__(self):
-        self.requests_per_minute = int(os.environ.get('LLM_REQUESTS_PER_MINUTE', '15'))
-        self.requests_per_day = int(os.environ.get('LLM_REQUESTS_PER_DAY', '1500'))
+        self.requests_per_minute = int(os.environ.get('LLM_REQUESTS_PER_MINUTE') or '15')
+        self.requests_per_day = int(os.environ.get('LLM_REQUESTS_PER_DAY') or '1500')
         self.minute_requests = []
         self.daily_requests = []
     

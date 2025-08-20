@@ -30,7 +30,7 @@ function SessionControls() {
   const loadUserSessions = async () => {
     setLoading(true);
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       let token = localStorage.getItem('token');
       
       if (!token) {
@@ -68,7 +68,7 @@ function SessionControls() {
   const loadCurrentSessions = async () => {
     setLoading(true);
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       let token = localStorage.getItem('token');
       
       if (!token) {

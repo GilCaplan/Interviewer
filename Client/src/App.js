@@ -42,7 +42,7 @@ function AppContent() {
 
   useEffect(() => {
     // Use the API URL from environment variables, or fallback to a default
-    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
     // Fetch information from the server with explicit URL
     fetch(`${apiUrl}/api/info`)

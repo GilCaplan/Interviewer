@@ -56,7 +56,7 @@ function LlmQuestions() {
 
     try {
       // Try to use the server API first
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       const response = await fetch(`${apiUrl}/api/llm-questions`, {
         method: 'POST',
         headers: {

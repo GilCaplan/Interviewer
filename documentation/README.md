@@ -26,7 +26,7 @@ docker-compose up --build
 
 # Access application
 # Frontend: http://localhost:3000
-# Backend API: http://localhost:5001
+# Backend API: http://localhost:5000
 # MongoDB: localhost:27017
 ```
 
@@ -182,13 +182,13 @@ docker-compose up --build
 ```
 
 This will:
-- Build and start the Flask server on port 5001
+- Build and start the Flask server on port 5000
 - Build and start the React client on port 3000  
 - Start a MongoDB database on port 27017
 
 3. **Access the application**:
    - **Frontend**: http://localhost:3000
-   - **Backend API**: http://localhost:5001/api/health
+   - **Backend API**: http://localhost:5000/api/health
    - **Template Builder**: http://localhost:3000/session/[any-code]
 
 ## 🧪 Comprehensive Testing
@@ -263,10 +263,10 @@ python test_environment_setup.py
 #### Quick Health Check
 ```bash
 # Test server connectivity
-curl http://localhost:5001/api/health
+curl http://localhost:5000/api/health
 
 # Test API info
-curl http://localhost:5001/api/info
+curl http://localhost:5000/api/info
 ```
 
 ## 🚀 **Maximum Load Testing & Performance**
@@ -461,7 +461,7 @@ Key environment variables in `.env`:
 
 ```bash
 # Server Configuration  
-SERVER_PORT=5001
+SERVER_PORT=5000
 FLASK_ENV=development
 SECRET_KEY=dev-secret-key-change-in-production
 
@@ -474,7 +474,7 @@ LLM_REQUESTS_PER_MINUTE=10
 LLM_REQUESTS_PER_DAY=1000
 
 # Frontend
-REACT_APP_API_URL=http://localhost:5001
+REACT_APP_API_URL=http://localhost:5000
 ```
 
 ## 🐛 Troubleshooting
@@ -482,7 +482,7 @@ REACT_APP_API_URL=http://localhost:5001
 ### Common Issues
 
 1. **Port conflicts**: 
-   - Ensure ports 3000, 5001, and 27017 are available
+   - Ensure ports 3000, 5000, and 27017 are available
    - macOS users: Disable AirPlay Receiver if using port 5000
 
 2. **Docker issues**:
@@ -512,9 +512,9 @@ REACT_APP_API_URL=http://localhost:5001
 
 The test suite currently achieves 100% pass rate. If tests fail after modifications:
 
-1. **Server connectivity**: Ensure server is running on port 5001
+1. **Server connectivity**: Ensure server is running on port 5000
    ```bash
-   curl http://localhost:5001/api/health
+   curl http://localhost:5000/api/health
    ```
 
 2. **Database connectivity**: Check MongoDB is accessible in Docker

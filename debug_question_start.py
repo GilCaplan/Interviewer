@@ -7,7 +7,7 @@ import json
 
 # Test with a real user session
 def test_question_start():
-    api_url = "http://localhost:5001"
+    api_url = "http://localhost:5000"
     
     # First login to get a token
     login_response = requests.post(f"{api_url}/api/auth/login", json={

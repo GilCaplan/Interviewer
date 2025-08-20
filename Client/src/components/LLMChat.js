@@ -73,7 +73,7 @@ const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
   useEffect(() => {
     const fetchLLMStatus = async () => {
       try {
-        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
         const response = await fetch(`${apiUrl}/api/llm/status`);
         if (response.ok) {
           const status = await response.json();

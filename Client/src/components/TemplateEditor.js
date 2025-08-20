@@ -135,7 +135,7 @@ const TemplateEditor = ({
     }
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       let token = localStorage.getItem('token');
       if (!token) {
         const storedUser = localStorage.getItem('user');
@@ -175,7 +175,7 @@ const TemplateEditor = ({
     if (!suggestionText.trim() || !suggestionField || !suggestionQuestionId) return;
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       let token = localStorage.getItem('token');
       if (!token) {
         const storedUser = localStorage.getItem('user');
@@ -225,7 +225,7 @@ const TemplateEditor = ({
 
   const handleSuggestion = async (questionId, suggestionId, action) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       let token = localStorage.getItem('token');
       if (!token) {
         const storedUser = localStorage.getItem('user');
@@ -300,7 +300,7 @@ const TemplateEditor = ({
     }
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       let token = localStorage.getItem('token');
       if (!token) {
         const storedUser = localStorage.getItem('user');
@@ -334,7 +334,7 @@ const TemplateEditor = ({
     }
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       let token = localStorage.getItem('token');
       if (!token) {
         const storedUser = localStorage.getItem('user');
@@ -364,7 +364,7 @@ const TemplateEditor = ({
 
   const fetchSuggestionHistory = async () => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       let token = localStorage.getItem('token');
       if (!token) {
         const storedUser = localStorage.getItem('user');
@@ -411,7 +411,7 @@ const TemplateEditor = ({
     setConvertingTemplate(true);
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       let token = localStorage.getItem('token');
       if (!token) {
         const storedUser = localStorage.getItem('user');
@@ -1087,7 +1087,7 @@ const TemplateEditor = ({
           <button 
             onClick={async () => {
               try {
-                const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+                const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
                 let token = localStorage.getItem('token');
                 if (!token) {
                   const storedUser = localStorage.getItem('user');

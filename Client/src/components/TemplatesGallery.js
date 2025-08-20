@@ -192,8 +192,8 @@ function TemplatesGallery() {
       `${getApiUrl()}/api/templates/${template.template_id}`,
       `${getApiUrl().replace('/api', '')}/templates/${template.template_id}`,
       `${getApiUrl()}/api/templates/${template.template_id}/questions`,
-      `http://localhost:5001/api/templates/${template.template_id}`,
-      `http://localhost:5001/templates/${template.template_id}`
+      `http://localhost:5000/api/templates/${template.template_id}`,
+      `http://localhost:5000/templates/${template.template_id}`
     ];
     
     for (const endpoint of endpoints) {

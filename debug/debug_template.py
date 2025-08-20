@@ -3,7 +3,7 @@ import requests
 import json
 
 # Test the template creation with questions directly
-API_URL = "http://localhost:5001"
+API_URL = "http://localhost:5000"
 
 # Create a test user
 user_response = requests.post(f"{API_URL}/api/auth/login", json={"username": "debug_template_test"})

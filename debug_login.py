@@ -6,7 +6,7 @@ import requests
 import json
 
 def test_login():
-    url = "http://localhost:5001/api/auth/login"
+    url = "http://localhost:5000/api/auth/login"
     data = {"username": "test_user_123"}
     headers = {"Content-Type": "application/json"}
     

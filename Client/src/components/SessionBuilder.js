@@ -44,7 +44,7 @@ const SessionBuilder = () => {
     
     const initializeSession = async () => {
       try {
-        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
         
         // Get token from localStorage with better error handling
         let token = localStorage.getItem('token');
@@ -408,7 +408,7 @@ const SessionBuilder = () => {
     // Debounce the load to prevent multiple rapid calls
     loadParticipantsTimeoutRef.current = setTimeout(async () => {
       try {
-        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
         
         // Get token with fallback
         let authToken = localStorage.getItem('token');
@@ -446,7 +446,7 @@ const SessionBuilder = () => {
   // Handler functions
   const handleStartQuestion = async (questionNumber, questionType) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
       // Get token with fallback
       let authToken = localStorage.getItem('token');
@@ -518,7 +518,7 @@ const SessionBuilder = () => {
     console.log('handleUpdateQuestion called:', { questionId, field, value, sessionId: session?.session_id });
     
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
       // Get token with fallback
       let authToken = localStorage.getItem('token');
@@ -578,7 +578,7 @@ const SessionBuilder = () => {
     });
     
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
       // Get token with fallback
       let authToken = localStorage.getItem('token');
@@ -626,7 +626,7 @@ const SessionBuilder = () => {
 
   const handleLLMRequest = async (questionId, field, context, numResponses = 1) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
       // Get token with fallback
       let authToken = localStorage.getItem('token');
@@ -670,7 +670,7 @@ const SessionBuilder = () => {
     setError(null);
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       const token = localStorage.getItem('token') || user?.sessionToken;
 
       const response = await fetch(`${apiUrl}/api/sessions/join/${sessionCode}`, {
@@ -728,7 +728,7 @@ const SessionBuilder = () => {
     }
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
       // Get token with fallback
       let authToken = localStorage.getItem('token');
@@ -763,7 +763,7 @@ const SessionBuilder = () => {
     }
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
       // Get token with fallback
       let authToken = localStorage.getItem('token');
@@ -797,7 +797,7 @@ const SessionBuilder = () => {
     }
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
       // Get token with fallback
       let authToken = localStorage.getItem('token');

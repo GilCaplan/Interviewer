@@ -5,7 +5,7 @@
     "name": "test_interview_platform"
   },
   "api": {
-    "port": 5001,
+    "port": 5000,
     "host": "localhost"
   },
   "llm": {

@@ -58,7 +58,7 @@ class TestEnvironmentSetup:
             "TESTING": "true",
             "TEST_MODE": "1",
             "TEST_DATABASE_NAME": "test_interview_platform",
-            "TEST_API_PORT": "5001",
+            "TEST_API_PORT": "5000",
             "TEST_CLIENT_PORT": "3001",
             "LLM_API_KEY": "test_key_for_mock_llm",
             "JWT_SECRET_KEY": "test_jwt_secret_key_for_testing_only",
@@ -101,7 +101,7 @@ class TestEnvironmentSetup:
                 "name": "test_interview_platform"
             },
             "api": {
-                "port": 5001,
+                "port": 5000,
                 "host": "localhost"
             },
             "llm": {
@@ -147,13 +147,13 @@ FLASK_ENV=testing
 MONGO_URI=mongodb://localhost:27017/test_interview_platform
 JWT_SECRET_KEY=test_jwt_secret_key_for_testing_only
 LLM_API_KEY=test_key_for_mock_llm
-API_PORT=5001
+API_PORT=5000
 CLIENT_PORT=3001
 CORS_ORIGINS=http://localhost:3000,http://localhost:3001
 
 # Test-specific settings
 TEST_DATABASE_NAME=test_interview_platform
-TEST_API_PORT=5001
+TEST_API_PORT=5000
 TEST_CLIENT_PORT=3001
 MOCK_LLM_ENABLED=true
 TEST_USER_CLEANUP_ENABLED=true
@@ -272,7 +272,7 @@ TEST_DATA_ISOLATION=true
         log("\n🌐 Testing Server Accessibility", Colors.BOLD + Colors.YELLOW)
         log("-" * 60, Colors.YELLOW)
         
-        test_ports = ["5000", "5001"]
+        test_ports = ["5000", "5000"]
         server_accessible = False
         accessible_port = None
         

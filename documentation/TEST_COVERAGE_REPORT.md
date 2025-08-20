@@ -280,7 +280,7 @@ OVERALL RESULTS                             96.1%   173/180       ❌ FAIL
 
 ### Prerequisites
 1. Start the server: `docker-compose up --build`
-2. Server should be accessible on port 5000 or 5001
+2. Server should be accessible on port 5000 or 5000
 
 ### Full Test Suite Execution
 ```bash

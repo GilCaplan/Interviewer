@@ -35,7 +35,7 @@ const SessionSettings = ({ session, isHost, user, onClose, onSettingsUpdate }) =
     setError(null);
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
       // Get token with fallback
       let authToken = localStorage.getItem('token');

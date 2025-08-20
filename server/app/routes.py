@@ -45,7 +45,7 @@ def info():
         # Check if we're using test database
         'test' in os.getenv('MONGO_URI', '').lower() or
         # Check if server is running on test port  
-        os.getenv('SERVER_PORT') == '5001'
+        os.getenv('SERVER_PORT') == '5000'
     )
     
     return jsonify({

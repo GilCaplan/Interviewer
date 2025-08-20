@@ -6,7 +6,7 @@ import requests
 import json
 
 def debug_suggestion_storage():
-    api_url = 'http://localhost:5001' 
+    api_url = 'http://localhost:5000' 
     
     print("🔍 DEBUGGING SUGGESTION STORAGE")
     print("=" * 40)
