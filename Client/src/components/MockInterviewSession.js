@@ -1,202 +1,191 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import './Questions.css'; // Import the stylesheet
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
+import { fetchApi } from '../utils/api';
 import InterviewSummary from './InterviewSummary';
+import './Questions.css';
 
 function MockInterviewSession() {
-    const { sessionId } = useParams();
-    const navigate = useNavigate();
-    const [session, setSession] = useState(null);
-    const [userAnswer, setUserAnswer] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState('');
+  const { sessionId } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-    const fetchSession = async () => {
-        const token = localStorage.getItem('token');
-        if (!token) {
-            setError("Authentication required.");
-            setIsLoading(false);
-            return;
-        }
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isCompleted, setIsCompleted] = useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [currentAnswer, setCurrentAnswer] = useState('');
 
-        try {
-            const response = await fetch(`/api/interviews/${sessionId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Failed to fetch session data.');
-            setSession(data.session);
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setIsLoading(false);
+  useEffect(() => {
+    const initializeSession = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        if (sessionId === 'new') {
+          const params = new URLSearchParams(location.search);
+          const templateId = params.get('template');
+          if (!templateId) {
+            throw new Error("No template specified for the new interview.");
+          }
+
+          const data = await fetchApi('/api/sessions/create-from-template', {
+            method: 'POST',
+            body: JSON.stringify({ template_id: templateId }),
+          });
+
+          // Redirect to the newly created session's URL, which will trigger a re-render
+          navigate(`/interview/${data.session.session_id}`, { replace: true });
+
+        } else {
+          // Load an existing session's data
+          const data = await fetchApi(`/api/sessions/${sessionId}`);
+          setSession(data.session);
+          setCurrentQuestionIndex(data.session.current_question_index || 0);
+          if (data.session.status === 'completed') {
+            setIsCompleted(true);
+          }
         }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    useEffect(() => {
-        fetchSession();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sessionId]);
-
-    const handleSubmitAnswer = async () => {
-        setError('');
-        // Add validation to ensure an answer is provided
-        if (!userAnswer.trim()) {
-            setError("Please select an option or provide an answer before submitting.");
-            return;
-        }
-
-        const token = localStorage.getItem('token');
-        try {
-            const response = await fetch(`/api/interviews/${sessionId}/answer`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ answer: userAnswer })
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Failed to submit answer.');
-
-            setUserAnswer(''); // Clear textarea
-            fetchSession(); // Refresh session state to get next question
-        } catch (err) {
-            setError(err.message);
-        }
-    };
-
-    const handleFinishInterview = async () => {
-        setError('');
-        const token = localStorage.getItem('token');
-        try {
-            const response = await fetch(`/api/interviews/${sessionId}/finish`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Failed to finish interview.');
-
-            // Refresh to show completed state
-            fetchSession();
-        } catch (err) {
-            setError(err.message);
-        }
-    };
-
-    const renderQuestionInput = () => {
-        if (!currentQuestion) return null;
-
-        switch (currentQuestion.type) {
-            case 'multiple_choice':
-                return (
-                    <div className="question-options-container">
-                        {currentQuestion.options.map((option, index) => (
-                            <div key={index} className="radio-option">
-                                <input
-                                    type="radio"
-                                    id={`option-${index}`}
-                                    name="mcq-options"
-                                    value={option}
-                                    checked={userAnswer === option}
-                                    onChange={(e) => setUserAnswer(e.target.value)}
-                                />
-                                <label htmlFor={`option-${index}`}>{option}</label>
-                            </div>
-                        ))}
-                    </div>
-                );
-
-            case 'true_false':
-                return (
-                    <div className="question-options-container">
-                        <div className="radio-option">
-                            <input
-                                type="radio"
-                                id="option-true"
-                                name="tf-options"
-                                value="true"
-                                checked={userAnswer === 'true'}
-                                onChange={(e) => setUserAnswer(e.target.value)}
-                            />
-                            <label htmlFor="option-true">True</label>
-                        </div>
-                        <div className="radio-option">
-                            <input
-                                type="radio"
-                                id="option-false"
-                                name="tf-options"
-                                value="false"
-                                checked={userAnswer === 'false'}
-                                onChange={(e) => setUserAnswer(e.target.value)}
-                            />
-                            <label htmlFor="option-false">False</label>
-                        </div>
-                    </div>
-                );
-
-            default: // Handles 'open_ended', 'short_answer', 'coding'
-                return (
-                    <textarea
-                        value={userAnswer}
-                        onChange={(e) => setUserAnswer(e.target.value)}
-                        placeholder="Type your answer here..."
-                        rows="10"
-                        className="answer-textarea"
-                    />
-                );
-        }
-    };
-
-    if (isLoading) return <p>Loading interview session...</p>;
-    if (error) return <p style={{ color: 'red' }}>Error: {error}</p>;
-    if (!session) return <p>No session data found.</p>;
-
-    const currentQuestionIndex = session.current_question_index;
-    const totalQuestions = session.questions.length;
-    const isInterviewOver = currentQuestionIndex >= totalQuestions;
-    const currentQuestion = !isInterviewOver ? session.questions[currentQuestionIndex] : null;
-
-    if (session.status === 'completed') {
-        return (
-            <div className="mock-interview-container">
-                <InterviewSummary session={session} />
-                <div className="summary-actions">
-                    <button className="action-btn" onClick={() => navigate('/templates')}>
-                        Back to Templates
-                    </button>
-                </div>
-            </div>
-        );
+    if (sessionId) {
+      initializeSession();
     }
+  }, [sessionId, navigate, location.search]);
 
+  const handleAnswerChange = (e) => {
+    setCurrentAnswer(e.target.value);
+  };
+
+  const completeInterview = async (finalAnswerPayload = null) => {
+    try {
+      const data = await fetchApi(`/api/sessions/${session.session_id}/complete`, {
+        method: 'POST',
+        body: finalAnswerPayload ? JSON.stringify(finalAnswerPayload) : null,
+      });
+      // Update session state with the final data from the server for the summary page
+      setSession(data.session);
+      setIsCompleted(true);
+    } catch (err) {
+      setError(`Failed to complete interview: ${err.message}`);
+    }
+  };
+
+  const submitAnswer = async () => {
+    try {
+      const nextIndex = currentQuestionIndex + 1;
+      if (nextIndex < session.questions.length) {
+        // Not the last question, submit answer normally
+        await fetchApi(`/api/sessions/${session.session_id}/answer`, {
+          method: 'POST',
+          body: JSON.stringify({
+            question_index: currentQuestionIndex,
+            answer: currentAnswer,
+          }),
+        });
+        // Advance to the next question
+        setCurrentQuestionIndex(nextIndex);
+        setCurrentAnswer('');
+      } else {
+        // This IS the last question. Call completeInterview with the final answer.
+        const finalAnswerPayload = {
+          final_answer: {
+            question_index: currentQuestionIndex,
+            answer: currentAnswer,
+          }
+        };
+        await completeInterview(finalAnswerPayload);
+      }
+    } catch (err) {
+      setError(`Failed to submit answer: ${err.message}`);
+    }
+  };
+
+  if (loading) {
+    return <div className="loading">Setting up your interview...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="mock-interview-container">
+        <div className="error-message">
+          <strong>Error:</strong> {error}
+        </div>
+        <Link to="/templates" className="back-button">Back to Templates</Link>
+      </div>
+    );
+  }
+
+  if (isCompleted && session) {
     return (
         <div className="mock-interview-container">
-            <div className="interview-header">
-                <h2>Mock Interview: {session.template_name}</h2>
-                <p className="interview-progress">Question {Math.min(currentQuestionIndex + 1, totalQuestions)} of {totalQuestions}</p>
-            </div>
-            <hr />
-
-            {isInterviewOver ? (
-                <div className="interview-completed-container">
-                    <h3>You've answered all questions!</h3>
-                    <p>Click below to finish and save your session.</p>
-                    <button onClick={handleFinishInterview} className="action-btn finish-btn">
-                        Finish Interview
-                    </button>
-                </div>
-            ) : (
-                <div className="question-card-interview">
-                    <p className="question-text-interview">{currentQuestion.question_text}</p>
-                    {renderQuestionInput()}
-                    <button onClick={handleSubmitAnswer} className="action-btn" disabled={!userAnswer.trim()}>
-                        Submit Answer & Next Question
-                    </button>
-                </div>
-            )}
+            <InterviewSummary session={session} />
+            <Link to="/templates" className="back-button">Back to Templates</Link>
         </div>
     );
+  }
+
+  if (!session || !session.questions || session.questions.length === 0) {
+    return (
+      <div className="mock-interview-container">
+        <h2>Interview Session</h2>
+        <p>This interview template has no questions.</p>
+        <Link to="/templates" className="back-button">Back to Templates</Link>
+      </div>
+    );
+  }
+
+  const currentQuestion = session.questions[currentQuestionIndex];
+
+  return (
+    <div className="mock-interview-container">
+      <div className="interview-header">
+        <h2>{session.template_name || session.title}</h2>
+        <div className="interview-progress">
+          Question {currentQuestionIndex + 1} of {session.questions.length}
+        </div>
+      </div>
+      <hr />
+      <div className="question-card-interview">
+        <p className="question-text-interview">{currentQuestion.question_text}</p>
+        
+        {currentQuestion.type === 'multiple_choice' ? (
+          <div className="question-options-container">
+            {currentQuestion.options.map((option, index) => (
+              <div key={index} className="radio-option">
+                <input
+                  type="radio"
+                  id={`option-${index}`}
+                  name="mcq-answer"
+                  value={option}
+                  checked={currentAnswer === option}
+                  onChange={handleAnswerChange}
+                />
+                <label htmlFor={`option-${index}`}>{option}</label>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <textarea
+            className="answer-textarea"
+            value={currentAnswer}
+            onChange={handleAnswerChange}
+            placeholder="Type your answer here..."
+          />
+        )}
+      </div>
+      <div className="practice-controls" style={{ justifyContent: 'flex-end', marginTop: '20px' }}>
+        <button onClick={submitAnswer} className="action-btn" disabled={!currentAnswer}>
+          {currentQuestionIndex < session.questions.length - 1 ? 'Next Question' : 'Finish Interview'}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default MockInterviewSession;

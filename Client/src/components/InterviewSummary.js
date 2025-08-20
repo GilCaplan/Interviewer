@@ -8,7 +8,7 @@ import './Questions.css'; // Reuse our existing stylesheet
  * @returns {string} The decoded string.
  */
 const decodeHTMLEntities = (text) => {
-    if (typeof text !== 'string') return text;
+    if (typeof text !== 'string' || !text) return '';
     const textArea = document.createElement('textarea');
     textArea.innerHTML = text;
     return textArea.value;
@@ -17,15 +17,19 @@ const decodeHTMLEntities = (text) => {
 function InterviewSummary({ session }) {
     if (!session) return null;
 
-    const correctAnswers = session.answers.filter(a => a.is_correct).length;
-    const totalAnswered = session.answers.length;
+    // Add defensive checks to prevent errors if arrays are missing
+    const questions = session.questions || [];
+    const answers = session.answers || [];
+    const totalQuestions = questions.length;
+    const correctAnswers = answers.filter(a => a.is_correct).length;
+    const totalAnswered = answers.length;
     const score = totalAnswered > 0 ? (correctAnswers / totalAnswered) * 100 : 0;
 
     const calculateDuration = () => {
         if (!session.started_at || !session.ended_at) return 'N/A';
-        // Handle MongoDB's date format from the server
-        const start = new Date(session.started_at.$date || session.started_at);
-        const end = new Date(session.ended_at.$date || session.ended_at);
+        // The backend now consistently sends ISO strings
+        const start = new Date(session.started_at);
+        const end = new Date(session.ended_at);
         const diffMs = end - start;
         if (isNaN(diffMs)) return 'N/A';
 
@@ -41,8 +45,8 @@ function InterviewSummary({ session }) {
             <div className="summary-metrics">
                 <div className="metric-card">
                     <h3>Score</h3>
-                    <p className="metric-value">{Math.round(score)}%</p>
-                    <p className="metric-details">({correctAnswers} / {totalAnswered} correct)</p>
+                    <p className="metric-value">{totalAnswered > 0 ? `${Math.round(score)}%` : 'N/A'}</p>
+                    <p className="metric-details">({correctAnswers} / {totalAnswered} correct of {totalQuestions} total)</p>
                 </div>
                 <div className="metric-card">
                     <h3>Time Taken</h3>
@@ -64,10 +68,20 @@ function InterviewSummary({ session }) {
 
             <h3>Results Breakdown</h3>
             <ul className="results-breakdown-list">
-                {session.questions.slice(0, totalAnswered).map((question, index) => {
-                    const userAnswer = session.answers.find(a => a.question_index === index);
-                    if (!userAnswer) return null;
+                {questions.map((question, index) => {
+                    const userAnswer = answers.find(a => a.question_index === index);
 
+                    if (!userAnswer) {
+                        return (
+                            <li key={index} className="result-item unanswered">
+                                <div className="result-header">
+                                    <strong>Q{index + 1}: {decodeHTMLEntities(question.question_text)}</strong>
+                                    <span className="result-indicator">⚪ Unanswered</span>
+                                </div>
+                            </li>
+                        );
+                    }
+                    
                     const isCorrect = userAnswer.is_correct;
                     const displayCorrectAnswer = typeof userAnswer.correct_answer === 'boolean'
                         ? userAnswer.correct_answer.toString().charAt(0).toUpperCase() + userAnswer.correct_answer.toString().slice(1)
@@ -76,7 +90,7 @@ function InterviewSummary({ session }) {
                     return (
                         <li key={index} className={`result-item ${isCorrect ? 'correct' : 'incorrect'}`}>
                             <div className="result-header">
-                                <strong>Q{index + 1}: {question.question_text}</strong>
+                                <strong>Q{index + 1}: {decodeHTMLEntities(question.question_text)}</strong>
                                 <span className="result-indicator">{isCorrect ? '✔ Correct' : '✖ Incorrect'}</span>
                             </div>
                             <div className="result-body">

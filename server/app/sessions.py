@@ -1,5 +1,5 @@
 # server/app/sessions.py
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, Response
 from flask_socketio import emit, join_room, leave_room
 import datetime
 import secrets
@@ -7,9 +7,11 @@ import string
 import uuid
 import random
 import re
+import json
 import html
 import hashlib
 from .auth import token_required
+from pymongo import ReturnDocument
 from .config import Config
 from .templates import QUESTION_TYPES, validate_question_data
 from .password_utils import hash_session_password, verify_session_password
@@ -938,6 +940,203 @@ def list_current_sessions(user):
         current_app.logger.error(f"Error listing current sessions: {str(e)}")
         return jsonify({"error": "Failed to list current sessions"}), 500
 
+
+# Create a new interview session from a template
+@sessions_bp.route('/api/sessions/create-from-template', methods=['POST'])
+@rate_limit('session_create', 20, 3600, per_user=True)
+@token_required
+def create_session_from_template(user):
+    try:
+        if not request.is_json:
+            return jsonify({"error": "Request must be JSON"}), 400
+        
+        data = request.get_json()
+        if not data or 'template_id' not in data:
+            return jsonify({"error": "A template_id is required"}), 400
+            
+        template_id = data['template_id']
+        
+        # Find the template in the templates collection
+        template = templates_collection.find_one({"template_id": template_id})
+        if not template:
+            return jsonify({"error": "Template not found"}), 404
+            
+        # Check if the user has permission to access this template
+        is_public = template.get('is_public', False)
+        owner_id = template.get('created_by_id')
+        if not is_public and owner_id != user.get("user_id"):
+            return jsonify({"error": "You do not have permission to use this template"}), 403
+            
+        # Generate a unique session code for the new interview
+        session_code = generate_session_code()
+        while sessions_collection.find_one({"session_code": session_code}):
+            session_code = generate_session_code()
+            
+        # Construct the new interview session document
+        interview_session = {
+            "session_id": str(uuid.uuid4()),
+            "session_code": session_code,
+            "title": f"Interview: {template.get('template_name', 'Untitled')}",
+            "host_id": user["user_id"],
+            "host_username": user["username"],
+            "participants": [user["username"]],  # Add the host as a participant
+            "created_at": datetime.datetime.utcnow(),
+            "started_at": datetime.datetime.utcnow(),
+            "status": "active",
+            "template_mode": False,  # This is an interview, not template building
+            "source_template_id": template_id,
+            "template_name": template.get('template_name'),
+            "questions": template.get('questions', []),
+            "answers": [],
+            "current_question_index": 0,
+        }
+        
+        sessions_collection.insert_one(interview_session)
+        
+        return jsonify({
+            "message": "Interview session created successfully",
+            "session": clean_session_for_response(interview_session)
+        }), 201
+
+    except Exception as e:
+        current_app.logger.error(f"Error creating session from template: {str(e)}")
+        return jsonify({"error": "Failed to create session from template"}), 500
+
+# Submit an answer for a mock interview question
+@sessions_bp.route('/api/sessions/<session_id>/answer', methods=['POST'])
+@token_required
+def submit_interview_answer(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] != session.get("host_username"):
+            return jsonify({"error": "Only the person taking the interview can submit answers"}), 403
+
+        data = request.get_json()
+        if not data or 'question_index' not in data or 'answer' not in data:
+            return jsonify({"error": "question_index and answer are required"}), 400
+            
+        question_index = data['question_index']
+        user_answer = data['answer']
+        
+        questions = session.get('questions', [])
+        if not (0 <= question_index < len(questions)):
+            return jsonify({"error": "Invalid question index"}), 400
+            
+        question = questions[question_index]
+        is_correct = None
+        
+        # Grade the answer if possible
+        if question.get('type') == 'multiple_choice':
+            is_correct = (user_answer == question.get('correct_answer'))
+        elif question.get('type') == 'true_false':
+            # Handle boolean answers sent as strings from frontend
+            user_answer_bool = str(user_answer).lower() == 'true'
+            is_correct = (user_answer_bool == question.get('correct_answer'))
+        
+        answer_record = {
+            "question_index": question_index,
+            "question_id": question.get("question_id"),
+            "answer": user_answer,
+            "is_correct": is_correct,
+            "correct_answer": question.get("correct_answer"),
+            "submitted_at": datetime.datetime.utcnow()
+        }
+        
+        # Update the session with the new answer
+        sessions_collection.update_one(
+            {"session_id": session_id},
+            {
+                "$push": {"answers": answer_record},
+                "$set": {"current_question_index": question_index + 1}
+            }
+        )
+        
+        return jsonify({"message": "Answer submitted successfully", "is_correct": is_correct}), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error submitting answer: {str(e)}")
+        return jsonify({"error": "Failed to submit answer"}), 500
+
+
+# Complete a mock interview session
+@sessions_bp.route('/api/sessions/<session_id>/complete', methods=['POST'])
+@token_required
+def complete_interview_session(user, session_id):
+    try:
+        session = sessions_collection.find_one({"session_id": session_id})
+        if not session:
+            return jsonify({"error": "Session not found"}), 404
+        
+        if user["username"] != session.get("host_username"):
+            return jsonify({"error": "Only the host can complete the session"}), 403
+            
+        # Atomically update the session in one go
+        update_operations = {
+            "$set": {
+                "status": "completed",
+                "ended_at": datetime.datetime.utcnow()
+            }
+        }
+
+        # Check if a final answer was submitted with the completion request
+        if request.is_json:
+            data = request.get_json()
+            final_answer_data = data.get('final_answer') if data else None
+            if final_answer_data and 'question_index' in final_answer_data and 'answer' in final_answer_data:
+                question_index = final_answer_data['question_index']
+                user_answer = final_answer_data['answer']
+                
+                questions = session.get('questions', [])
+                if 0 <= question_index < len(questions):
+                    question = questions[question_index]
+                    is_correct = None
+                    
+                    if question.get('type') == 'multiple_choice':
+                        is_correct = (user_answer == question.get('correct_answer'))
+                    elif question.get('type') == 'true_false':
+                        user_answer_bool = str(user_answer).lower() == 'true'
+                        is_correct = (user_answer_bool == question.get('correct_answer'))
+                    
+                    answer_record = {
+                        "question_index": question_index,
+                        "question_id": question.get("question_id"),
+                        "answer": user_answer,
+                        "is_correct": is_correct,
+                        "correct_answer": question.get("correct_answer"),
+                        "submitted_at": datetime.datetime.utcnow()
+                    }
+                    
+                    # Add the final answer to the update operations
+                    update_operations["$push"] = {"answers": answer_record}
+                    update_operations["$set"]["current_question_index"] = question_index + 1
+
+        # Perform the atomic update. This is more reliable than find_one_and_update
+        # which can have ambiguous return values depending on the driver.
+        result = sessions_collection.update_one(
+            {"session_id": session_id},
+            update_operations
+        )
+
+        if result.matched_count == 0:
+            return jsonify({"error": "Session not found during final update."}), 404
+
+        # Now, fetch the guaranteed final state of the document.
+        final_session = sessions_collection.find_one({"session_id": session_id})
+
+        if not final_session:
+            return jsonify({"error": "Could not retrieve session after update."}), 500
+        
+        return jsonify({
+            "message": "Interview completed successfully",
+            "session": clean_session_for_response(final_session)
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error completing session: {str(e)}")
+        return jsonify({"error": "Failed to complete session"}), 500
 
 # NEW ENDPOINTS FOR STRUCTURED TEMPLATE BUILDING
 

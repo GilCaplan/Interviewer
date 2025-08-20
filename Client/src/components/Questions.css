@@ -685,10 +685,12 @@ button:disabled {
 
 .result-item.correct { border-left-color: #28a745; }
 .result-item.incorrect { border-left-color: #dc3545; }
+.result-item.unanswered { border-left-color: #9e9e9e; }
 .result-header { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee; }
 .result-indicator { font-weight: bold; font-size: 0.9rem; }
 .result-item.correct .result-indicator { color: #28a745; }
 .result-item.incorrect .result-indicator { color: #dc3545; }
+.result-item.unanswered .result-indicator { color: #616161; }
 .result-body { padding: 15px; line-height: 1.6; }
 .result-body p { margin: 0 0 10px 0; }
 .result-body p:last-child { margin-bottom: 0; }
