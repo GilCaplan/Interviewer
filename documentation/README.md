@@ -79,7 +79,7 @@ python individual_tests/test_scaling_and_concurrent_users.py # Performance under
 - **3-Screen Template Builder**: Template Editor, LLM Chat, Participants List
 - **Real AI Integration**: Google Gemini 1.5 Flash with smart rate limiting
 - **Multi-User Collaboration**: WebSocket-powered real-time sessions (up to 10 users in normal mode, 100+ tested under extreme load)
-- **5 Question Types**: Open ended, multiple choice, true/false, coding, short answer
+- **4 Question Types**: Open ended, multiple choice, true/false, short answer
 - **JWT Authentication**: Secure user sessions with auto-registration
 - **Comprehensive Testing**: 100% pass rate across 168 individual tests in 16 test suites
 - **Enterprise Scalability**: Successfully tested with 100+ concurrent WebSocket users and 30,000+ messages/minute
@@ -100,10 +100,10 @@ python individual_tests/test_scaling_and_concurrent_users.py # Performance under
 #### Method 2: Direct API Creation
 ```javascript
 const templateData = {
-  template_name: "Algorithm Interview Questions",
-  description: "Common algorithm questions for technical interviews",
-  subject: "algorithms",
-  difficulty: "medium",
+  template_name: "Company Policy Review",
+  description: "Questions about new company policies for Q3.",
+  subject: "HR",
+  difficulty: "easy",
   is_public: false
 };
 
@@ -315,7 +315,7 @@ python individual_tests/test_stress_and_chaos.py
 ### LLM Features
 - **General Chat**: Broad assistance and discussion
 - **Question-Specific Suggestions**: Context-aware content generation
-- **Multiple Question Types**: Supports all 5 question types
+- **Multiple Question Types**: Supports all 4 question types
 - **Smart Context**: AI understands session subject and difficulty
 
 ## 📚 Question Types Supported
@@ -324,10 +324,10 @@ python individual_tests/test_stress_and_chaos.py
 ```json
 {
   "type": "multiple_choice",
-  "question_text": "What is the time complexity of quicksort?",
-  "options": ["O(n)", "O(n log n)", "O(n²)", "O(log n)"],
-  "correct_answer": "O(n log n)",
-  "explanation": "Quicksort has O(n log n) average case complexity"
+  "question_text": "Which of these is a core company value?",
+  "options": ["Innovation", "Integrity", "Agility", "All of the above"],
+  "correct_answer": "All of the above",
+  "explanation": "Our core values guide all of our decisions and actions."
 }
 ```
 
@@ -335,10 +335,10 @@ python individual_tests/test_stress_and_chaos.py
 ```json
 {
   "type": "open_ended",
-  "question_text": "Explain the difference between BFS and DFS",
-  "sample_answer": "BFS explores neighbors first, DFS goes deep first",
-  "grading_criteria": ["Mentions breadth-first", "Mentions depth-first"],
-  "hints": ["Think about traversal order"]
+  "question_text": "Describe a time you had to handle a difficult customer.",
+  "sample_answer": "A good answer would describe the situation, the action taken, and the result, focusing on empathy and problem-solving.",
+  "grading_criteria": ["Describes situation clearly", "Explains action taken", "Details the outcome"],
+  "hints": ["Use the STAR method (Situation, Task, Action, Result)"]
 }
 ```
 

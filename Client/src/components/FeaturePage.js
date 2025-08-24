@@ -23,33 +23,7 @@ function FeaturePage({ features }) {
   const getDetailedDescription = (featureName) => {
     const name = featureName.toLowerCase();
 
-    if (name.includes('programming')) {
-      return (
-        <>
-          <p>Enhance your coding skills with our extensive collection of programming challenges.</p>
-          <ul>
-            <li>Practice problems in multiple languages (Python, Java, JavaScript, C++)</li>
-            <li>Algorithmic challenges at various difficulty levels</li>
-            <li>Data structure implementations</li>
-            <li>Real interview questions from top tech companies</li>
-          </ul>
-          <p>Coming soon: Code execution environment and automated test cases.</p>
-        </>
-      );
-    } else if (name.includes('puzzle') || name.includes('riddle')) {
-      return (
-        <>
-          <p>Sharpen your logical thinking with our collection of puzzles and riddles.</p>
-          <ul>
-            <li>Brain teasers and mind benders</li>
-            <li>Mathematical puzzles</li>
-            <li>Logic problems</li>
-            <li>Pattern recognition challenges</li>
-          </ul>
-          <p>Coming soon: Interactive puzzle-solving tools and hint system.</p>
-        </>
-      );
-    } else if (name.includes('interview question')) {
+    if (name.includes('interview question')) {
       return (
         <>
           <p>Prepare for technical interviews with commonly asked questions.</p>
@@ -113,36 +87,9 @@ function FeaturePage({ features }) {
           <p>Coming soon: AI-powered feedback on your answers.</p>
         </>
       );
-    } else if (name.includes('case')) {
-      return (
-        <>
-          <p>Tackle complex business cases that test your analytical and problem-solving abilities.</p>
-          <ul>
-            <li>Business strategy problems</li>
-            <li>Market sizing questions</li>
-            <li>Financial analysis scenarios</li>
-            <li>Product management cases</li>
-          </ul>
-          <p>Coming soon: Interactive case frameworks and calculation tools.</p>
-        </>
-      );
-    } else if (name.includes('mock')) {
-      return (
-        <>
-          <p>Experience realistic interview simulations with our mock interview system.</p>
-          <ul>
-            <li>AI-powered interviewers</li>
-            <li>Peer matching for practice sessions</li>
-            <li>Timed interview environments</li>
-            <li>Performance feedback</li>
-          </ul>
-          <p>Coming soon: Video recording and professional reviewer options.</p>
-        </>
-      );
     } else {
-      return (
-        <p>This feature will help you prepare for your interviews more effectively. Check back soon for more details as we continue to develop this part of the application.</p>
-      );
+      // Fallback for any other feature, which shouldn't be accessible with the new filtering.
+      return <p>Details for this feature are not available.</p>;
     }
   };
 

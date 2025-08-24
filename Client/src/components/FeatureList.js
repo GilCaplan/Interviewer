@@ -3,21 +3,8 @@ import { Link } from 'react-router-dom';
 import './FeatureList.css';
 
 function FeatureList({ features }) {
-  // Filter out the unwanted features: "Behavioral questions" and "More Coming Soon"
-  const filteredFeatures = features.filter(feature =>
-    !feature.name.toLowerCase().includes('behavioral questions') &&
-    !feature.name.toLowerCase().includes('more coming soon')
-  );
-  // Group features into rows of 3 for better layout
-  const chunkArray = (array, size) => {
-    const result = [];
-    for (let i = 0; i < array.length; i += size) {
-      result.push(array.slice(i, i + size));
-    }
-    return result;
-  };
-
-  const featureRows = chunkArray(filteredFeatures, 3); // Use filtered features here
+  // This component now assumes the `features` prop is pre-filtered at its source.
+  // It simply displays the features it receives.
 
   return (
     <div className="feature-list-container">
@@ -27,7 +14,7 @@ function FeatureList({ features }) {
       </p>
 
       <div className="features-list">
-        {filteredFeatures.map((feature, index) => ( // Map over filtered features
+        {features.map((feature, index) => ( // Map over features directly
           <Link
             to={feature.route || `/feature/${index}`}
             key={index}
@@ -63,10 +50,6 @@ function getFeatureIcon(featureName) {
 
   if (name.includes('collaborative') || name.includes('session')) {
     return '👥';
-  } else if (name.includes('programming') || name.includes('coding')) {
-    return '💻';
-  } else if (name.includes('puzzle') || name.includes('riddle')) {
-    return '🧩';
   } else if (name.includes('interview question')) {
     return '❓';
   } else if (name.includes('case stud')) {

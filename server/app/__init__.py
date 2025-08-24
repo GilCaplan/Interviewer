@@ -13,7 +13,6 @@ from .auth import auth
 from .questions import questions
 from .sessions import sessions_bp
 from .templates import templates_bp
-from .coding_challenges import coding_challenges
 from .websocket_handlers import init_simple_websockets  # Only import the function
 from .async_handler import init_async_manager, shutdown_async_manager
 from .interviews import interviews_bp
@@ -98,7 +97,6 @@ def create_app(config_class=Config):
     app.register_blueprint(questions)
     app.register_blueprint(sessions_bp)
     app.register_blueprint(templates_bp)
-    app.register_blueprint(coding_challenges)
     app.register_blueprint(interviews_bp)
 
     # Enhanced error handlers for graceful error handling and security

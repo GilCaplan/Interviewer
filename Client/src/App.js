@@ -7,8 +7,6 @@ import FeaturePage from './components/FeaturePage';
 import Login from './components/Login';
 import UserQuestions from './components/UserQuestions';
 import LlmQuestions from './components/LlmQuestions';
-import CodingChallengeList from './components/CodingChallengeList';
-import CodingChallenge from './components/CodingChallenge';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import './index.css';
 import './components/Login.css';
@@ -63,54 +61,24 @@ function AppContent() {
       });
   }, []);
 
-  // Default features to display if API is not available
+  // Define the single feature to be displayed.
   const fallbackFeatures = [
-    {
-      name: "Collaborative Sessions",
-      description: "Create or join secure collaborative sessions to build interview templates together.",
-      route: "/sessions"
-    },
-    {
-      name: "Practice programming problems",
-      description: "Sharpen your coding skills with various programming challenges."
-    },
-    {
-      name: "Logical puzzles/riddles",
-      description: "Test your problem-solving abilities with logic puzzles."
-    },
     {
       name: "Interview questions",
       description: "Common technical questions to prepare for your interview."
-    },
-    {
-      name: "Behavioral questions",
-      description: "Practice answering questions about your past experiences."
-    },
-    {
-      name: "Case studies",
-      description: "Complex scenarios to test your analytical thinking."
-    },
-    {
-      name: "Mock interviews",
-      description: "Simulate a real interview environment with AI feedback."
     }
   ];
 
-  // Format API features to include descriptions
+  // This function now filters for and formats only the "Interview questions" feature.
   const formatApiFeatures = (features) => {
-    return features.map(feature => {
-      return {
-        name: feature,
-        description: getFeatureDescription(feature)
-      };
-    });
-  };
-
-  // Get a description for each feature
-  const getFeatureDescription = (featureName) => {
-    // Find matching feature in fallback list or provide generic description
-    const fallbackFeature = fallbackFeatures.find(f => f.name === featureName);
-    return fallbackFeature ? fallbackFeature.description : "Explore this feature to enhance your interview preparation.";
+    const interviewFeatureName = features.find(f => f.toLowerCase().includes('interview question'));
+    if (interviewFeatureName) {
+      return [{
+        name: interviewFeatureName,
+        description: "Common technical questions to prepare for your interview."
+      }];
+    }
+    return [];
   };
 
   const features = apiInfo ? formatApiFeatures(apiInfo.features) : fallbackFeatures;
@@ -207,25 +175,6 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <LlmQuestions />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Routes for coding challenges */}
-        <Route
-          path="/coding-challenges"
-          element={
-            <ProtectedRoute>
-              <CodingChallengeList />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/coding-challenges/:challengeId"
-          element={
-            <ProtectedRoute>
-              <CodingChallenge />
             </ProtectedRoute>
           }
         />
