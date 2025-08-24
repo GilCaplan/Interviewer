@@ -1,6 +1,6 @@
 # server/app/sessions.py
 from flask import Blueprint, request, jsonify, current_app, Response
-from flask_socketio import emit, join_room, leave_room
+from flask_socketio import emit
 import datetime
 import secrets
 import string
@@ -8,7 +8,6 @@ import uuid
 import random
 import re
 import json
-import html
 import hashlib
 from .auth import token_required
 from pymongo import ReturnDocument
@@ -19,6 +18,7 @@ from .rate_limiter import rate_limit
 from .database import sessions_collection, questions_collection, templates_collection
 from .crash_prevention import CrashPrevention, safe_execute, safe_database_operation
 from .llm_service import LLMService
+from .utils import clean_user_input, clean_session_for_response
 # Production optimization imports removed for Docker-only setup
 
 sessions_bp = Blueprint('sessions', __name__)
@@ -70,26 +70,6 @@ def generate_session_code():
     return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
 
 
-def sanitize_text_input(text, max_length=1000):
-    """Sanitize text input to prevent XSS and injection attacks"""
-    if text is None:
-        return ""
-    if not isinstance(text, str):
-        text = str(text)
-    
-    # Remove null bytes and control characters
-    cleaned = ''.join(c for c in text if ord(c) >= 32 or c in '\t\n\r')
-    
-    # HTML escape to prevent XSS
-    cleaned = html.escape(cleaned, quote=True)
-    
-    # Truncate if too long
-    if len(cleaned) > max_length:
-        cleaned = cleaned[:max_length]
-    
-    return cleaned
-
-
 def validate_session_code(code):
     """Validate session code format (6 alphanumeric characters)"""
     if not isinstance(code, str):
@@ -117,65 +97,6 @@ def safe_emit(event, data, room=None, namespace='/'):
         current_app.logger.warning(f"WebSocket emit failed (likely test environment): {str(e)}")
     except Exception as e:
         current_app.logger.warning(f"WebSocket emit failed: {str(e)}")
-
-
-def clean_session_for_response(session_data):
-    """
-    Recursively removes sensitive data and serializes non-JSON-compatible types
-    (like ObjectId and datetime) for API responses and WebSocket events.
-    """
-    if not session_data:
-        return None
-
-    # Use a recursive helper to serialize the data
-    def serialize_value(value):
-        if isinstance(value, list):
-            return [serialize_value(item) for item in value]
-        if isinstance(value, dict):
-            return {k: serialize_value(v) for k, v in value.items()}
-        if isinstance(value, datetime.datetime):
-            return value.isoformat()
-        # Add ObjectId serialization if you use it in responses
-        # from bson import ObjectId
-        # if isinstance(value, ObjectId):
-        #     return str(value)
-        return value
-
-    # Remove top-level sensitive keys and then serialize
-    session_data.pop('password_hash', None)
-    session_data.pop('_id', None)
-    return serialize_value(session_data)
-
-
-def clean_user_input(text):
-    """Clean and secure user text input"""
-    if not text or not isinstance(text, str):
-        return ""
-    
-    # Remove control chars (except basic whitespace)
-    text = ''.join(c for c in text if ord(c) >= 32 or c in '\t\n\r')
-    
-    # Prevent DoS with length limit
-    text = text[:10000] if len(text) > 10000 else text
-    
-    # Basic XSS protection
-    text = html.escape(text, quote=True)
-    
-    # Remove common attack patterns
-    bad_patterns = [
-        r'<script.*?</script>', r'javascript:', r'vbscript:', 
-        r'on\w+\s*=', r'<iframe', r'<object', r'<embed',
-        r';\s*(drop|delete|exec)', r'union\s+select'
-    ]
-    
-    for pattern in bad_patterns:
-        text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
-    
-    # Clean up path traversal and remaining tags
-    text = re.sub(r'\.\.[\\/]', '', text)
-    text = re.sub(r'<[^>]*>', '', text)
-    
-    return text.strip()
 
 
 def is_valid_session_code(session_code):
@@ -1939,7 +1860,11 @@ def convert_session_to_template(user, session_id):
         from .templates import templates_collection
         import re
         
-        template_name = data.get('template_name', session.get('title', 'Converted Template'))
+        # The template name, description, and difficulty should be sourced from the session object,
+        # which holds the user's latest edits from the template builder.
+        template_name = session.get('title', 'Converted Template')
+        description = session.get('description', f"Converted from session {session['session_code']}")
+        difficulty = session.get('difficulty', 'medium')
         
         # Create template slug for unique identification
         template_slug = re.sub(r'[^a-zA-Z0-9]+', '-', template_name.lower()).strip('-')
@@ -1961,10 +1886,10 @@ def convert_session_to_template(user, session_id):
             "template_id": existing_template["template_id"] if existing_template else str(uuid.uuid4()),
             "template_key": template_key,
             "template_name": template_name,
-            "description": data.get('description', f"Converted from session {session['session_code']}"),
+            "description": description,
             "subject": session.get('subject', 'general'),
             "sub_subject": data.get('sub_subject', ''),
-            "difficulty": data.get('difficulty', 'medium'),
+            "difficulty": difficulty,
             "created_by": user["username"],
             "created_by_id": user["user_id"],
             "is_public": data.get('is_public', False),

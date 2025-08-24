@@ -1,8 +1,9 @@
 import React from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 
 function FeaturePage({ features }) {
   const { featureId } = useParams();
+  const navigate = useNavigate();
   const featureIndex = parseInt(featureId);
 
   // Make sure we have valid features and a valid index
@@ -18,6 +19,11 @@ function FeaturePage({ features }) {
 
   const feature = features[featureIndex];
   const isInterviewQuestions = feature.name.toLowerCase().includes('interview question');
+
+  const handleStartNewSession = () => {
+    const newSessionCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    navigate(`/session/${newSessionCode}`);
+  };
 
   // Detailed descriptions for each feature type
   const getDetailedDescription = (featureName) => {
@@ -41,47 +47,11 @@ function FeaturePage({ features }) {
               🤖 Generate AI Questions
             </Link>
             <button
-              onClick={async () => {
-                try {
-                  const token = localStorage.getItem('token');
-                  if (!token) {
-                    console.warn('User not logged in, cannot create template.');
-                    return;
-                  }
-
-                  const dummyTemplate = {
-                    template_name: "Sample Interview Template",
-                    description: "A sample template with common interview questions",
-                    subject: "general",
-                    difficulty: "medium",
-                    is_public: true,
-                    tags: ["sample", "interview", "general"]
-                  };
-
-                  const response = await fetch("http://localhost:5000/api/templates", {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify(dummyTemplate)
-                  });
-
-                  if (!response.ok) {
-                    const error = await response.json().catch(() => ({}));
-                    throw new Error(error.error || "Failed to create template");
-                  }
-
-                  const data = await response.json();
-                  console.log(`✅ Template created successfully! ID: ${data.template.template_id}`);
-                } catch (error) {
-                  console.error("❌ Error creating template:", error);
-                }
-              }}
+              onClick={handleStartNewSession}
               className="feature-action-btn"
               style={{ backgroundColor: "#4CAF50" }}
             >
-              ➕ Create Sample Template
+              ➕ Start New Template Session
             </button>
           </div>
           <p>Coming soon: AI-powered feedback on your answers.</p>

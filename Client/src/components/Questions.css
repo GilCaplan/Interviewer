@@ -712,3 +712,71 @@ button:disabled {
   font-size: 0.95rem;
   line-height: 1.5;
 }
+
+/* Session Builder Metadata Form */
+.template-metadata-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.template-metadata-form .metadata-input-title {
+  font-size: 1.8rem;
+  font-weight: bold;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  background-color: transparent;
+  transition: background-color 0.2s;
+  color: #333;
+}
+
+.template-metadata-form .metadata-input-title:focus {
+  background-color: #f0f7ff;
+  outline: 1px solid #a0c2e8;
+}
+
+.template-metadata-form .metadata-input-description {
+  font-size: 1rem;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  background-color: transparent;
+  resize: none;
+  font-family: inherit;
+  color: #555;
+  transition: background-color 0.2s;
+}
+
+.template-metadata-form .metadata-input-description:focus {
+  background-color: #f0f7ff;
+  outline: 1px solid #a0c2e8;
+}
+
+.template-metadata-form .metadata-row {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.template-metadata-form .metadata-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.template-metadata-form .metadata-group label {
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.template-metadata-form .metadata-group input,
+.template-metadata-form .metadata-group select {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 0.9rem;
+}

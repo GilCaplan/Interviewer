@@ -29,10 +29,18 @@ const SessionBuilder = () => {
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
+  const [conversionStatus, setConversionStatus] = useState('');
   
   // Screen data
   const [questions, setQuestions] = useState([]);
   const [participants, setParticipants] = useState([]);
+  const [templateMetadata, setTemplateMetadata] = useState({
+    template_name: '',
+    description: '',
+    subject: 'general',
+    difficulty: 'medium'
+  });
   const [onlineUsers, setOnlineUsers] = useState(new Set()); // Track online status
   const [chatMessages, setChatMessages] = useState([]);
 
@@ -134,7 +142,16 @@ const SessionBuilder = () => {
         }
 
         const data = await response.json();
-        setSession(data.session);
+        const sessionData = data.session;
+        setSession(sessionData);
+        
+        // Populate metadata from session
+        setTemplateMetadata({
+          template_name: sessionData.title || `Collaborative Template`,
+          description: sessionData.description || 'Building interview templates together',
+          difficulty: sessionData.difficulty || 'medium',
+          subject: sessionData.subject || 'general'
+        });
         
         // Get username from multiple sources for reliability
         let username = user?.username;
@@ -250,6 +267,14 @@ const SessionBuilder = () => {
       if (isMountedRef.current && updatedSession) {
         // Update the main session state object
         setSession(updatedSession);
+
+        // Also update the metadata state to reflect changes
+        setTemplateMetadata({
+          template_name: updatedSession.title || '',
+          description: updatedSession.description || '',
+          difficulty: updatedSession.difficulty || 'medium',
+          subject: updatedSession.subject || ''
+        });
 
         // Update the derived questions state from the new, authoritative session data
         const templateData = updatedSession.template_data || {};
@@ -388,30 +413,25 @@ const SessionBuilder = () => {
       }
       
       console.log('Question start successful');
-      
-      // Refresh session data to ensure UI is in sync
-      try {
-        const refreshResponse = await fetch(`${apiUrl}/api/sessions/${session.session_id}`, {
-          headers: {
-            'Authorization': `Bearer ${authToken}`
-          }
-        });
-        
-        if (refreshResponse.ok) {
-          const refreshData = await refreshResponse.json();
-          const templateData = refreshData.session.template_data || {};
-          setQuestions([
-            ...(templateData.questions_queue || []),
-            ...(templateData.ready_questions || [])
-          ]);
-          console.log('Session state refreshed after question creation');
-        }
-      } catch (refreshError) {
-        console.warn('Could not refresh session state:', refreshError);
-      }
-      
+      // The UI will be updated via the 'session_updated' WebSocket event.
     } catch (err) {
       console.error('Error starting question:', err);
+    }
+  };
+
+  const handleMetadataChange = (e) => {
+    const { name, value } = e.target;
+    setTemplateMetadata(prev => ({ ...prev, [name]: value }));
+  };
+
+  const saveMetadata = () => {
+    if (socket && isHost) {
+      // Emit an event to the backend to update the session's metadata
+      socket.emit('update_session_metadata', {
+        session_id: session.session_id,
+        // Send all metadata fields to be updated on the session document
+        metadata: templateMetadata
+      });
     }
   };
 
@@ -478,6 +498,32 @@ const SessionBuilder = () => {
       console.log('Question finalized successfully');
     } catch (err) {
       console.error('Error finalizing question:', err);
+    }
+  };
+
+  const handleConvertToTemplate = async () => {
+    if (!window.confirm('This will create a permanent, reusable template from the current session. This action cannot be undone. Continue?')) {
+      return;
+    }
+
+    setIsConverting(true);
+    setConversionStatus('Converting to template...');
+
+    try {
+      const response = await fetchApi(`/api/sessions/${session.session_id}/convert-to-template`, {
+        method: 'POST',
+        // The backend will use the session title as the template name by default.
+        body: JSON.stringify({ template_name: session.title || 'Converted Template' })
+      });
+      
+      setConversionStatus('Template created successfully! You will be redirected shortly.');
+      
+      setTimeout(() => {
+        navigate(`/template/${response.template.template_id}`);
+      }, 2500);
+    } catch (err) {
+      setConversionStatus(`Error: ${err.message}`);
+      setIsConverting(false);
     }
   };
 
@@ -744,9 +790,45 @@ const SessionBuilder = () => {
       {/* Header */}
       <div className="session-header">
         <div className="session-info">
-          <h1>{session.title}</h1>
+          {isHost ? (
+            <div className="template-metadata-form">
+              <input
+                type="text"
+                name="template_name"
+                value={templateMetadata.template_name}
+                onChange={handleMetadataChange}
+                onBlur={saveMetadata}
+                placeholder="Enter Template Name"
+                className="metadata-input-title"
+              />
+              <textarea
+                name="description"
+                value={templateMetadata.description}
+                onChange={handleMetadataChange}
+                onBlur={saveMetadata}
+                placeholder="Enter a short description..."
+                className="metadata-input-description"
+                rows={2}
+              />
+              <div className="metadata-row">
+                <div className="metadata-group">
+                  <label>Subject:</label>
+                  <input type="text" name="subject" value={templateMetadata.subject} onChange={handleMetadataChange} onBlur={saveMetadata} placeholder="e.g., Frontend" />
+                </div>
+                <div className="metadata-group">
+                  <label>Difficulty:</label>
+                  <select name="difficulty" value={templateMetadata.difficulty} onChange={handleMetadataChange} onBlur={saveMetadata}>
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <h1>{session.title}</h1>
+          )}
           <p>Session Code: <strong>{session.session_code}</strong></p>
-          <p>Subject: {session.subject}</p>
           <div className="session-badges">
             {isHost && <span className="host-badge">HOST</span>}
             {session.is_password_protected && <span className="password-badge">🔒 Protected</span>}
@@ -792,6 +874,9 @@ const SessionBuilder = () => {
             onUpdateQuestion={handleUpdateQuestion}
             onFinalizeQuestion={handleFinalizeQuestion}
             viewingMode={session?.settings?.viewing_mode || 'suggestions_only'}
+            onConvertToTemplate={handleConvertToTemplate}
+            isConverting={isConverting}
+            conversionStatus={conversionStatus}
           />
         )}
         
