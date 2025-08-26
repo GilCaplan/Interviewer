@@ -40,7 +40,7 @@
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #8BC34A, #4CAF50);
+  background: linear-gradient(90deg, #4aa7c3, #1a24d7);
   transition: width 0.3s ease;
 }
 

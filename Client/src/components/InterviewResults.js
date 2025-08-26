@@ -158,7 +158,7 @@ function InterviewResults({ session }) {
                                                 </span>
                                             </div>
                                             
-                                            {!isCorrect && userAnswer.correct_answer && (
+                                            {userAnswer.correct_answer && (
                                                 <div className="correct-answer">
                                                     <strong>Correct Answer:</strong> 
                                                     <span className="expected-answer">
@@ -209,3 +209,4 @@ function InterviewResults({ session }) {
 }
 
 export default InterviewResults;
+

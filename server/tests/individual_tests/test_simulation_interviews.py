@@ -16,7 +16,7 @@ from datetime import datetime
 def find_server_url():
     """Find available server URL"""
     urls_to_try = [
-        'http://localhost:5001',  # Test server
+        'http://localhost:5000',  # Test server
         'http://localhost:5000',  # Main server
         'http://server:5000',     # Docker service name
     ]
@@ -193,7 +193,7 @@ class InterviewSimulationTestSuite:
     def test_start_interview_session(self):
         """Test starting an interview session from template"""
         try:
-            response = requests.post(f"{API_URL}/api/interviews/start",
+            response = requests.post(f"{API_URL}/api/interview/start",
                                    json={"template_id": self.test_template_id},
                                    headers=self.test_user.get_headers(),
                                    timeout=15)
@@ -210,7 +210,7 @@ class InterviewSimulationTestSuite:
     def test_start_interview_invalid_template(self):
         """Test starting interview with invalid template ID"""
         try:
-            response = requests.post(f"{API_URL}/api/interviews/start",
+            response = requests.post(f"{API_URL}/api/interview/start",
                                    json={"template_id": "invalid-template-id"},
                                    headers=self.test_user.get_headers(),
                                    timeout=15)
@@ -222,7 +222,7 @@ class InterviewSimulationTestSuite:
     def test_start_interview_missing_template(self):
         """Test starting interview without template ID"""
         try:
-            response = requests.post(f"{API_URL}/api/interviews/start",
+            response = requests.post(f"{API_URL}/api/interview/start",
                                    json={},
                                    headers=self.test_user.get_headers(),
                                    timeout=15)
@@ -237,7 +237,7 @@ class InterviewSimulationTestSuite:
             return False
             
         try:
-            response = requests.get(f"{API_URL}/api/interviews/{self.interview_session_id}",
+            response = requests.get(f"{API_URL}/api/interview/{self.interview_session_id}",
                                   headers=self.test_user.get_headers(),
                                   timeout=15)
             
@@ -254,7 +254,7 @@ class InterviewSimulationTestSuite:
     def test_get_interview_invalid_session(self):
         """Test retrieving invalid interview session"""
         try:
-            response = requests.get(f"{API_URL}/api/interviews/invalid-session-id",
+            response = requests.get(f"{API_URL}/api/interview/invalid-session-id",
                                   headers=self.test_user.get_headers(),
                                   timeout=15)
             
@@ -268,7 +268,7 @@ class InterviewSimulationTestSuite:
             return False
             
         try:
-            response = requests.post(f"{API_URL}/api/interviews/{self.interview_session_id}/answer",
+            response = requests.post(f"{API_URL}/api/interview/{self.interview_session_id}/answer",
                                    json={"answer": "O(log n)"},
                                    headers=self.test_user.get_headers(),
                                    timeout=15)
@@ -286,7 +286,7 @@ class InterviewSimulationTestSuite:
             return False
             
         try:
-            response = requests.post(f"{API_URL}/api/interviews/{self.interview_session_id}/answer",
+            response = requests.post(f"{API_URL}/api/interview/{self.interview_session_id}/answer",
                                    json={"answer": "Stack follows LIFO principle while Queue follows FIFO principle"},
                                    headers=self.test_user.get_headers(),
                                    timeout=15)
@@ -304,7 +304,7 @@ class InterviewSimulationTestSuite:
             return False
             
         try:
-            response = requests.post(f"{API_URL}/api/interviews/{self.interview_session_id}/answer",
+            response = requests.post(f"{API_URL}/api/interview/{self.interview_session_id}/answer",
                                    json={"answer": "Cascading Style Sheets"},
                                    headers=self.test_user.get_headers(),
                                    timeout=15)
@@ -322,7 +322,7 @@ class InterviewSimulationTestSuite:
             return False
             
         try:
-            response = requests.post(f"{API_URL}/api/interviews/{self.interview_session_id}/answer",
+            response = requests.post(f"{API_URL}/api/interview/{self.interview_session_id}/answer",
                                    json={},
                                    headers=self.test_user.get_headers(),
                                    timeout=15)
@@ -337,7 +337,7 @@ class InterviewSimulationTestSuite:
             return False
             
         try:
-            response = requests.post(f"{API_URL}/api/interviews/{self.interview_session_id}/finish",
+            response = requests.post(f"{API_URL}/api/interview/{self.interview_session_id}/finish",
                                    headers=self.test_user.get_headers(),
                                    timeout=15)
             
@@ -348,7 +348,7 @@ class InterviewSimulationTestSuite:
     def test_finish_invalid_interview(self):
         """Test finishing invalid interview session"""
         try:
-            response = requests.post(f"{API_URL}/api/interviews/invalid-session-id/finish",
+            response = requests.post(f"{API_URL}/api/interview/invalid-session-id/finish",
                                    headers=self.test_user.get_headers(),
                                    timeout=15)
             
@@ -368,7 +368,7 @@ class InterviewSimulationTestSuite:
             return False
             
         try:
-            response = requests.get(f"{API_URL}/api/interviews/{self.interview_session_id}",
+            response = requests.get(f"{API_URL}/api/interview/{self.interview_session_id}",
                                   headers=another_user.get_headers(),
                                   timeout=15)
             
@@ -382,7 +382,7 @@ class InterviewSimulationTestSuite:
             # Start multiple sessions
             session_ids = []
             for i in range(3):
-                response = requests.post(f"{API_URL}/api/interviews/start",
+                response = requests.post(f"{API_URL}/api/interview/start",
                                        json={"template_id": self.test_template_id},
                                        headers=self.test_user.get_headers(),
                                        timeout=15)
@@ -395,7 +395,7 @@ class InterviewSimulationTestSuite:
             
             # Verify all sessions exist and are independent
             for session_id in session_ids:
-                response = requests.get(f"{API_URL}/api/interviews/{session_id}",
+                response = requests.get(f"{API_URL}/api/interview/{session_id}",
                                       headers=self.test_user.get_headers(),
                                       timeout=15)
                 

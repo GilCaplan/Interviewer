@@ -295,6 +295,11 @@
   font-size: 14px;
 }
 
+.session-code-strong {
+  color: #111;
+  font-weight: bold;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .session-header {

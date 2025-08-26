@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, memo } from 'react';
+import { decodeHTMLEntities } from '../utils/textUtils';
 import './TemplateEditor.css';
 
 const TemplateEditor = ({ 
@@ -663,14 +664,12 @@ const TemplateEditor = ({
               "Hints",
               "hints",
               <textarea
-                value={(() => {
-                  const hints = getFieldValueLocal('hints');
-                  return Array.isArray(hints) ? hints.join('\n') : (hints || '');
-                })()}
-                onChange={(e) => handleFieldUpdate(question.question_id, 'hints', e.target.value.split('\n').filter(h => h.trim()))}
+                value={getFieldValueLocal('hints') || ''}
+                onChange={(e) => handleFieldUpdate(question.question_id, 'hints', e.target.value)}
                 disabled={!canEdit}
-                placeholder="Hint 1: Think about the key concepts...\nHint 2: Consider edge cases..."
-                rows={2}
+                placeholder="Hint 1: Think about the key concepts...
+                              Hint 2: Consider edge cases..."
+                rows={3}
               />
             )}
           </div>
@@ -735,29 +734,27 @@ const TemplateEditor = ({
             {renderFieldGroup(
               "Hints",
               "hints",
-              <textarea
-                value={(() => {
-                  const hints = getFieldValueLocal('hints');
-                  return Array.isArray(hints) ? hints.join('\n') : (hints || '');
-                })()}
-                onChange={(e) => handleFieldUpdate(question.question_id, 'hints', e.target.value.split('\n').filter(h => h.trim()))}
-                disabled={!canEdit}
-                placeholder="Hint 1: Think about the algorithm approach...\nHint 2: Consider edge cases like empty input..."
-                rows={2}
-              />
+                <textarea
+                    value={getFieldValueLocal('hints') || ''}
+                    onChange={(e) => handleFieldUpdate(question.question_id, 'hints', e.target.value)}
+                    disabled={!canEdit}
+                    placeholder="Hint 1: Think about the key concepts...
+                              Hint 2: Consider edge cases..."
+                    rows={3}
+                />
             )}
           </div>
         );
 
       case 'true_false':
         return (
-          <div className="question-fields">
-            {renderFieldGroup(
-              "Statement",
-              "question_text",
-              <textarea
-                value={getFieldValueLocal('question_text')}
-                onChange={(e) => handleFieldUpdate(question.question_id, 'question_text', e.target.value)}
+            <div className="question-fields">
+              {renderFieldGroup(
+                  "Statement",
+                  "question_text",
+                  <textarea
+                      value={getFieldValueLocal('question_text')}
+                      onChange={(e) => handleFieldUpdate(question.question_id, 'question_text', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Enter the true/false statement..."
               />
@@ -791,29 +788,27 @@ const TemplateEditor = ({
             {renderFieldGroup(
               "Hints",
               "hints",
-              <textarea
-                value={(() => {
-                  const hints = getFieldValueLocal('hints');
-                  return Array.isArray(hints) ? hints.join('\n') : (hints || '');
-                })()}
-                onChange={(e) => handleFieldUpdate(question.question_id, 'hints', e.target.value.split('\n').filter(h => h.trim()))}
-                disabled={!canEdit}
-                placeholder="Hint 1: Consider the fundamentals...\nHint 2: Think about common misconceptions..."
-                rows={2}
-              />
+                <textarea
+                    value={getFieldValueLocal('hints') || ''}
+                    onChange={(e) => handleFieldUpdate(question.question_id, 'hints', e.target.value)}
+                    disabled={!canEdit}
+                    placeholder="Hint 1: Think about the key concepts...
+                              Hint 2: Consider edge cases..."
+                    rows={3}
+                />
             )}
-          </div>
+            </div>
         );
 
       case 'short_answer':
         return (
-          <div className="question-fields">
-            {renderFieldGroup(
-              "Question",
-              "question_text",
-              <textarea
-                value={getFieldValueLocal('question_text')}
-                onChange={(e) => handleFieldUpdate(question.question_id, 'question_text', e.target.value)}
+            <div className="question-fields">
+              {renderFieldGroup(
+                  "Question",
+                  "question_text",
+                  <textarea
+                      value={getFieldValueLocal('question_text')}
+                      onChange={(e) => handleFieldUpdate(question.question_id, 'question_text', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Enter your short answer question..."
               />
@@ -850,29 +845,27 @@ const TemplateEditor = ({
             {renderFieldGroup(
               "Hints",
               "hints",
-              <textarea
-                value={(() => {
-                  const hints = getFieldValueLocal('hints');
-                  return Array.isArray(hints) ? hints.join('\n') : (hints || '');
-                })()}
-                onChange={(e) => handleFieldUpdate(question.question_id, 'hints', e.target.value.split('\n').filter(h => h.trim()))}
-                disabled={!canEdit}
-                placeholder="Hint 1: Focus on key concepts...\nHint 2: Be concise but complete..."
-                rows={2}
-              />
+                <textarea
+                    value={getFieldValueLocal('hints') || ''}
+                    onChange={(e) => handleFieldUpdate(question.question_id, 'hints', e.target.value)}
+                    disabled={!canEdit}
+                    placeholder="Hint 1: Think about the key concepts...
+                              Hint 2: Consider edge cases..."
+                    rows={3}
+                />
             )}
-          </div>
+            </div>
         );
 
       default: // open_ended
         return (
-          <div className="question-fields">
-            {renderFieldGroup(
-              "Question",
-              "question_text",
-              <textarea
-                value={getFieldValueLocal('question_text')}
-                onChange={(e) => handleFieldUpdate(question.question_id, 'question_text', e.target.value)}
+            <div className="question-fields">
+              {renderFieldGroup(
+                  "Question",
+                  "question_text",
+                  <textarea
+                      value={getFieldValueLocal('question_text')}
+                      onChange={(e) => handleFieldUpdate(question.question_id, 'question_text', e.target.value)}
                 disabled={!canEdit}
                 placeholder="Enter your open-ended question..."
                 rows={3}
@@ -909,28 +902,26 @@ const TemplateEditor = ({
             {renderFieldGroup(
               "Hints",
               "hints",
-              <textarea
-                value={(() => {
-                  const hints = getFieldValueLocal('hints');
-                  return Array.isArray(hints) ? hints.join('\n') : (hints || '');
-                })()}
-                onChange={(e) => handleFieldUpdate(question.question_id, 'hints', e.target.value.split('\n').filter(h => h.trim()))}
-                disabled={!canEdit}
-                placeholder="Hint 1: Think about real-world applications...\nHint 2: Consider multiple perspectives..."
-                rows={2}
-              />
+                <textarea
+                    value={getFieldValueLocal('hints') || ''}
+                    onChange={(e) => handleFieldUpdate(question.question_id, 'hints', e.target.value)}
+                    disabled={!canEdit}
+                    placeholder="Hint 1: Think about the key concepts...
+                              Hint 2: Consider edge cases..."
+                    rows={3}
+                />
             )}
-          </div>
+            </div>
         );
     }
   };
 
   const sortedQuestions = [...questions].sort((a, b) => a.question_number - b.question_number);
-  
+
   // Debug logging
   console.log('TemplateEditor render:', {
     questionsLength: questions.length,
-    questions: questions.map(q => ({ id: q.question_id, number: q.question_number, status: q.status })),
+    questions: questions.map(q => ({id: q.question_id, number: q.question_number, status: q.status})),
     sortedQuestions: sortedQuestions.length,
     isHost,
     user: user?.username
@@ -1044,6 +1035,8 @@ const TemplateEditor = ({
                         }
                         // Then finalize
                         onFinalizeQuestion(question.question_id);
+                        // Collapse the question after finalizing
+                        setExpandedQuestion(null);
                       }}
                       className="finalize-btn"
                     >
@@ -1506,7 +1499,7 @@ const TemplateEditor = ({
                             <span className="note-field">Field: {note.field_reference}</span>
                           )}
                         </div>
-                        <div className="note-content">{note.note}</div>
+                        <div className="note-content">{decodeHTMLEntities(note.note)}</div>
                       </div>
                     ))}
                   </div>
@@ -1521,7 +1514,7 @@ const TemplateEditor = ({
                           <span className="suggestion-field">Field: {suggestion.field}</span>
                           <span className="suggestion-time">{new Date(suggestion.timestamp).toLocaleString()}</span>
                         </div>
-                        <div className="suggestion-content">{suggestion.suggestion}</div>
+                        <div className="suggestion-content">{decodeHTMLEntities(suggestion.suggestion)}</div>
                       </div>
                     ))}
                   </div>

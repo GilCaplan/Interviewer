@@ -828,7 +828,7 @@ const SessionBuilder = () => {
           ) : (
             <h1>{session.title}</h1>
           )}
-          <p>Session Code: <strong>{session.session_code}</strong></p>
+          <p>Session Code: <strong className="session-code-strong">{session.session_code}</strong></p>
           <div className="session-badges">
             {isHost && <span className="host-badge">HOST</span>}
             {session.is_password_protected && <span className="password-badge">🔒 Protected</span>}

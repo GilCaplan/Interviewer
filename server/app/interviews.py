@@ -20,7 +20,7 @@ def get_templates_collection():
     return db.templates
 
 
-@interviews_bp.route('/api/interviews/start', methods=['POST'])
+@interviews_bp.route('/api/interview/start', methods=['POST'])
 @token_required
 def start_interview_session(current_user):
     """
@@ -67,7 +67,7 @@ def start_interview_session(current_user):
     }), 201
 
 
-@interviews_bp.route('/api/interviews/<session_id>', methods=['GET'])
+@interviews_bp.route('/api/interview/<session_id>', methods=['GET'])
 @token_required
 def get_interview_session(current_user, session_id):
     """
@@ -94,7 +94,7 @@ def get_interview_session(current_user, session_id):
     return jsonify({"session": session}), 200
 
 
-@interviews_bp.route('/api/interviews/<session_id>/answer', methods=['POST'])
+@interviews_bp.route('/api/interview/<session_id>/answer', methods=['POST'])
 @token_required
 def submit_answer(current_user, session_id):
     """
@@ -170,7 +170,7 @@ def submit_answer(current_user, session_id):
     }), 200
 
 
-@interviews_bp.route('/api/interviews/<session_id>/finish', methods=['POST'])
+@interviews_bp.route('/api/interview/<session_id>/finish', methods=['POST'])
 @token_required
 def finish_interview(current_user, session_id):
     """

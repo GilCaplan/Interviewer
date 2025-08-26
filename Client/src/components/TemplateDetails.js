@@ -31,10 +31,26 @@ function TemplateDetails() {
     }
   }, [templateId]);
 
-  const startInterview = () => {
-    // This would navigate to the mock interview page, passing the template ID
+  const startInterview = async () => {
     console.log("Starting interview with template:", templateId);
-    navigate(`/interview/new?template=${templateId}`);
+    try {
+      // Corrected API endpoint and response handling
+      const response = await fetchApi('/api/interview/start', {
+        method: 'POST',
+        body: JSON.stringify({ template_id: templateId }),
+      });
+
+      if (response && response.interview_session_id) {
+        // Navigate to the interview page for the newly created session
+        navigate(`/interview/${response.interview_session_id}`);
+      } else {
+        setError('Failed to create a new interview session. No session ID was returned.');
+      }
+    } catch (err) {
+      // Display any errors that occur during session creation
+      setError(err.message);
+      console.error("Failed to start interview:", err);
+    }
   };
 
   if (loading) {

@@ -1,4 +1,6 @@
 import React from 'react';
+import { decodeHTMLEntities } from '../utils/textUtils';
+
 import './Questions.css'; // Reuse our existing stylesheet
 
 /**
@@ -40,7 +42,7 @@ function InterviewSummary({ session }) {
 
     return (
         <div className="interview-summary-container">
-            <h2>Interview Results: {session.template_name}</h2>
+            <h2>Interview Results: {decodeHTMLEntities(session.template_name)}</h2>
 
             <div className="summary-metrics">
                 <div className="metric-card">
@@ -94,7 +96,7 @@ function InterviewSummary({ session }) {
                                 <span className="result-indicator">{isCorrect ? '✔ Correct' : '✖ Incorrect'}</span>
                             </div>
                             <div className="result-body">
-                                <p><strong>Your Answer:</strong> {userAnswer.answer || "No answer provided"}</p>
+                                <p><strong>Your Answer:</strong> {decodeHTMLEntities(userAnswer.answer) || "No answer provided"}</p>
                                 {!isCorrect && (
                                     <>
                                         <p><strong>Correct Answer:</strong> {displayCorrectAnswer}</p>

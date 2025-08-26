@@ -35,7 +35,7 @@ function InterviewSimulation() {
           }
 
           console.log('Starting interview with template:', templateId);
-          const data = await fetchApi('/api/interviews/start', {
+          const data = await fetchApi('/api/interview/start', {
             method: 'POST',
             body: JSON.stringify({ template_id: templateId }),
           });
@@ -47,7 +47,7 @@ function InterviewSimulation() {
         } else {
           // Load existing interview session
           console.log('Loading interview session:', sessionId);
-          const data = await fetchApi(`/api/interviews/${sessionId}`);
+          const data = await fetchApi(`/api/interview/${sessionId}`);
           console.log('Interview session loaded:', data);
           
           setSession(data.session);
@@ -86,6 +86,13 @@ function InterviewSimulation() {
     }
   }, [timeRemaining, isCompleted]);
 
+  const decodeHTMLEntities = (text) => {
+    if (typeof text !== 'string' || !text) return '';
+    const textArea = document.createElement('textarea');
+    textArea.innerHTML = text;
+    return textArea.value;
+  };
+
   const handleSubmitAnswer = async () => {
     if (submitting) return;
 
@@ -93,7 +100,7 @@ function InterviewSimulation() {
     try {
       console.log('Submitting answer:', currentAnswer, 'for question index:', currentQuestionIndex);
       
-      const response = await fetchApi(`/api/interviews/${sessionId}/answer`, {
+      const response = await fetchApi(`/api/interview/${sessionId}/answer`, {
         method: 'POST',
         body: JSON.stringify({ answer: currentAnswer }),
       });
@@ -103,7 +110,7 @@ function InterviewSimulation() {
       const nextIndex = response.next_question_index;
       
       // Update session data
-      const updatedSession = await fetchApi(`/api/interviews/${sessionId}`);
+      const updatedSession = await fetchApi(`/api/interview/${sessionId}`);
       setSession(updatedSession.session);
       setCurrentQuestionIndex(nextIndex);
       setCurrentAnswer('');
@@ -124,12 +131,12 @@ function InterviewSimulation() {
   const finishInterview = async () => {
     try {
       console.log('Finishing interview:', sessionId);
-      await fetchApi(`/api/interviews/${sessionId}/finish`, {
+      await fetchApi(`/api/interview/${sessionId}/finish`, {
         method: 'POST',
       });
 
       // Reload session to get final results
-      const finalSession = await fetchApi(`/api/interviews/${sessionId}`);
+      const finalSession = await fetchApi(`/api/interview/${sessionId}`);
       setSession(finalSession.session);
       setIsCompleted(true);
       console.log('Interview completed:', finalSession.session);
@@ -210,7 +217,7 @@ function InterviewSimulation() {
   return (
     <div className="mock-interview-container">
       <div className="interview-header">
-        <h1>{session.template_name}</h1>
+        <h1>{decodeHTMLEntities(session.template_name)}</h1>
         <div className="interview-progress">
           <div className="progress-bar">
             <div className="progress-fill" style={{ width: `${progress}%` }}></div>
@@ -235,18 +242,16 @@ function InterviewSimulation() {
         </div>
         
         <div className="question-text">
-          {currentQuestion.question_text}
+          {decodeHTMLEntities(currentQuestion.question_text)}
         </div>
 
-        {currentQuestion.hints && currentQuestion.hints.length > 0 && (
+        {currentQuestion.hints && typeof currentQuestion.hints === 'string' && currentQuestion.hints.trim() !== '' && (
           <div className="hints-container">
             <details>
               <summary>💡 Hints</summary>
-              <ul>
-                {currentQuestion.hints.map((hint, index) => (
-                  <li key={index}>{hint}</li>
-                ))}
-              </ul>
+              <pre className="hint-text">
+                {decodeHTMLEntities(currentQuestion.hints)}
+              </pre>
             </details>
           </div>
         )}
@@ -263,7 +268,7 @@ function InterviewSimulation() {
                     checked={currentAnswer === option}
                     onChange={() => handleMultipleChoice(option)}
                   />
-                  <span className="option-text">{option}</span>
+                  <span className="option-text">{decodeHTMLEntities(option)}</span>
                 </label>
               ))}
             </div>

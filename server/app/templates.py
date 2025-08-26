@@ -16,7 +16,6 @@ templates_bp = Blueprint('templates', __name__)
 client = MongoClient(Config.MONGO_URI)
 db = client.get_default_database()
 templates_collection = db.templates
-template_questions_collection = db.template_questions
 
 def to_json_response(data, status_code=200):
     """
@@ -298,9 +297,7 @@ def get_templates(user):
                 # If user_id is not available, only show public templates
                 query['is_public'] = True
         
-        templates = list(templates_collection.find(
-            query,
-        ).sort("metadata.created_at", -1))
+        templates = list(templates_collection.find(query))
 
         # Use the robust JSON response function
         return to_json_response({"templates": templates})

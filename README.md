@@ -28,7 +28,7 @@ docker-compose up --build
 
 # 4. Access application
 # Frontend: http://localhost:3000
-# Backend: http://localhost:5001
+# Backend: http://localhost:5000
 ```
 
 ## Testing
@@ -71,7 +71,7 @@ ls individual_tests/test_*.py
 
 **Port conflicts:** Change `SERVER_PORT` in `.env`  
 **Docker issues:** `docker-compose down && docker-compose up --build`  
-**Test failures:** `curl http://localhost:5001/api/health`
+**Test failures:** `curl http://localhost:5000/api/health`
 
 ## System Requirements
 
