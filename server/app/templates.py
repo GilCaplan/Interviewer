@@ -246,8 +246,6 @@ def create_template(user):
                     validated_questions.append(question_data)
                 else:
                     # Log validation errors but continue with other questions
-                    print(f"DEBUG: Question {i+1} validation failed: {validation_errors}")
-                    print(f"DEBUG: Question data: {question_data}")
                     current_app.logger.warning(f"Question {i+1} validation failed: {validation_errors}")
             
             template_data["questions"] = validated_questions

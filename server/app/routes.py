@@ -18,7 +18,7 @@ def health_check():
         client = MongoClient(Config.MONGO_URI, serverSelectionTimeoutMS=5000)
         client.admin.command('ping')
         db_status = True
-    except:
+    except Exception as e:
         db_status = False
     
     # Get system status

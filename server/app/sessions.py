@@ -18,6 +18,7 @@ from .rate_limiter import rate_limit
 from .database import sessions_collection, questions_collection, templates_collection
 from .crash_prevention import CrashPrevention, safe_execute, safe_database_operation
 from .llm_service import LLMService
+from .security import sanitize_text_input
 from .utils import clean_user_input, clean_session_for_response
 # Production optimization imports removed for Docker-only setup
 
@@ -182,7 +183,7 @@ def validate_session_data(data):
         try:
             num = int(value) if isinstance(value, (int, float, str)) and str(value).isdigit() else default
             return max(min_val, min(num, max_val))
-        except:
+        except (ValueError, TypeError, AttributeError) as e:
             return default
     
     def get_bool(value, default):
@@ -2157,7 +2158,6 @@ def llm_chat(user, session_id):
         return jsonify({"error": "Failed to process LLM chat"}), 500
 
 
-# DEBUG: Get detailed session state  
 @sessions_bp.route('/api/sessions/<session_id>/debug', methods=['GET'])
 @token_required
 def debug_session_state(user, session_id):

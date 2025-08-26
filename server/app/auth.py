@@ -305,7 +305,7 @@ def logout(user):
                 {'$set': {'is_revoked': True}}
             )
 
-        except:
+        except (jwt.InvalidTokenError, jwt.DecodeError, KeyError) as e:
             pass  # If token is invalid, just continue
 
     # Create response

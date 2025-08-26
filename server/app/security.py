@@ -319,3 +319,27 @@ def security_required(check_type='general'):
         
         return decorated_function
     return decorator
+
+def sanitize_text_input(text, max_length=1000):
+    """
+    Sanitize and validate text input with length limits
+    
+    Args:
+        text (str): Input text to sanitize
+        max_length (int): Maximum allowed length
+    
+    Returns:
+        str: Sanitized text
+    
+    Raises:
+        ValueError: If input is invalid or too long
+    """
+    if not isinstance(text, str):
+        text = str(text) if text is not None else ""
+    
+    # Check length limit
+    if len(text) > max_length:
+        raise ValueError(f"Input exceeds maximum length of {max_length} characters")
+    
+    # Use existing security validation
+    return security_manager.validate_input_security(text, 'general')

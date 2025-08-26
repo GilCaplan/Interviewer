@@ -31,7 +31,7 @@ class RateLimiter:
                 token = auth_header.split(' ')[1]
                 # Simple token hash for rate limiting (not decoding full JWT)
                 return hashlib.md5(token.encode()).hexdigest()[:12]
-            except:
+            except (IndexError, AttributeError, UnicodeDecodeError) as e:
                 return None
         return None
     
@@ -52,7 +52,7 @@ class RateLimiter:
             try:
                 data = self.redis_client.get(key)
                 return json.loads(data) if data else None
-            except:
+            except (ConnectionError, TimeoutError, json.JSONDecodeError) as e:
                 pass
         
         # Fallback to memory store
@@ -65,7 +65,7 @@ class RateLimiter:
             try:
                 self.redis_client.setex(key, ttl, json.dumps(data))
                 return
-            except:
+            except (ConnectionError, TimeoutError) as e:
                 pass
         
         # Fallback to memory store
@@ -153,7 +153,7 @@ try:
     redis_client.ping()
     rate_limiter = RateLimiter(redis_client)
     print("Rate limiter initialized with Redis")
-except:
+except (ConnectionError, TimeoutError, Exception) as e:
     # Fallback to memory-based rate limiting
     rate_limiter = RateLimiter()
     print("Rate limiter initialized with memory store (Redis unavailable)")
