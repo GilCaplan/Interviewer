@@ -1,7 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 import jwt
 import datetime
-import secrets
 import uuid
 from functools import wraps
 from .config import Config

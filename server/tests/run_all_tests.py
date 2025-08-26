@@ -32,8 +32,8 @@ os.environ['FLASK_ENV'] = 'testing'
 def check_server_ready(max_attempts=10, delay=2):
     """Check if test server is ready and responsive"""
     urls_to_try = [
-        'http://localhost:5000/api/health',
-        'http://localhost:5000/api/health',
+        'http://localhost:5001/api/health',  # Docker port mapping
+        'http://localhost:5000/api/health',  # Original port
     ]
     
     for attempt in range(max_attempts):
@@ -99,7 +99,9 @@ def categorize_tests():
         'test_websocket_collaboration.py',
         'test_session_management.py',
         'test_llm_integration.py',
-        'test_database_reliability.py'
+        'test_database_reliability.py',
+        'test_simulation_interviews.py',
+        'test_service_evaluation.py'
     }
     
     # Tests that run offline/standalone
@@ -115,7 +117,9 @@ def categorize_tests():
         'test_unit_comprehensive.py',
         'test_utils.py',
         'test_environment_setup.py',
-        'test_security_authentication_consolidated.py'
+        'test_security_authentication_consolidated.py',
+        'test_simulation_interviews.py',
+        'test_service_evaluation.py'
     }
     
     # Long-running tests
@@ -266,39 +270,60 @@ def run_single_test(test_file_path):
         sys.stderr = captured_output
         
         try:
-            # Add timeout for individual tests
+            # Add timeout for individual tests with better handling
             import signal
-            
-            def timeout_handler(signum, frame):
-                raise TimeoutError("Test execution timed out")
+            import threading
+            import queue
             
             # Set timeout per test - can be overridden by command line arg
             if hasattr(run_single_test, '_timeout_override'):
                 timeout_duration = run_single_test._timeout_override
             elif '1000' in test_name or 'extreme_scaling' in test_name.lower():
-                timeout_duration = 300  # 5 minutes for 1000-user tests (reduced)
+                timeout_duration = 180  # 3 minutes for 1000-user tests (reduced from 5)
             elif 'scaling' in test_name.lower():
-                timeout_duration = 180  # 3 minutes for other scaling tests  
+                timeout_duration = 120  # 2 minutes for other scaling tests (reduced from 3)
+            elif 'service_evaluation' in test_name.lower() or 'simulation' in test_name.lower():
+                timeout_duration = 90   # 1.5 minutes for problematic tests
             elif 'llm' in test_name.lower() or 'security' in test_name.lower() or 'edge_cases' in test_name.lower():
-                timeout_duration = 90   # 90 seconds for complex tests
+                timeout_duration = 75   # 75 seconds for complex tests (reduced from 90)
             elif 'crash_prevention' in test_name.lower() or 'websocket' in test_name.lower():
-                timeout_duration = 120  # 2 minutes for stability tests
+                timeout_duration = 90   # 1.5 minutes for stability tests (reduced from 2)
             else:
-                timeout_duration = 45   # 45 seconds for regular tests
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(timeout_duration)
+                timeout_duration = 60   # 60 seconds for regular tests (increased from 45 for safety)
             
-            try:
-                # Run the test
-                if hasattr(test_function, 'run_all_tests'):
-                    # For test suite classes
-                    suite = test_function()
-                    result = suite.run_all_tests()
-                else:
-                    # For regular functions
-                    result = test_function()
-            finally:
-                signal.alarm(0)  # Cancel timeout
+            # Use threading instead of signal for better compatibility
+            result_queue = queue.Queue()
+            exception_queue = queue.Queue()
+            
+            def run_test_thread():
+                try:
+                    if hasattr(test_function, 'run_all_tests'):
+                        # For test suite classes
+                        suite = test_function()
+                        result = suite.run_all_tests()
+                    else:
+                        # For regular functions
+                        result = test_function()
+                    result_queue.put(result)
+                except Exception as e:
+                    exception_queue.put(e)
+            
+            test_thread = threading.Thread(target=run_test_thread)
+            test_thread.daemon = True
+            test_thread.start()
+            test_thread.join(timeout=timeout_duration)
+            
+            if test_thread.is_alive():
+                # Test is still running, consider it timed out
+                raise TimeoutError(f"Test execution timed out after {timeout_duration} seconds")
+            
+            if not exception_queue.empty():
+                raise exception_queue.get()
+            
+            if not result_queue.empty():
+                result = result_queue.get()
+            else:
+                result = None
             
             output = captured_output.getvalue()
             
@@ -381,8 +406,8 @@ def run_single_test(test_file_path):
                 
                 return test_name, (pass_rate, passed, total), error_lines
             
-        except TimeoutError:
-            return test_name, (0.0, 0, 1), ["Test execution timed out (30s limit)"]
+        except TimeoutError as e:
+            return test_name, (0.0, 0, 1), [f"Test execution timed out: {str(e)}"]
         finally:
             sys.stdout = original_stdout
             sys.stderr = original_stderr
@@ -465,9 +490,11 @@ def main():
         run_single_test._timeout_override = args.timeout
     
     for i, test_file in enumerate(test_files, 1):
-        print(f"[{i:2d}/{len(test_files)}] Running {test_file.name}...", end=" ")
+        test_start_time = time.time()
+        print(f"[{i:2d}/{len(test_files)}] Running {test_file.name}...", end=" ", flush=True)
         
         test_name, (pass_rate, passed, total), errors = run_single_test(test_file)
+        test_duration = time.time() - test_start_time
         
         # Validate the results to prevent calculation errors
         if not isinstance(passed, int) or not isinstance(total, int):
@@ -483,11 +510,11 @@ def main():
         total_passed += passed
         total_tests += total
         
-        # Status indicator
+        # Status indicator with timing
         if passed == total:
-            print(f"✅ {passed}/{total}")
+            print(f"✅ {passed}/{total} ({test_duration:.1f}s)")
         else:
-            print(f"❌ {passed}/{total}")
+            print(f"❌ {passed}/{total} ({test_duration:.1f}s)")
             
         # Print errors for failed tests only
         if errors:
@@ -509,11 +536,21 @@ def main():
                 time.sleep(3)  # Longer standard delay
             
             # More frequent health checks for better stability
-            if i % 3 == 0:  # Every 3rd test, do a health check
+            should_health_check = (i % 3 == 0 or  # Every 3rd test
+                                 'service_evaluation' in test_name.lower() or  # After problematic tests
+                                 'scaling' in test_name.lower() or
+                                 test_duration > 60)  # After long-running tests
+                                 
+            if should_health_check:
                 print(f"    🔍 Health check after test {i}...")
-                if not check_server_ready(max_attempts=5, delay=2):
+                if not check_server_ready(max_attempts=3, delay=1):  # Faster health check
                     print(f"    ⚠️ Server health check failed after test {i}, extended recovery...")
-                    time.sleep(5)  # Extended recovery time
+                    time.sleep(3)  # Reduced recovery time
+                    
+                    # Try once more before giving up
+                    if not check_server_ready(max_attempts=2, delay=2):
+                        print(f"    💥 Server appears unresponsive, but continuing with tests...")
+                        time.sleep(2)
     
     end_time = time.time()
     

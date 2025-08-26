@@ -13,8 +13,11 @@ import './components/Login.css';
 import './components/Questions.css';
 import TemplateDetails from "./components/TemplateDetails";
 import SessionBuilder from './components/SessionBuilder';
-import MockInterviewSession from './components/MockInterviewSession';
+import InterviewSimulation from './components/InterviewSimulation';
 import SessionJoinForm from './components/SessionJoinForm';
+import EvaluationDashboard from './components/EvaluationDashboard';
+import EvaluationSession from './components/EvaluationSession';
+import EvaluationResults from './components/EvaluationResults';
 
 // Protected route component
 const ProtectedRoute = ({ children }) => {
@@ -143,10 +146,19 @@ function AppContent() {
         />
 
         <Route
+            path="/interview/new"
+            element={
+              <ProtectedRoute>
+                <InterviewSimulation />
+              </ProtectedRoute>
+          }
+        />
+
+        <Route
             path="/interview/:sessionId"
             element={
               <ProtectedRoute>
-                <MockInterviewSession />
+                <InterviewSimulation />
               </ProtectedRoute>
           }
         />
@@ -194,6 +206,34 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <SessionBuilder />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Evaluation Routes */}
+        <Route
+          path="/evaluation"
+          element={
+            <ProtectedRoute>
+              <EvaluationDashboard />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/evaluation/session/:sessionId"
+          element={
+            <ProtectedRoute>
+              <EvaluationSession />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/evaluation/results/:evaluationId"
+          element={
+            <ProtectedRoute>
+              <EvaluationResults />
             </ProtectedRoute>
           }
         />

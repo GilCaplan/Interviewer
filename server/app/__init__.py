@@ -4,7 +4,6 @@ import redis
 from flask import Flask
 from flask_cors import CORS
 from flask_socketio import SocketIO
-from flask_session import Session
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from .config import Config
@@ -16,6 +15,7 @@ from .templates import templates_bp
 from .websocket_handlers import init_simple_websockets  # Only import the function
 from .async_handler import init_async_manager, shutdown_async_manager
 from .interviews import interviews_bp
+from .evaluations import evaluations_bp
 from .crash_prevention import CrashPrevention
 # Production optimization imports removed for Docker-only setup
 
@@ -49,8 +49,7 @@ def create_app(config_class=Config):
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     
-    # Initialize session management
-    Session(app)
+    # Session management handled by JWT tokens
     
     # Initialize rate limiter for API protection
     limiter = Limiter(
@@ -98,6 +97,7 @@ def create_app(config_class=Config):
     app.register_blueprint(sessions_bp)
     app.register_blueprint(templates_bp)
     app.register_blueprint(interviews_bp)
+    app.register_blueprint(evaluations_bp)
 
     # Enhanced error handlers for graceful error handling and security
     @app.errorhandler(400)

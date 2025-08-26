@@ -45,7 +45,9 @@ try:
     print("✅ Successfully imported REAL implementations for unit testing")
     
 except Exception as e:
-    print(f"Warning: Could not import real modules: {e}")
+    # Suppress Redis warnings as it's optional in testing environment
+    if "redis" not in str(e).lower():
+        print(f"Warning: Could not import real modules: {e}")
     print("Falling back to mock implementations...")
     
     # Fallback mock implementations
@@ -511,6 +513,100 @@ class TestAuthUtils(unittest.TestCase):
                 else:
                     self.assertIsNone(expected)
 
+class TestPasswordSecurity(unittest.TestCase):
+    """Test secure password hashing functionality - CRITICAL FOR SECURITY COMPLIANCE"""
+    
+    def test_pbkdf2_password_hashing(self):
+        """Test that passwords are hashed using secure PBKDF2 (not vulnerable SHA-256)"""
+        try:
+            # Import the actual password utilities
+            from app.password_utils import hash_session_password, verify_session_password
+        except ImportError:
+            # Fallback to mock implementation for testing
+            self.skipTest("Password utilities not available - using mock")
+        
+        # Test password hashing
+        test_password = "secure_test_password_123!"
+        hashed = hash_session_password(test_password)
+        
+        # Verify hash format (salt$hash in base64)
+        self.assertIsInstance(hashed, str)
+        self.assertIn('$', hashed)
+        parts = hashed.split('$')
+        self.assertEqual(len(parts), 2, "Hash should have salt$hash format")
+        
+        # Verify it's not plain text or simple hash
+        self.assertNotEqual(hashed, test_password)
+        self.assertNotIn(test_password, hashed)
+        
+        # Verify salt is sufficiently long (32 bytes base64 encoded ≈ 44 chars)  
+        salt_part = parts[0]
+        self.assertGreater(len(salt_part), 40, "Salt should be at least 32 bytes")
+        
+        # Verify hash is sufficiently long (32 bytes base64 encoded ≈ 44 chars)
+        hash_part = parts[1]
+        self.assertGreater(len(hash_part), 40, "Hash should be at least 32 bytes")
+    
+    def test_password_verification(self):
+        """Test password verification works correctly"""
+        try:
+            from app.password_utils import hash_session_password, verify_session_password
+        except ImportError:
+            self.skipTest("Password utilities not available")
+        
+        test_password = "another_secure_password_456#"
+        hashed = hash_session_password(test_password)
+        
+        # Correct password should verify
+        self.assertTrue(verify_session_password(test_password, hashed))
+        
+        # Wrong password should not verify
+        self.assertFalse(verify_session_password("wrong_password", hashed))
+        self.assertFalse(verify_session_password("", hashed))
+    
+    def test_password_uniqueness_salting(self):
+        """Test that same password produces different hashes (due to random salt)"""
+        try:
+            from app.password_utils import hash_session_password, verify_session_password
+        except ImportError:
+            self.skipTest("Password utilities not available")
+        
+        password = "test_uniqueness_password"
+        hash1 = hash_session_password(password)
+        hash2 = hash_session_password(password)
+        
+        # Same password should produce different hashes due to random salt
+        self.assertNotEqual(hash1, hash2, "CRITICAL: Same password must produce different hashes!")
+        
+        # But both should verify correctly
+        self.assertTrue(verify_session_password(password, hash1))
+        self.assertTrue(verify_session_password(password, hash2))
+    
+    def test_security_compliance(self):
+        """Test that password hashing meets security requirements"""
+        try:
+            from app.password_utils import hash_session_password
+        except ImportError:
+            self.skipTest("Password utilities not available")
+        
+        test_password = "compliance_test_password"
+        hashed = hash_session_password(test_password)
+        
+        # Must not be plain text (INSTRUCTIONS.md requirement)
+        self.assertNotEqual(hashed, test_password, "CRITICAL: Passwords cannot be plain text!")
+        
+        # Must not be simple hash (vulnerable to rainbow tables)
+        import hashlib
+        simple_hash = hashlib.sha256(test_password.encode()).hexdigest()
+        self.assertNotEqual(hashed, simple_hash, "CRITICAL: Cannot use simple SHA-256!")
+        
+        # Must use salt (different hashes for same password)
+        hash2 = hash_session_password(test_password)
+        self.assertNotEqual(hashed, hash2, "CRITICAL: Must use random salt!")
+        
+        # Hash should be long enough (base64 encoded result)
+        self.assertGreater(len(hashed), 80, "Hash appears too short for PBKDF2")
+
 class TestLLMService(unittest.TestCase):
     """Test LLM service functionality"""
     
@@ -698,6 +794,7 @@ class UnitTestRunner:
             TestSessionUtils,
             TestTemplateValidation,
             TestAuthUtils,
+            TestPasswordSecurity,  # CRITICAL: Security compliance tests
             TestLLMService,
             TestUtilityFunctions,
             TestDataStructures

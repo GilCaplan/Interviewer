@@ -117,7 +117,7 @@ def validate_question_data(question_data, is_update=False):
         is_update = False
     else:
         # New signature: validate_question_data(question_data, is_update)
-        question_type = question_data.get('type')
+        question_type = question_data.get('type') or question_data.get('question_type')
     
     if not question_type or question_type not in QUESTION_TYPES:
         return False, [f"Invalid question type: {question_type}"]

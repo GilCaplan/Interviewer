@@ -1107,12 +1107,12 @@ function TemplatesGallery() {
                   👁️ View
                 </button>
                 <button 
-                  className="action-btn debug-btn"
-                  onClick={(e) => debugTemplateData(template, e)}
-                  title="Debug template data"
-                  style={{ background: '#ff9800' }}
+                  className="action-btn interview-btn"
+                  onClick={() => navigate(`/interview/new?template=${template.template_id}`)}
+                  title="Start a mock interview with this template"
+                  style={{ background: '#4CAF50', color: 'white' }}
                 >
-                  🔍 Debug
+                  🎯 Start Interview
                 </button>
                 <button 
                   className="action-btn pdf-btn"

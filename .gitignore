@@ -81,3 +81,11 @@ docker-compose.override.yml
 **/*secret*
 **/*key*.txt
 **/.env*
+
+# Flask session files
+flask_session/
+**/flask_session/
+
+# Additional log files
+test_server.log
+server.log
