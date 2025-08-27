@@ -8,6 +8,15 @@ Run with: python test_llm_integration.py
 """
 
 import os
+
+# Try to load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # dotenv not installed, will rely on system environment variables
+    pass
+
 # Set testing environment variables
 os.environ['TESTING'] = 'true'
 os.environ['TEST_MODE'] = '1'
@@ -23,9 +32,9 @@ from datetime import datetime
 def find_server_url():
     """Find available server URL"""
     urls_to_try = [
-        'http://localhost:5000',  # Inside Docker container
-        'http://server:5000',     # Docker service name
-        'http://localhost:5000',  # Host machine
+        'http://localhost:5001',  # Inside Docker container
+        'http://server:5001',     # Docker service name
+        'http://localhost:5001',  # Host machine
     ]
     
     for url in urls_to_try:
@@ -92,37 +101,20 @@ class LLMIntegrationTestSuite:
         return False
     
     def prompt_for_gemini_token(self):
-        """Prompt user for Gemini API token if not found in environment"""
+        """Check for Gemini API token and skip prompting if found in .env"""
         if self.gemini_token_available:
             return True
         
-        # Check if we're in an interactive environment
-        import sys
-        if not sys.stdin.isatty():
-            log("⚠️ Non-interactive environment detected - skipping real LLM tests", Colors.YELLOW)
-            log("   To enable real LLM testing, set GEMINI_API_KEY environment variable", Colors.YELLOW)
-            return False
-            
-        log("🔑 Gemini API Token Required for Real LLM Testing", Colors.BOLD + Colors.YELLOW)
-        log("-" * 50, Colors.YELLOW)
-        log("To test real LLM integration, please provide your Gemini API token.", Colors.WHITE)
-        log("You can get one from: https://makersuite.google.com/app/apikey", Colors.CYAN)
-        log("", Colors.WHITE)
+        # Check if token is available in environment (should be loaded from .env)
+        if self.check_gemini_token():
+            log("✅ Using Gemini API token from environment (.env file)", Colors.GREEN)
+            return True
         
-        try:
-            token = input("Enter Gemini API token (or press Enter to skip real LLM tests): ").strip()
-            if token and len(token) > 10:
-                # Set the token in environment for this session
-                os.environ['GEMINI_API_KEY'] = token
-                self.gemini_token_available = True
-                log("✅ Gemini API token set for this session", Colors.GREEN)
-                return True
-            else:
-                log("⚠️ Skipping real LLM tests - will use mock LLM only", Colors.YELLOW)
-                return False
-        except (KeyboardInterrupt, EOFError):
-            log("\n⚠️ Skipping real LLM tests - will use mock LLM only", Colors.YELLOW)
-            return False
+        # If no token found, just skip real LLM tests without prompting
+        log("⚠️ No Gemini API key found in .env file - skipping real LLM tests", Colors.YELLOW)
+        log("   To enable real LLM testing, add GEMINI_API_KEY to your .env file", Colors.YELLOW)
+        log("   You can get a key from: https://makersuite.google.com/app/apikey", Colors.CYAN)
+        return False
     
     def setup_test_user(self):
         """Set up test user and session with retry logic"""

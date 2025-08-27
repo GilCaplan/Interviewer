@@ -16,7 +16,7 @@ from datetime import datetime
 from queue import Queue
 
 # Configuration for more reliable testing (reduced for stability)
-API_URL = "http://localhost:5000"
+API_URL = "http://localhost:5001"
 MAX_CONCURRENT_USERS = 500   # Reduced from 1500 for better stability
 BATCH_SIZE = 100             # Reduced batch size for better throughput
 REQUEST_TIMEOUT = 30         # Moderate timeout for stability

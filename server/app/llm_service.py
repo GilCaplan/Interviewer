@@ -43,7 +43,7 @@ class RateLimiter:
 rate_limiter = RateLimiter()
 
 # Configure Gemini API
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+GEMINI_API_KEY = Config.GEMINI_API_KEY
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel('gemini-1.5-flash')  # Free tier model

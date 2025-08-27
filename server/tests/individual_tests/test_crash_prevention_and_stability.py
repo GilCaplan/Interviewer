@@ -18,7 +18,7 @@ import os
 from datetime import datetime
 
 # Test Configuration
-API_URL = "http://localhost:5000"
+API_URL = "http://localhost:5001"
 MAX_CONCURRENT_USERS = 300  # Balanced for reliability
 MALICIOUS_ATTACK_COUNT = 100
 REQUEST_TIMEOUT = 15

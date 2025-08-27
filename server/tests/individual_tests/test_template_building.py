@@ -16,9 +16,9 @@ from datetime import datetime
 def find_server_url():
     """Find available server URL"""
     urls_to_try = [
-        'http://localhost:5000',  # Host machine
-        'http://localhost:5000',  # Inside Docker container
-        'http://server:5000',     # Docker service name
+        'http://localhost:5001',  # Host machine
+        'http://localhost:5001',  # Inside Docker container
+        'http://server:5001',     # Docker service name
     ]
     
     for url in urls_to_try:
