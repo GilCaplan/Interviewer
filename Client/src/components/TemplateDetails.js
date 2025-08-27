@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { fetchApi } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 import './Questions.css'; // Reusing styles for a consistent look
 
 function TemplateDetails() {
@@ -9,6 +10,7 @@ function TemplateDetails() {
   const [template, setTemplate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     const loadTemplateDetails = async () => {
@@ -30,6 +32,19 @@ function TemplateDetails() {
       loadTemplateDetails();
     }
   }, [templateId]);
+
+  const togglePublicStatus = async () => {
+    try {
+      const updatedTemplate = await fetchApi(`/api/templates/${templateId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ is_public: !template.is_public }),
+      });
+      setTemplate(updatedTemplate.template);
+    } catch (err) {
+      setError(err.message);
+      console.error("Failed to update template status:", err);
+    }
+  };
 
   const startInterview = async () => {
     console.log("Starting interview with template:", templateId);
@@ -89,6 +104,12 @@ function TemplateDetails() {
       <button onClick={startInterview} className="start-interview-btn">
         Start Mock Interview
       </button>
+
+      {user && user.user_id === template.created_by_id && (
+        <button onClick={togglePublicStatus} className="make-public-btn">
+          {template.is_public ? 'Make Private' : 'Make Public'}
+        </button>
+      )}
 
       <h3>Questions in this Template</h3>
       {template.questions && template.questions.length > 0 ? (

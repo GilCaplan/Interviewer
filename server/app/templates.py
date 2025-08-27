@@ -2,7 +2,6 @@
 from flask import Blueprint, request, jsonify, current_app, Response
 from pymongo import MongoClient, ReturnDocument
 from bson.objectid import ObjectId
-from bson import json_util
 import json
 import datetime
 import uuid
@@ -273,31 +272,48 @@ def get_templates(user):
         is_public = request.args.get('is_public')
         created_by = request.args.get('created_by')
         
-        # Build query
-        query = {}
-        
+        # Safely get user_id to prevent crashes if token is malformed
+        user_id = user.get("user_id")
+
+        # Build base query for subject and difficulty filters
+        base_filters = {}
         if subject:
-            query['subject'] = subject
+            base_filters['subject'] = subject
         if difficulty:
-            query['difficulty'] = difficulty
-        if is_public is not None:
-            query['is_public'] = is_public.lower() == 'true'
+            base_filters['difficulty'] = difficulty
+
+        # Handle visibility and ownership logic
         if created_by:
-            query['created_by'] = created_by
+            # If specific creator is requested, filter by that - use created_by_id consistently
+            query = {**base_filters, 'created_by_id': created_by}
+        elif is_public is not None:
+            # If explicit public/private filter is set
+            if is_public.lower() == 'true':
+                query = {**base_filters, 'is_public': True}
+            else:
+                # Show only user's private templates
+                if user_id:
+                    query = {**base_filters, 'created_by_id': user_id, 'is_public': False}
+                else:
+                    # No user ID, can't show private templates
+                    query = {**base_filters, 'is_public': True}
         else:
-            # Safely get user_id to prevent crashes if token is malformed
-            user_id = user.get("user_id")
-            # By default, show public templates + user's own templates
+            # Default behavior: show public templates + user's own templates
             if user_id:
-                query['$or'] = [
-                    {'is_public': True},
-                    {'created_by_id': user_id}
-                ]
+                query = {
+                    **base_filters,
+                    '$or': [
+                        {'is_public': True},
+                        {'created_by_id': user_id}
+                    ]
+                }
             else:
                 # If user_id is not available, only show public templates
-                query['is_public'] = True
-        
+                query = {**base_filters, 'is_public': True}
+
+        current_app.logger.info(f"Template query: {query}")
         templates = list(templates_collection.find(query))
+        current_app.logger.info(f"Found {len(templates)} templates")
 
         # Use the robust JSON response function
         return to_json_response({"templates": templates})

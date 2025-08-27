@@ -2,13 +2,13 @@ import React, { useState, useCallback, useRef, memo } from 'react';
 import { decodeHTMLEntities } from '../utils/textUtils';
 import './TemplateEditor.css';
 
-const TemplateEditor = ({ 
-  session, 
-  questions, 
-  isHost, 
-  user, 
-  onStartQuestion, 
-  onUpdateQuestion, 
+const TemplateEditor = ({
+  session,
+  questions,
+  isHost,
+  user,
+  onStartQuestion,
+  onUpdateQuestion,
   onFinalizeQuestion,
   viewingMode = 'suggestions_only'  // 'view_only', 'suggestions_only'
 }) => {
@@ -21,7 +21,7 @@ const TemplateEditor = ({
   const [savingQuestions, setSavingQuestions] = useState({});
   const [convertingTemplate, setConvertingTemplate] = useState(false);
   const [showNextSteps, setShowNextSteps] = useState(false);
-  
+
   // Collaborative editing states
   const [showSuggestionModal, setShowSuggestionModal] = useState(false);
   const [suggestionField, setSuggestionField] = useState(null);
@@ -58,13 +58,13 @@ const TemplateEditor = ({
 
   const handleStartNewQuestion = async () => {
     if (isCreatingQuestion) return; // Prevent double-clicks
-    
+
     const questionNumber = getNextQuestionNumber();
     console.log('TemplateEditor: Starting question', { questionNumber, selectedQuestionType, existingQuestions: questions.length });
-    
+
     setIsCreatingQuestion(true);
     setNewQuestionNumber(questionNumber);
-    
+
     try {
       await onStartQuestion(questionNumber, selectedQuestionType);
     } finally {
@@ -74,13 +74,13 @@ const TemplateEditor = ({
 
   const handleFieldUpdate = (questionId, field, value) => {
     console.log('Local field update:', { questionId, field, value });
-    
+
     // Update local state immediately for responsive UI
     setLocalQuestions(prev => ({
       ...prev,
       [`${questionId}-${field}`]: value
     }));
-    
+
     // Mark as unsaved
     setUnsavedChanges(prev => ({
       ...prev,
@@ -264,12 +264,12 @@ const TemplateEditor = ({
       questionId = suggestionQuestionId;
     }
     if (!questionId) return '';
-    
+
     const localKey = `${questionId}-${field}`;
     // Find the question data
     const question = questions.find(q => q.question_id === questionId);
     const userContent = question?.user_content || {};
-    
+
     return localQuestions[localKey] !== undefined ? localQuestions[localKey] : (userContent[field] || '');
   };
 
@@ -291,7 +291,7 @@ const TemplateEditor = ({
       'grading_criteria': 'Grading Criteria',
       'max_words': 'Maximum Words'
     };
-    
+
     return fieldDisplayNames[fieldName] || fieldName;
   };
 
@@ -396,7 +396,7 @@ const TemplateEditor = ({
 
   const handleConvertToTemplate = async () => {
     const finalizedQuestions = questions.filter(q => q.status === 'finalized');
-    
+
     if (finalizedQuestions.length === 0) {
       alert('No finalized questions available to convert to template.');
       return;
@@ -424,7 +424,7 @@ const TemplateEditor = ({
 
       const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/convert-to-template`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
@@ -440,12 +440,12 @@ const TemplateEditor = ({
       if (response.ok) {
         const result = await response.json();
         const templateId = result.template?.template_id;
-        
+
         console.log('Template conversion successful:', result);
-        
+
         // Show success message and next steps
         setShowNextSteps(true);
-        
+
         // Scroll to the next steps section
         setTimeout(() => {
           const nextStepsElement = document.getElementById('next-steps-section');
@@ -453,7 +453,7 @@ const TemplateEditor = ({
             nextStepsElement.scrollIntoView({ behavior: 'smooth' });
           }
         }, 100);
-        
+
       } else {
         const errorData = await response.text();
         let errorMessage = 'Failed to convert to template';
@@ -479,7 +479,7 @@ const TemplateEditor = ({
     const canEdit = isHost && !isFinalized;
     const canSuggest = !isHost && !isFinalized && viewingMode === 'suggestions_only';
     const canViewSuggestions = !isFinalized; // Everyone can view suggestions if question isn't finalized
-    
+
     // Helper function to get field value for this specific question
     const getFieldValueLocal = (field) => getFieldValue(field, question.question_id);
 
@@ -488,17 +488,17 @@ const TemplateEditor = ({
       // Get pending suggestions for this field (only show pending ones in active display)
       const allNotes = question.collaboration_notes || [];
       const fieldSuggestions = allNotes
-        .filter(note => note.type === 'field_suggestion' && 
+        .filter(note => note.type === 'field_suggestion' &&
                        note.suggestion_data?.field === fieldName &&
                        note.suggestion_data?.status === 'pending');
-      
+
 
       return (
         <div className="field-group">
           <div className="field-header">
             <label>{label}:</label>
             {canSuggest && (
-              <button 
+              <button
                 className="suggest-btn"
                 onClick={() => handleSuggestEdit(question.question_id, fieldName, getFieldValueLocal(fieldName))}
                 title="Suggest an edit for this field"
@@ -508,7 +508,7 @@ const TemplateEditor = ({
             )}
           </div>
           {inputElement}
-          
+
           {/* Display pending suggestions for this field */}
           {canViewSuggestions && fieldSuggestions.length > 0 && (
             <div className="field-suggestions">
@@ -520,8 +520,8 @@ const TemplateEditor = ({
                       {note.suggestion_data.author === 'AI Assistant' ? '🤖 ' : '👤 '}{note.suggestion_data.author}
                     </span>
                     <span className="suggestion-time">
-                      {note.suggestion_data.timestamp ? 
-                        new Date(note.suggestion_data.timestamp).toLocaleString() : 
+                      {note.suggestion_data.timestamp ?
+                        new Date(note.suggestion_data.timestamp).toLocaleString() :
                         new Date(note.timestamp).toLocaleString()
                       }
                     </span>
@@ -532,8 +532,8 @@ const TemplateEditor = ({
                       <div className="ai-context">
                         <small><em>Generated by AI Assistant</em></small>
                         <div style={{fontSize: '10px', color: '#666'}}>
-                          Debug: ID={note.suggestion_data.suggestion_id?.slice(0,8)}... 
-                          Status={note.suggestion_data.status} 
+                          Debug: ID={note.suggestion_data.suggestion_id?.slice(0,8)}...
+                          Status={note.suggestion_data.status}
                           ValueLen={note.suggestion_data.suggested_value?.length || 0}
                         </div>
                       </div>
@@ -541,14 +541,14 @@ const TemplateEditor = ({
                   </div>
                   {isHost && !isFinalized && (
                     <div className="suggestion-actions">
-                      <button 
+                      <button
                         className="accept-btn"
                         onClick={() => handleSuggestion(question.question_id, note.suggestion_data.suggestion_id, 'accept')}
                         title="Accept this suggestion"
                       >
                         ✅ Accept
                       </button>
-                      <button 
+                      <button
                         className="reject-btn"
                         onClick={() => handleSuggestion(question.question_id, note.suggestion_data.suggestion_id, 'reject')}
                         title="Reject this suggestion"
@@ -564,7 +564,7 @@ const TemplateEditor = ({
         </div>
       );
     };
-    
+
     // Debug logging
     console.log('TemplateEditor render debug:', {
       questionId: question.question_id,
@@ -589,12 +589,12 @@ const TemplateEditor = ({
                 placeholder="Enter your multiple choice question..."
               />
             )}
-            
+
             <div className="field-group">
               <div className="field-header">
                 <label>Options:</label>
                 {canSuggest && (
-                  <button 
+                  <button
                     className="suggest-btn"
                     onClick={() => {
                       const currentOptions = getFieldValueLocal('options');
@@ -618,8 +618,8 @@ const TemplateEditor = ({
                     })()}
                     onChange={(e) => {
                       const currentOptions = getFieldValueLocal('options');
-                      const newOptions = Array.isArray(currentOptions) 
-                        ? [...currentOptions] 
+                      const newOptions = Array.isArray(currentOptions)
+                        ? [...currentOptions]
                         : ['', '', '', ''];
                       newOptions[index] = e.target.value;
                       handleFieldUpdate(question.question_id, 'options', newOptions);
@@ -976,7 +976,7 @@ const TemplateEditor = ({
                 </option>
               ))}
             </select>
-            <button 
+            <button
               onClick={handleStartNewQuestion}
               disabled={isCreatingQuestion}
               style={{ opacity: isCreatingQuestion ? 0.6 : 1 }}
@@ -995,8 +995,8 @@ const TemplateEditor = ({
           </div>
         ) : (
           sortedQuestions.map((question) => (
-            <div 
-              key={question.question_id} 
+            <div
+              key={question.question_id}
               className={`question-card ${question.status === 'finalized' ? 'finalized' : ''}`}
             >
               <div className="question-header">
@@ -1018,9 +1018,9 @@ const TemplateEditor = ({
                       onClick={() => saveQuestion(question.question_id)}
                       className="save-btn"
                       disabled={savingQuestions[question.question_id]}
-                      style={{ 
+                      style={{
                         backgroundColor: '#4CAF50',
-                        opacity: savingQuestions[question.question_id] ? 0.6 : 1 
+                        opacity: savingQuestions[question.question_id] ? 0.6 : 1
                       }}
                     >
                       {savingQuestions[question.question_id] ? 'Saving...' : 'Save'}
@@ -1047,10 +1047,10 @@ const TemplateEditor = ({
                     <button
                       onClick={() => removeQuestion(question.question_id)}
                       className="remove-btn"
-                      style={{ 
+                      style={{
                         backgroundColor: '#f44336',
                         color: 'white',
-                        marginLeft: '5px' 
+                        marginLeft: '5px'
                       }}
                     >
                       Remove
@@ -1077,7 +1077,7 @@ const TemplateEditor = ({
       {isHost && (
         <div className="debug-section" style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f0f0f0', borderRadius: '5px' }}>
           <h3>Debug Info</h3>
-          <button 
+          <button
             onClick={async () => {
               try {
                 const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
@@ -1089,21 +1089,21 @@ const TemplateEditor = ({
                     token = userData.sessionToken;
                   }
                 }
-                
+
                 const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/debug`, {
                   headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
+
                 if (response.ok) {
                   const data = await response.json();
                   console.log('=== BACKEND DEBUG INFO ===');
-                  console.log('Backend questions in queue:', data.debug.queue_question_ids);  
+                  console.log('Backend questions in queue:', data.debug.queue_question_ids);
                   console.log('Backend questions ready:', data.debug.ready_question_ids);
                   console.log('Full backend data:', data.debug);
-                  
+
                   console.log('=== FRONTEND STATE ===');
                   console.log('Frontend questions:', questions.map(q => ({ id: q.question_id, number: q.question_number, status: q.status })));
-                  
+
                   alert(`Backend has ${data.debug.questions_in_queue} in queue, ${data.debug.questions_ready} ready. Check console for details.`);
                 } else {
                   alert('Failed to get debug info');
@@ -1126,13 +1126,13 @@ const TemplateEditor = ({
           <h3>Session Management</h3>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             {questions.length > 0 && (
-              <button 
+              <button
                 onClick={clearAllQuestions}
-                style={{ 
-                  backgroundColor: '#ffc107', 
-                  color: 'black', 
-                  padding: '8px 15px', 
-                  border: 'none', 
+                style={{
+                  backgroundColor: '#ffc107',
+                  color: 'black',
+                  padding: '8px 15px',
+                  border: 'none',
                   borderRadius: '4px',
                   cursor: 'pointer'
                 }}
@@ -1140,26 +1140,26 @@ const TemplateEditor = ({
                 🗑️ Clear All Questions
               </button>
             )}
-            <button 
+            <button
               onClick={resetSession}
-              style={{ 
-                backgroundColor: '#dc3545', 
-                color: 'white', 
-                padding: '8px 15px', 
-                border: 'none', 
+              style={{
+                backgroundColor: '#dc3545',
+                color: 'white',
+                padding: '8px 15px',
+                border: 'none',
                 borderRadius: '4px',
                 cursor: 'pointer'
               }}
             >
               🔄 Reset Session
             </button>
-            <button 
+            <button
               onClick={fetchSuggestionHistory}
-              style={{ 
-                backgroundColor: '#17a2b8', 
-                color: 'white', 
-                padding: '8px 15px', 
-                border: 'none', 
+              style={{
+                backgroundColor: '#17a2b8',
+                color: 'white',
+                padding: '8px 15px',
+                border: 'none',
                 borderRadius: '4px',
                 cursor: 'pointer'
               }}
@@ -1180,7 +1180,7 @@ const TemplateEditor = ({
           <p style={{ color: '#2e7d32', marginBottom: '15px' }}>
             You have {questions.filter(q => q.status === 'finalized').length} finalized questions ready to convert into a reusable template.
           </p>
-          <button 
+          <button
             className="convert-btn"
             onClick={handleConvertToTemplate}
             disabled={convertingTemplate}
@@ -1208,12 +1208,12 @@ const TemplateEditor = ({
           <p style={{ color: '#1976d2', marginBottom: '25px', textAlign: 'center', fontSize: '16px' }}>
             Your template has been saved and is now available for future interview sessions.
           </p>
-          
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', alignItems: 'center' }}>
             <h3 style={{ color: '#1976d2', marginBottom: '10px' }}>What would you like to do next?</h3>
-            
+
             <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', justifyContent: 'center' }}>
-              <button 
+              <button
                 onClick={() => {
                   if (window.confirm('Close this session? You can always create new sessions from your templates.')) {
                     window.location.href = '/dashboard';
@@ -1232,8 +1232,8 @@ const TemplateEditor = ({
               >
                 🏠 Go to Dashboard
               </button>
-              
-              <button 
+
+              <button
                 onClick={() => {
                   window.location.href = '/templates';
                 }}
@@ -1250,8 +1250,8 @@ const TemplateEditor = ({
               >
                 📚 View Templates Gallery
               </button>
-              
-              <button 
+
+              <button
                 onClick={resetSession}
                 style={{
                   backgroundColor: '#4CAF50',
@@ -1266,8 +1266,8 @@ const TemplateEditor = ({
               >
                 ➕ Create New Template
               </button>
-              
-              <button 
+
+              <button
                 onClick={() => {
                   window.location.href = '/sessions/simulate';
                 }}
@@ -1285,8 +1285,8 @@ const TemplateEditor = ({
                 🎭 Start Mock Interview
               </button>
             </div>
-            
-            <button 
+
+            <button
               onClick={() => setShowNextSteps(false)}
               style={{
                 backgroundColor: '#757575',
@@ -1311,7 +1311,7 @@ const TemplateEditor = ({
           <div className="suggestion-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>💡 Suggest Edit for {getFieldDisplayName(suggestionField)}</h3>
-              <button 
+              <button
                 className="close-btn"
                 onClick={() => setShowSuggestionModal(false)}
               >
@@ -1344,13 +1344,13 @@ const TemplateEditor = ({
               </div>
             </div>
             <div className="modal-footer">
-              <button 
+              <button
                 className="cancel-btn"
                 onClick={() => setShowSuggestionModal(false)}
               >
                 Cancel
               </button>
-              <button 
+              <button
                 className="submit-suggestion-btn"
                 onClick={submitSuggestion}
                 disabled={!suggestionText.trim()}
@@ -1371,7 +1371,7 @@ const TemplateEditor = ({
                 <h3>📜 Suggestion History</h3>
                 <p className="modal-subtitle">Review all collaboration suggestions and their status</p>
               </div>
-              <button 
+              <button
                 className="modal-close-btn"
                 onClick={() => setShowSuggestionHistory(false)}
                 title="Close modal"
@@ -1379,7 +1379,7 @@ const TemplateEditor = ({
                 ✕
               </button>
             </div>
-            
+
             <div className="suggestion-history-content">
               {suggestionHistory.length === 0 ? (
                 <div className="empty-state">
@@ -1403,7 +1403,7 @@ const TemplateEditor = ({
                       <div className="summary-label">Rejected</div>
                     </div>
                   </div>
-                  
+
                   <div className="suggestion-history-list">
                     {suggestionHistory.map((suggestion, index) => (
                       <div key={suggestion.suggestion_id} className="history-item">
@@ -1421,7 +1421,7 @@ const TemplateEditor = ({
                             </span>
                           </div>
                         </div>
-                        
+
                         <div className="history-item-content">
                           <div className="suggestion-details">
                             <div className="detail-row">
@@ -1433,7 +1433,7 @@ const TemplateEditor = ({
                               <span className="detail-value">{suggestion.handled_by}</span>
                             </div>
                           </div>
-                          
+
                           <div className="value-comparison">
                             <div className="suggested-section">
                               <div className="value-label">Suggested Value:</div>
@@ -1453,9 +1453,9 @@ const TemplateEditor = ({
                 </>
               )}
             </div>
-            
+
             <div className="suggestion-history-footer">
-              <button 
+              <button
                 className="footer-close-btn"
                 onClick={() => setShowSuggestionHistory(false)}
               >
@@ -1470,21 +1470,21 @@ const TemplateEditor = ({
       {questions.map(question => {
         const hasNotes = question.collaboration_notes && question.collaboration_notes.length > 0;
         const hasLLMSuggestions = question.llm_suggestions && question.llm_suggestions.length > 0;
-        
+
         if (!hasNotes && !hasLLMSuggestions) return null;
-        
+
         return (
           <div key={`notes-${question.question_id}`} className="question-collaboration">
             <div className="collaboration-header">
               <h4>Q{question.question_number} - Collaboration & Suggestions</h4>
-              <button 
+              <button
                 className="toggle-notes-btn"
                 onClick={() => toggleNotesDisplay(question.question_id)}
               >
                 {showNotesFor[question.question_id] ? 'Hide' : 'Show'} ({hasNotes ? question.collaboration_notes.length : 0} notes, {hasLLMSuggestions ? question.llm_suggestions.length : 0} AI suggestions)
               </button>
             </div>
-            
+
             {showNotesFor[question.question_id] && (
               <div className="collaboration-content">
                 {hasNotes && (
@@ -1504,7 +1504,7 @@ const TemplateEditor = ({
                     ))}
                   </div>
                 )}
-                
+
                 {hasLLMSuggestions && (
                   <div className="llm-suggestions">
                     <h5>🤖 AI Suggestions</h5>

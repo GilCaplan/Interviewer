@@ -3,6 +3,7 @@ import './TemplatesGallery.css';
 import { Link, useNavigate } from 'react-router-dom';
 import { getApiUrl, makeAuthenticatedRequest } from '../utils/authUtils';
 import { useAuth } from '../context/AuthContext';
+import {fetchApi} from "../utils/api";
 
 // Dynamic imports for PDF libraries to handle Docker environment issues
 let jsPDF = null;
@@ -150,6 +151,28 @@ function TemplatesGallery() {
       }
       
       alert('Failed to export template to PDF. Please try again or contact support if the problem persists.');
+    }
+  };
+
+  const startInterview = async () => {
+    console.log("Starting interview with template:", templateId);
+    try {
+      // Corrected API endpoint and response handling
+      const response = await fetchApi('/api/interview/start', {
+        method: 'POST',
+        body: JSON.stringify({ template_id: templateId }),
+      });
+
+      if (response && response.interview_session_id) {
+        // Navigate to the interview page for the newly created session
+        navigate(`/interview/${response.interview_session_id}`);
+      } else {
+        setError('Failed to create a new interview session. No session ID was returned.');
+      }
+    } catch (err) {
+      // Display any errors that occur during session creation
+      setError(err.message);
+      console.error("Failed to start interview:", err);
     }
   };
 
@@ -950,7 +973,7 @@ function TemplatesGallery() {
 
 
   // Group templates by template_key and show only latest version of each
-  const groupedTemplates = templates.reduce((acc, template) => {
+/*  const groupedTemplates = templates.reduce((acc, template) => {
     const key = template.template_key || `legacy_${template.template_id}`;
     
     if (!acc[key] || template.metadata?.version > (acc[key].metadata?.version || 1)) {
@@ -960,9 +983,9 @@ function TemplatesGallery() {
     return acc;
   }, {});
 
-  const uniqueTemplates = Object.values(groupedTemplates);
+  const uniqueTemplates = Object.values(groupedTemplates);*/
 
-  const filteredTemplates = uniqueTemplates.filter(template => {
+  const filteredTemplates = templates.filter(template => {
     const nameMatch = template.template_name?.toLowerCase().includes(searchQuery.toLowerCase());
     const difficultyMatch =
       !difficultyFilter || template.difficulty?.toLowerCase() === difficultyFilter;
@@ -1105,14 +1128,6 @@ function TemplatesGallery() {
                   title="View template details"
                 >
                   👁️ View
-                </button>
-                <button 
-                  className="action-btn interview-btn"
-                  onClick={() => navigate(`/interview/new?template=${template.template_id}`)}
-                  title="Start a mock interview with this template"
-                  style={{ background: '#4CAF50', color: 'white' }}
-                >
-                  🎯 Start Interview
                 </button>
                 <button 
                   className="action-btn pdf-btn"

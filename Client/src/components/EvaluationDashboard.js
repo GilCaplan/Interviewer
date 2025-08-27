@@ -209,7 +209,7 @@ function EvaluationDashboard() {
                   <>
                     <button 
                       className="action-btn evaluate-btn"
-                      onClick={() => navigate(`/evaluation/session/${session.session_id}`)}
+                      onClick={() => navigate(`/evaluations/session/${session.session_id}`)}
                       title="Manually evaluate this session"
                       style={{ background: '#2196F3', color: 'white' }}
                     >
@@ -217,7 +217,7 @@ function EvaluationDashboard() {
                     </button>
                     <button 
                       className="action-btn ai-evaluate-btn"
-                      onClick={() => navigate(`/evaluation/session/${session.session_id}?ai=true`)}
+                      onClick={() => navigate(`/evaluations/session/${session.session_id}?ai=true`)}
                       title="Use AI to evaluate this session"
                       style={{ background: '#9C27B0', color: 'white' }}
                     >
@@ -227,7 +227,7 @@ function EvaluationDashboard() {
                 ) : (
                   <button 
                     className="action-btn view-evaluation-btn"
-                    onClick={() => navigate(`/evaluation/results/${session.evaluation_id}`)}
+                    onClick={() => navigate(`/evaluations/results/${session.evaluation_id}`)}
                     title="View evaluation results"
                     style={{ background: '#4CAF50', color: 'white' }}
                   >
@@ -237,7 +237,7 @@ function EvaluationDashboard() {
                 
                 <button 
                   className="action-btn details-btn"
-                  onClick={() => navigate(`/evaluation/session/${session.session_id}?view=true`)}
+                  onClick={() => navigate(`/evaluations/session/${session.session_id}?view=true`)}
                   title="View session details"
                 >
                   👁️ Details

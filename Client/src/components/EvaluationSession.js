@@ -166,7 +166,7 @@ function EvaluationSession() {
       console.log('Evaluation submitted:', result);
       
       // Redirect to results page
-      navigate(`/evaluation/results/${result.evaluation_id}`);
+      navigate(`/evaluations/results/${result.evaluation_id}`);
       
     } catch (err) {
       console.error('Error submitting evaluation:', err);
@@ -192,7 +192,7 @@ function EvaluationSession() {
       console.log('AI evaluation completed:', result);
       
       // Redirect to results page
-      navigate(`/evaluation/results/${result.evaluation_id}`);
+      navigate(`/evaluations/results/${result.evaluation_id}`);
       
     } catch (err) {
       console.error('Error with AI evaluation:', err);
@@ -247,7 +247,7 @@ function EvaluationSession() {
           <div className="already-graded-notice">
             <strong>⚠️ This session has already been evaluated.</strong>
             <button 
-              onClick={() => navigate(`/evaluation/results/${sessionData.existing_evaluation}`)}
+              onClick={() => navigate(`/evaluations/results/${sessionData.existing_evaluation}`)}
               className="view-existing-btn"
             >
               View Existing Evaluation
@@ -406,7 +406,7 @@ function EvaluationSession() {
       {/* Actions */}
       <div className="evaluation-actions">
         <button 
-          onClick={() => navigate('/evaluation')}
+          onClick={() => navigate('/evaluations')}
           className="back-button"
         >
           ← Back to Dashboard

@@ -193,7 +193,7 @@ function InterviewResults({ session }) {
                     <Link to="/templates" className="button primary">
                         Try Another Template
                     </Link>
-                    <Link to={`/evaluation/${session._id || session.interview_session_id}`} className="button secondary">
+                    <Link to={`/evaluations/${session._id || session.interview_session_id}`} className="button secondary">
                         Get Detailed Evaluation
                     </Link>
                     <button 

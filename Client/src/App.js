@@ -212,7 +212,7 @@ function AppContent() {
 
         {/* Evaluation Routes */}
         <Route
-          path="/evaluation"
+          path="/evaluations"
           element={
             <ProtectedRoute>
               <EvaluationDashboard />
@@ -221,7 +221,7 @@ function AppContent() {
         />
         
         <Route
-          path="/evaluation/session/:sessionId"
+          path="/evaluations/session/:sessionId"
           element={
             <ProtectedRoute>
               <EvaluationSession />
@@ -230,7 +230,7 @@ function AppContent() {
         />
         
         <Route
-          path="/evaluation/results/:evaluationId"
+          path="/evaluations/results/:evaluationId"
           element={
             <ProtectedRoute>
               <EvaluationResults />

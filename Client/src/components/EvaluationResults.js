@@ -90,7 +90,7 @@ function EvaluationResults() {
         <div className="error-message">
           <strong>Error:</strong> {error || 'Evaluation not found'}
         </div>
-        <Link to="/evaluation" className="back-button">Back to Dashboard</Link>
+        <Link to="/evaluations" className="back-button">Back to Dashboard</Link>
       </div>
     );
   }
@@ -284,7 +284,7 @@ function EvaluationResults() {
 
       {/* Action Buttons */}
       <div className="results-actions">
-        <Link to="/evaluation" className="button secondary">
+        <Link to="/evaluations" className="button secondary">
           ← Back to Dashboard
         </Link>
         
