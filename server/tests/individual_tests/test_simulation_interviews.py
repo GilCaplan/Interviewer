@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# Import test configuration
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from test_config import get_all_api_urls
 """
 Comprehensive Interview Simulation Test Suite (Section 3)
 Tests interview session management, template-based simulations, and answer tracking
@@ -15,11 +20,7 @@ from datetime import datetime
 # Test Configuration
 def find_server_url():
     """Find available server URL"""
-    urls_to_try = [
-        'http://localhost:5001',  # Test server
-        'http://localhost:5001',  # Main server
-        'http://server:5001',     # Docker service name
-    ]
+    urls_to_try = get_all_api_urls()
     
     for url in urls_to_try:
         try:

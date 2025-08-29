@@ -1,3 +1,9 @@
+# Import test configuration
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from test_config import get_all_api_urls
+
 #!/usr/bin/env python3
 """
 Scaling and Concurrent Users Test Suite
@@ -23,7 +29,7 @@ from datetime import datetime
 from queue import Queue
 
 # Test Configuration
-API_URLS = ["http://localhost:5001", "http://localhost:5001"]
+API_URLS = get_all_api_urls()
 API_URL = None
 
 class Colors:

@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# Import test configuration
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from test_config import get_all_api_urls
 """
 Consolidated Security & Authentication Test Suite
 Combines all security, authentication, and authorization tests into one comprehensive suite.
@@ -26,11 +31,7 @@ from datetime import datetime
 # Test Configuration
 def find_server_url():
     """Find available server URL"""
-    urls_to_try = [
-        'http://localhost:5001',  # Inside Docker container
-        'http://server:5001',     # Docker service name
-        'http://localhost:5001',  # Host machine
-    ]
+    urls_to_try = get_all_api_urls()
     
     for url in urls_to_try:
         try:

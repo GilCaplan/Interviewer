@@ -1,3 +1,9 @@
+# Import test configuration
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from test_config import get_all_api_urls
+
 #!/usr/bin/env python3
 """
 Database Reliability and Edge Cases Test Suite
@@ -65,7 +71,7 @@ except ImportError:
 import random
 
 # Test Configuration
-API_URLS = ["http://localhost:5001", "http://localhost:5001"]
+API_URLS = get_all_api_urls()
 API_URL = None
 
 class Colors:

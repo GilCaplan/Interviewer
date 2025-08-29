@@ -1,3 +1,9 @@
+# Import test configuration
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from test_config import get_primary_api_url
+
 #!/usr/bin/env python3
 """
 Comprehensive Crash Prevention and Stability Test
@@ -18,7 +24,7 @@ import os
 from datetime import datetime
 
 # Test Configuration
-API_URL = "http://localhost:5001"
+API_URL = get_primary_api_url()
 MAX_CONCURRENT_USERS = 300  # Balanced for reliability
 MALICIOUS_ATTACK_COUNT = 100
 REQUEST_TIMEOUT = 15

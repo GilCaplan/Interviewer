@@ -1,3 +1,9 @@
+# Import test configuration
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from test_config import get_primary_api_url
+
 #!/usr/bin/env python3
 """
 ULTIMATE SCALING TEST: 1500+ Concurrent Users  
@@ -16,7 +22,7 @@ from datetime import datetime
 from queue import Queue
 
 # Configuration for more reliable testing (reduced for stability)
-API_URL = "http://localhost:5001"
+API_URL = get_primary_api_url()
 MAX_CONCURRENT_USERS = 500   # Reduced from 1500 for better stability
 BATCH_SIZE = 100             # Reduced batch size for better throughput
 REQUEST_TIMEOUT = 30         # Moderate timeout for stability

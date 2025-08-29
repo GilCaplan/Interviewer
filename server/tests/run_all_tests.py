@@ -31,10 +31,8 @@ os.environ['FLASK_ENV'] = 'testing'
 
 def check_server_ready(max_attempts=10, delay=2):
     """Check if test server is ready and responsive"""
-    urls_to_try = [
-        'http://localhost:5001/api/health',  # Docker port mapping
-        'http://localhost:5001/api/health',  # Original port
-    ]
+    from test_config import get_all_api_urls
+    urls_to_try = [f"{url}/api/health" for url in get_all_api_urls()]
     
     for attempt in range(max_attempts):
         for url in urls_to_try:
@@ -169,10 +167,7 @@ def cleanup_between_tests():
         import requests
         import gc
         
-        urls_to_try = [
-            'http://localhost:5001',
-            'http://localhost:5001',
-        ]
+        urls_to_try = get_all_api_urls()
         
         active_url = None
         for base_url in urls_to_try:
