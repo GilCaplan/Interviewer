@@ -189,10 +189,10 @@ def generate_questions(user):
 			llm_status = LLMService.get_llm_status()
 			return jsonify({
 				"success": False,
-				"message": "⚠️ Using Mock Responses (Gemini API not available)",
+				"message": "LLM service unavailable. Please check your Gemini API key configuration.",
 				"llm_status": llm_status,
 				"fallback": True
-			}), 200
+			}), 503
 
 		# Generate questions using Gemini API
 		generated_questions = []

@@ -43,31 +43,7 @@ try:
 except ImportError:
     PYMONGO_AVAILABLE = False
     MONGODB_RUNNING = False
-    
-    # Mock pymongo classes for offline testing
-    class ConnectionFailure(Exception):
-        pass
-    
-    class ServerSelectionTimeoutError(Exception):
-        pass
-    
-    class MockMongoClient:
-        def __init__(self, *args, **kwargs):
-            self.connected = False
-            
-        def admin(self):
-            return MockDatabase()
-            
-        def list_database_names(self):
-            if not self.connected:
-                raise ConnectionFailure("Mock connection failure")
-            return ["admin", "test", "interview_platform"]
-    
-    class MockDatabase:
-        def command(self, *args, **kwargs):
-            return {"ok": 1}
-    
-    MongoClient = MockMongoClient
+
 import random
 
 # Test Configuration
@@ -88,6 +64,17 @@ class Colors:
 def log(message, color=Colors.CYAN):
     timestamp = datetime.now().strftime("%H:%M:%S")
     print(f"{color}[{timestamp}] {message}{Colors.END}")
+
+# Require real MongoDB for database reliability testing
+if not PYMONGO_AVAILABLE:
+    log("❌ CRITICAL: pymongo not available. Cannot test database reliability without pymongo.", Colors.RED)
+    log("Install with: pip install pymongo", Colors.YELLOW)
+    exit(1)
+
+if not MONGODB_RUNNING:
+    log("❌ CRITICAL: MongoDB not running. Database reliability test requires running MongoDB.", Colors.RED)
+    log("Start MongoDB with: docker-compose up db", Colors.YELLOW)
+    exit(1)
 
 def find_running_server():
     global API_URL
