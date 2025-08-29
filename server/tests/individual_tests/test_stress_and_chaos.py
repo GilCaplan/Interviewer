@@ -416,7 +416,8 @@ class StressChaosTestSuite:
         
         session_start = time.time()
         
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(users)) as executor:
+        max_workers = max(1, len(users))  # Ensure at least 1 worker
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             session_results = list(executor.map(create_session_for_user, users))
         
         session_time = time.time() - session_start
@@ -450,7 +451,8 @@ class StressChaosTestSuite:
         
         start_time = time.time()
         
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(chaos_users)) as executor:
+        max_workers = max(1, len(chaos_users))  # Ensure at least 1 worker
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [executor.submit(chaos_monkey_session, user) for user in chaos_users]
             
             # Wait for all chaos sessions to complete
@@ -507,7 +509,8 @@ class StressChaosTestSuite:
             user.abandon_service()
         
         # Start intensive work
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(active_users)) as executor:
+        max_workers = max(1, len(active_users))  # Ensure at least 1 worker
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [executor.submit(intensive_work_session, user) for user in active_users]
             
             # Let them work for a bit, then randomly abandon some

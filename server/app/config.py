@@ -8,8 +8,23 @@ load_dotenv()
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
-    # MONGO_URI = os.environ.get('MONGO_URI') or 'mongodb://localhost:27017/interview-assistant'
-    MONGO_URI = os.environ.get('MONGO_URI') or 'mongodb://db:27017/interview-assistant'
+    
+    @staticmethod
+    def get_mongo_uri():
+        # Check if running in testing mode or local development
+        testing_condition = (os.environ.get('TESTING') == 'true' or 
+                           os.environ.get('TEST_MODE') == '1' or 
+                           os.environ.get('FLASK_ENV') == 'testing')
+        
+        if testing_condition:
+            return os.environ.get('MONGO_URI') or 'mongodb://localhost:27017/interview-assistant-test'
+        else:
+            return os.environ.get('MONGO_URI') or 'mongodb://db:27017/interview-assistant'
+    
+    # Property that gets evaluated each time
+    @property
+    def MONGO_URI(self):
+        return self.get_mongo_uri()
 
     # LLM Configuration (Gemini API only)
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')

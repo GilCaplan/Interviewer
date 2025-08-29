@@ -26,7 +26,7 @@ class DatabaseManager:
             
         # High-performance MongoDB connection pool for 1000+ concurrent users
         self.client = MongoClient(
-            Config.MONGO_URI,
+            Config.get_mongo_uri(),
             maxPoolSize=Config.DATABASE_POOL_SIZE,  # Maximum connections in pool
             minPoolSize=10,  # Minimum connections to maintain
             maxIdleTimeMS=Config.POOL_RECYCLE * 1000,  # Connection idle timeout

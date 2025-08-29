@@ -8,7 +8,7 @@ from .auth import token_required  # Assuming you have a token_required decorator
 interviews_bp = Blueprint('interviews_bp', __name__)
 
 # MongoDB connection, consistent with other blueprints
-client = MongoClient(Config.MONGO_URI)
+client = MongoClient(Config.get_mongo_uri())
 db = client.get_default_database()
 
 # Helper to get the collection

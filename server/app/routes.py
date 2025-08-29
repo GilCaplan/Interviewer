@@ -15,7 +15,7 @@ def health_check():
     """Enhanced health check with system status"""
     try:
         # Check database connectivity
-        client = MongoClient(Config.MONGO_URI, serverSelectionTimeoutMS=5000)
+        client = MongoClient(Config.get_mongo_uri(), serverSelectionTimeoutMS=5000)
         client.admin.command('ping')
         db_status = True
     except Exception as e:

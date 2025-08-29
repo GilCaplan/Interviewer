@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getApiUrl } from '../utils/authUtils';
 
 function UserQuestions() {
   const { user } = useAuth();
@@ -25,7 +26,7 @@ function UserQuestions() {
 
       // Then try to fetch from API for most up-to-date data
       try {
-        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+        const apiUrl = getApiUrl()
         const response = await fetch(`${apiUrl}/api/questions`, {
           headers: {
             'Authorization': `Bearer ${user?.sessionToken}`

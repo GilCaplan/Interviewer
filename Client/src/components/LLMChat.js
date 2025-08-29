@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
+import { getApiUrl } from '../utils/authUtils';
 import './LLMChat.css';
 
 const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
@@ -73,7 +74,7 @@ const LLMChat = ({ session, questions, messages, user, onLLMRequest }) => {
   useEffect(() => {
     const fetchLLMStatus = async () => {
       try {
-        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+        const apiUrl = getApiUrl()
         const response = await fetch(`${apiUrl}/api/llm/status`);
         if (response.ok) {
           const status = await response.json();

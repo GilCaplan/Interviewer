@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getApiUrl } from '../utils/authUtils';
 import './SessionSettings.css';
 
 const SessionSettings = ({ session, isHost, user, onClose, onSettingsUpdate }) => {
@@ -35,7 +36,7 @@ const SessionSettings = ({ session, isHost, user, onClose, onSettingsUpdate }) =
     setError(null);
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       
       // Get token with fallback
       let authToken = localStorage.getItem('token');

@@ -11,7 +11,7 @@ from .rate_limiter import rate_limit
 questions = Blueprint('questions', __name__)
 
 # Connect to MongoDB
-client = MongoClient(Config.MONGO_URI)
+client = MongoClient(Config.get_mongo_uri())
 db = client.get_default_database()
 # questions_collection = db.interview_questions
 questions_collection = db['interview_questions']
@@ -295,7 +295,7 @@ def generate_questions(user):
 def insert_dummy_template():
 	try:
 		# Connect to MongoDB
-		client = MongoClient(Config.MONGO_URI)
+		client = MongoClient(Config.get_mongo_uri())
 		db = client.get_default_database()
 		# questions_collection = db.interview_questions
 		templates_collection = db['templates']

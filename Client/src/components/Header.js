@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { getApiUrl } from '../utils/authUtils';
 import './Header.css';
 
 // Session Controls Component
@@ -30,7 +31,7 @@ function SessionControls() {
   const loadUserSessions = async () => {
     setLoading(true);
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       let token = localStorage.getItem('token');
       
       if (!token) {
@@ -68,7 +69,7 @@ function SessionControls() {
   const loadCurrentSessions = async () => {
     setLoading(true);
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       let token = localStorage.getItem('token');
       
       if (!token) {

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getApiUrl } from '../utils/authUtils';
 import './ParticipantsList.css';
 
 const ParticipantsList = ({ session, participants, onlineUsers, user, isHost, onShowSettings, onDeleteSession, onCleanupAllSessions, onRemoveUser }) => {
@@ -14,7 +15,7 @@ const ParticipantsList = ({ session, participants, onlineUsers, user, isHost, on
 
   const handleSettingsUpdate = async (newSettings) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       const response = await fetch(`${apiUrl}/api/sessions/${session.session_id}/settings`, {
         method: 'PUT',
         headers: {

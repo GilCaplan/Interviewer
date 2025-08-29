@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { getApiUrl } from './utils/authUtils';
 import Header from './components/Header';
 import TemplatesGallery from "./components/TemplatesGallery";
 import FeatureList from './components/FeatureList';
@@ -43,7 +44,7 @@ function AppContent() {
 
   useEffect(() => {
     // Use the API URL from environment variables, or fallback to a default
-    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    const apiUrl = getApiUrl()
 
     // Fetch information from the server with explicit URL
     fetch(`${apiUrl}/api/info`)

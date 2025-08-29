@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useRef, memo } from 'react';
+import React, { useState, memo } from 'react';
+import { getApiUrl } from '../utils/authUtils';
 import { decodeHTMLEntities } from '../utils/textUtils';
 import './TemplateEditor.css';
 
@@ -28,7 +29,7 @@ const TemplateEditor = ({
   const [suggestionText, setSuggestionText] = useState('');
   const [suggestionQuestionId, setSuggestionQuestionId] = useState(null);
   const [showNotesFor, setShowNotesFor] = useState({});
-  const [fieldSuggestions, setFieldSuggestions] = useState({}); // Store pending suggestions by question ID
+  // const [fieldSuggestions, setFieldSuggestions] = useState({}); // Store pending suggestions by question ID
   const [showSuggestionHistory, setShowSuggestionHistory] = useState(false);
   const [suggestionHistory, setSuggestionHistory] = useState([]);
 
@@ -42,9 +43,9 @@ const TemplateEditor = ({
 
   // Permission helpers based on viewing mode
   const canEdit = isHost; // Only hosts can edit directly
-  const canSuggest = isHost || viewingMode === 'suggestions_only';
-  const canView = true; // Everyone can view
-  const isViewOnly = !isHost && viewingMode === 'view_only';
+  // const canSuggest = isHost || viewingMode === 'suggestions_only';
+  // const canView = true; // Everyone can view
+  // const isViewOnly = !isHost && viewingMode === 'view_only';
 
   const getNextQuestionNumber = () => {
     const existingNumbers = questions.map(q => q.question_number).sort((a, b) => a - b);
@@ -136,7 +137,7 @@ const TemplateEditor = ({
     }
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       let token = localStorage.getItem('token');
       if (!token) {
         const storedUser = localStorage.getItem('user');
@@ -176,7 +177,7 @@ const TemplateEditor = ({
     if (!suggestionText.trim() || !suggestionField || !suggestionQuestionId) return;
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       let token = localStorage.getItem('token');
       if (!token) {
         const storedUser = localStorage.getItem('user');
@@ -226,7 +227,7 @@ const TemplateEditor = ({
 
   const handleSuggestion = async (questionId, suggestionId, action) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       let token = localStorage.getItem('token');
       if (!token) {
         const storedUser = localStorage.getItem('user');
@@ -301,7 +302,7 @@ const TemplateEditor = ({
     }
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       let token = localStorage.getItem('token');
       if (!token) {
         const storedUser = localStorage.getItem('user');
@@ -335,7 +336,7 @@ const TemplateEditor = ({
     }
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       let token = localStorage.getItem('token');
       if (!token) {
         const storedUser = localStorage.getItem('user');
@@ -365,7 +366,7 @@ const TemplateEditor = ({
 
   const fetchSuggestionHistory = async () => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       let token = localStorage.getItem('token');
       if (!token) {
         const storedUser = localStorage.getItem('user');
@@ -412,7 +413,7 @@ const TemplateEditor = ({
     setConvertingTemplate(true);
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       let token = localStorage.getItem('token');
       if (!token) {
         const storedUser = localStorage.getItem('user');
@@ -1080,7 +1081,7 @@ const TemplateEditor = ({
           <button
             onClick={async () => {
               try {
-                const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+                const apiUrl = getApiUrl()
                 let token = localStorage.getItem('token');
                 if (!token) {
                   const storedUser = localStorage.getItem('user');

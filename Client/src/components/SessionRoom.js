@@ -6,7 +6,7 @@ function SessionRoom() {
   const [sessionData, setSessionData] = useState(null);
 
   useEffect(() => {
-    fetch(`http://localhost:5000/sessions/${sessionId}`)
+    fetch(`http://localhost:5001/sessions/${sessionId}`)
       .then(res => res.json())
       .then(data => setSessionData(data))
       .catch(err => console.error("Failed to load session", err));

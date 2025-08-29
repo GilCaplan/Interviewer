@@ -1,4 +1,5 @@
 // Authentication utility functions for consistent token management
+import config from '../config';
 
 export const getAuthToken = () => {
   // Try multiple sources for backward compatibility
@@ -21,7 +22,11 @@ export const getAuthToken = () => {
 };
 
 export const getApiUrl = () => {
-  return process.env.REACT_APP_API_URL || 'http://localhost:5000';
+  return config.API_URL;
+};
+
+export const getWsUrl = () => {
+  return config.WS_URL;
 };
 
 export const createAuthHeaders = (token = null) => {

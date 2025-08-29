@@ -8,7 +8,13 @@ Requirements: pip install python-socketio requests
 Run with: python websocket_stress_test.py
 """
 
-import socketio
+try:
+    import socketio
+except ImportError:
+    print("❌ CRITICAL: python-socketio not available. Cannot test WebSocket functionality.")
+    print("Install with: pip install python-socketio[client]")
+    import sys
+    sys.exit(1)
 import requests
 import time
 import threading

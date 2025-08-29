@@ -78,35 +78,46 @@ docker-compose up --build -d
 
 ## 🧪 Testing
 
-We provide comprehensive testing with a dedicated test environment:
+We provide comprehensive testing that works on any machine with our cross-platform bash script:
 
-### Quick Tests (Recommended for new users)
+### Quick Tests (Recommended for all users)
 ```bash
-# Run fast test suite using Docker
+# Navigate to tests directory
+cd server/tests
+
+# Run fast test suite (15s timeout per test)
+sh run_individual_tests.sh --fast
+
+# Run all tests with standard timeout (60s per test)
+sh run_individual_tests.sh
+
+# Run tests in parallel for faster execution
+sh run_individual_tests.sh --parallel
+```
+
+### Individual Test Execution
+```bash
+# Run specific test categories
+cd server/tests
+sh run_individual_tests.sh --fast    # Quick run
+sh run_individual_tests.sh           # Standard run
+sh run_individual_tests.sh --help    # Show all options
+
+# The script automatically discovers and runs all test files:
+# - test_basic_functionality.py
+# - test_template_building.py  
+# - test_security_authentication_consolidated.py
+# - test_llm_integration.py
+# - And 14 more test files...
+```
+
+### Docker-based Testing (Alternative)
+```bash
+# If you prefer Docker-based testing
 docker-compose -f docker-compose.test.yml up --build tests
 
-# Or run specific test categories
+# Or run specific test categories  
 docker-compose -f docker-compose.test.yml run tests python run_all_tests.py --fast --exclude scaling
-```
-
-### Advanced Testing
-```bash
-# Run all tests (may take 10+ minutes)
-docker-compose -f docker-compose.test.yml run tests python run_all_tests.py
-
-# Run specific test files
-docker-compose -f docker-compose.test.yml run tests python individual_tests/test_basic_functionality.py
-docker-compose -f docker-compose.test.yml run tests python individual_tests/test_template_building.py
-
-# List all available tests
-docker-compose -f docker-compose.test.yml run tests ls individual_tests/test_*.py
-```
-
-### Local Testing (Without Docker)
-```bash
-# If you prefer running tests locally
-cd server/tests
-python run_all_tests.py --fast
 ```
 
 **Expected Result:** 100% pass rate (168+ tests across 5 categories)
@@ -212,7 +223,8 @@ docker-compose up --build
 # Check service health
 curl http://localhost:5001/api/health
 # Run basic tests first
-docker-compose -f docker-compose.test.yml run tests python individual_tests/test_basic_functionality.py
+cd server/tests
+sh run_individual_tests.sh --fast
 ```
 
 **❌ AI features not working**

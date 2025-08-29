@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
+import { getApiUrl } from '../utils/authUtils';
 
 // Create the auth context
 const AuthContext = createContext();
@@ -49,7 +50,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       // Call logout endpoint to invalidate token on server
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
 
       await fetch(`${apiUrl}/api/auth/logout`, {
         method: 'POST',

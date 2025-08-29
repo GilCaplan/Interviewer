@@ -18,7 +18,7 @@ function InterviewSimulation() {
   const [currentAnswer, setCurrentAnswer] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(null);
-  const [startTime] = useState(new Date());
+  // const [startTime] = useState(new Date());
 
   useEffect(() => {
     const initializeInterview = async () => {

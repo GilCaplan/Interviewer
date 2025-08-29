@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import io from 'socket.io-client';
-import { getApiUrl, getAuthToken } from '../utils/authUtils';
+import { getApiUrl, getWsUrl, getAuthToken } from '../utils/authUtils';
 import { fetchApi } from '../utils/api'; // Import the new utility
 import './SessionBuilder.css';
 
@@ -53,7 +53,7 @@ const SessionBuilder = () => {
     
     const initializeSession = async () => {
       try {
-        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+        const apiUrl = getApiUrl()
         
         // Get token from localStorage with better error handling
         let token = localStorage.getItem('token');
@@ -188,7 +188,7 @@ const SessionBuilder = () => {
           const socketToken = token || getAuthToken();
           if (socketToken) {
             try {
-              const newSocket = io(apiUrl, {
+              const newSocket = io(getWsUrl(), {
                 auth: { token: socketToken },
                 transports: ['websocket', 'polling'],
                 timeout: 10000,
@@ -335,7 +335,7 @@ const SessionBuilder = () => {
     // Debounce the load to prevent multiple rapid calls
     loadParticipantsTimeoutRef.current = setTimeout(async () => {
       try {
-        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+        const apiUrl = getApiUrl()
         
         // Get token with fallback
         let authToken = localStorage.getItem('token');
@@ -373,7 +373,7 @@ const SessionBuilder = () => {
   // Handler functions
   const handleStartQuestion = async (questionNumber, questionType) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       
       // Get token with fallback
       let authToken = localStorage.getItem('token');
@@ -456,7 +456,7 @@ const SessionBuilder = () => {
     });
     
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       
       // Get token with fallback
       let authToken = localStorage.getItem('token');
@@ -529,7 +529,7 @@ const SessionBuilder = () => {
 
   const handleLLMRequest = async (questionId, field, context, numResponses = 1) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       
       // Get token with fallback
       let authToken = localStorage.getItem('token');
@@ -570,7 +570,7 @@ const SessionBuilder = () => {
     setError(null);
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       const token = localStorage.getItem('token') || user?.sessionToken;
 
       const response = await fetch(`${apiUrl}/api/sessions/join/${sessionCode}`, {
@@ -599,7 +599,7 @@ const SessionBuilder = () => {
 
         // Initialize WebSocket
         const socketToken = token || user?.sessionToken;
-        const newSocket = io(apiUrl, {
+        const newSocket = io(getWsUrl(), {
           auth: { token: socketToken }
         });
         newSocket.emit('join_session', data.session.session_id);
@@ -628,7 +628,7 @@ const SessionBuilder = () => {
     }
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       
       // Get token with fallback
       let authToken = localStorage.getItem('token');
@@ -662,7 +662,7 @@ const SessionBuilder = () => {
     }
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       
       // Get token with fallback
       let authToken = localStorage.getItem('token');
@@ -695,7 +695,7 @@ const SessionBuilder = () => {
     }
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl()
       
       // Get token with fallback
       let authToken = localStorage.getItem('token');

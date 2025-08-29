@@ -3,7 +3,7 @@ import './TemplatesGallery.css';
 import { Link, useNavigate } from 'react-router-dom';
 import { getApiUrl, makeAuthenticatedRequest } from '../utils/authUtils';
 import { useAuth } from '../context/AuthContext';
-import {fetchApi} from "../utils/api";
+// import {fetchApi} from "../utils/api";
 
 // Dynamic imports for PDF libraries to handle Docker environment issues
 let jsPDF = null;
@@ -193,8 +193,8 @@ function TemplatesGallery() {
       `${getApiUrl()}/api/templates/${template.template_id}`,
       `${getApiUrl().replace('/api', '')}/templates/${template.template_id}`,
       `${getApiUrl()}/api/templates/${template.template_id}/questions`,
-      `http://localhost:5000/api/templates/${template.template_id}`,
-      `http://localhost:5000/templates/${template.template_id}`
+      `http://localhost:5001/api/templates/${template.template_id}`,
+      `http://localhost:5001/templates/${template.template_id}`
     ];
     
     for (const endpoint of endpoints) {

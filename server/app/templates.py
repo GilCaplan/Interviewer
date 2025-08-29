@@ -12,7 +12,7 @@ from .rate_limiter import rate_limit
 templates_bp = Blueprint('templates', __name__)
 
 # MongoDB connection
-client = MongoClient(Config.MONGO_URI)
+client = MongoClient(Config.get_mongo_uri())
 db = client.get_default_database()
 templates_collection = db.templates
 
