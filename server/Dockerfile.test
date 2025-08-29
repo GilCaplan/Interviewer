@@ -1,0 +1,32 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    python3-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install test dependencies (if any additional ones are needed)
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir pytest pytest-cov
+
+# Copy application code
+COPY . .
+
+# Create non-root user for security
+RUN useradd -m -u 1000 testuser && chown -R testuser:testuser /app
+USER testuser
+
+# Set test environment variables
+ENV TESTING=true
+ENV TEST_MODE=1
+ENV FLASK_ENV=testing
+
+# Default command runs all tests
+WORKDIR /app/tests
+CMD ["python", "run_all_tests.py", "--fast"]
