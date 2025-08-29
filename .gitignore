@@ -80,7 +80,12 @@ docker-compose.override.yml
 **/secrets.txt
 **/*secret*
 **/*key*.txt
-**/.env*
+**/.env
+**/.env.local
+**/.env.production
+**/.env.staging
+# Allow .env.example template files
+!**/.env.example
 
 # Flask session files
 flask_session/
