@@ -20,7 +20,38 @@ git clone https://github.com/GilCaplan/Interviewer.git
 cd Project_Interviewer
 
 # 2. Set up environment
-cp .env.example .env
+create a .env file and add the following with a gemini api key:
+
+"""
+# Flask Backend Configuration
+FLASK_APP=app
+FLASK_ENV=development
+SERVER_PORT=5001
+SECRET_KEY=interview-assistant-secret-key-change-in-production
+
+# Database Configuration
+MONGO_URI=mongodb://db:27017/interview-assistant
+
+# React Frontend Configuration  
+REACT_APP_API_URL=http://localhost:5001
+REACT_APP_WS_URL=ws://localhost:5001
+
+# LLM Configuration
+GEMINI_API_KEY=
+LLM_MODEL=gemini-1.5-flash
+
+# HuggingFace Configuration (Optional)
+HUGGINGFACE_TOKEN=
+
+# Application Limits
+MAX_SESSION_PARTICIPANTS=10
+MAX_QUESTIONS_PER_TEMPLATE=20
+SESSION_TIMEOUT_HOURS=24
+
+# Rate Limiting (requests per minute/day)
+LLM_REQUESTS_PER_MINUTE=15
+LLM_REQUESTS_PER_DAY=1500
+"""
 # Optional: Edit .env and add your Gemini API key from https://makersuite.google.com/app/apikey
 
 # 3. Start application
