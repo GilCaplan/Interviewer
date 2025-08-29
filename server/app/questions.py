@@ -5,8 +5,10 @@ from datetime import datetime
 import json
 from .auth import token_required
 from .config import Config
+from .llm_service import LLMService
+from .rate_limiter import rate_limit
 
-questions = Blueprint('questions', __name__, url_prefix='/questions')
+questions = Blueprint('questions', __name__)
 
 # Connect to MongoDB
 client = MongoClient(Config.MONGO_URI)
@@ -58,8 +60,8 @@ def add_question(user):
 			"question": data.get('question'),
 			"answer": data.get('answer', ''),
 			"category": data.get('category', 'general'),
-			"created_at": datetime.datetime.utcnow(),
-			"last_updated": datetime.datetime.utcnow()
+			"created_at": datetime.utcnow(),
+			"last_updated": datetime.utcnow()
 		}
 
 		# Insert question into database
@@ -109,7 +111,7 @@ def update_question(user, question_id):
 			"question": data.get('question', question["question"]),
 			"answer": data.get('answer', question["answer"]),
 			"category": data.get('category', question["category"]),
-			"last_updated": datetime.datetime.utcnow()
+			"last_updated": datetime.utcnow()
 		}
 
 		questions_collection.update_one(
@@ -162,69 +164,129 @@ def delete_question(user, question_id):
 
 
 # LLM-generated questions endpoint
-# This is a stub that will be expanded later
 @questions.route('/api/llm-questions', methods=['POST'])
+@rate_limit('llm', 30, 3600, per_user=True)  # 30 LLM requests per hour per user
 @token_required
 def generate_questions(user):
+	"""Generate questions using Gemini API"""
 	try:
 		data = request.get_json()
-
-		if not data or not data.get('prompt'):
+		
+		# Validate input
+		if not data:
 			return jsonify({
 				"success": False,
-				"message": "Prompt is required"
+				"message": "Request data is required"
 			}), 400
 
-		# Placeholder for LLM integration
-		# This will be replaced with actual LLM API calls later
-		topic = data.get('prompt', '').lower()
+		subject = data.get('subject', data.get('prompt', 'general'))
+		question_type = data.get('question_type', 'open_ended')
+		context = data.get('context', '')
+		count = min(int(data.get('count', 1)), 5)  # Max 5 questions per request
+		
+		# Check if LLM service is available
+		if not LLMService.is_available():
+			llm_status = LLMService.get_llm_status()
+			return jsonify({
+				"success": False,
+				"message": "⚠️ Using Mock Responses (Gemini API not available)",
+				"llm_status": llm_status,
+				"fallback": True
+			}), 200
 
-		# Sample mock questions based on topic
-		questions = []
-
-		if 'javascript' in topic or 'js' in topic:
-			questions = [
-				"What's the difference between let, const and var?",
-				"Explain closures in JavaScript.",
-				"How does prototypal inheritance work?",
-				"What is event delegation?",
-				"Explain async/await and how it differs from promises."
-			]
-		elif 'react' in topic:
-			questions = [
-				"What are React hooks?",
-				"Explain the component lifecycle.",
-				"What is the virtual DOM?",
-				"How does state differ from props?",
-				"What is JSX?"
-			]
-		elif 'system design' in topic or 'architecture' in topic:
-			questions = [
-				"How would you design a URL shortening service?",
-				"Design a distributed cache system.",
-				"How would you approach designing Twitter's backend?",
-				"Explain how you would design a notification system.",
-				"Design a scalable photo-sharing application."
-			]
-		else:
-			# Generic questions based on the provided topic
-			questions = [
-				f"Explain the key principles of {topic}.",
-				f"What are the best practices when working with {topic}?",
-				f"Describe your experience with {topic}.",
-				f"How would you implement {topic} in a large-scale application?",
-				f"What tools or frameworks do you prefer when working with {topic} and why?"
-			]
+		# Generate questions using Gemini API
+		generated_questions = []
+		
+		for i in range(count):
+			try:
+				# Generate question using LLM service
+				question_data = LLMService.generate_question(
+					subject=subject,
+					context=context + f" (Question {i+1} of {count})",
+					question_type=question_type,
+					question_number=i+1
+				)
+				
+				# Extract the question text and metadata
+				question_info = {
+					"question_text": question_data.get("question_text", ""),
+					"type": question_data.get("type", question_type),
+					"difficulty": question_data.get("difficulty", "medium"),
+					"subject": question_data.get("subject", subject),
+					"generated_by": question_data.get("generated_by", "unknown"),
+					"llm_source": question_data.get("llm_source", "unknown"),
+					"timestamp": question_data.get("timestamp"),
+					"question_number": i + 1
+				}
+				
+				# Add type-specific fields
+				if question_type == "multiple_choice":
+					question_info.update({
+						"options": question_data.get("options", []),
+						"correct_answer": question_data.get("correct_answer", ""),
+						"explanation": question_data.get("explanation", "")
+					})
+				elif question_type == "true_false":
+					question_info.update({
+						"correct_answer": question_data.get("correct_answer", True),
+						"explanation": question_data.get("explanation", "")
+					})
+				elif question_type == "coding":
+					question_info.update({
+						"language": question_data.get("language", "python"),
+						"starter_code": question_data.get("starter_code", ""),
+						"solution": question_data.get("solution", ""),
+						"test_cases": question_data.get("test_cases", [])
+					})
+				elif question_type == "short_answer":
+					question_info.update({
+						"expected_keywords": question_data.get("expected_keywords", []),
+						"sample_answers": question_data.get("sample_answers", []),
+						"max_words": question_data.get("max_words", 50)
+					})
+				else:  # open_ended
+					question_info.update({
+						"sample_answer": question_data.get("sample_answer", ""),
+						"grading_criteria": question_data.get("grading_criteria", [])
+					})
+				
+				# Add hints if available
+				if question_data.get("hints"):
+					question_info["hints"] = question_data["hints"]
+				
+				generated_questions.append(question_info)
+				
+			except Exception as question_error:
+				current_app.logger.error(f"Error generating question {i+1}: {str(question_error)}")
+				# Add a fallback question
+				generated_questions.append({
+					"question_text": f"Sample {subject} question {i+1}: Explain a key concept in {subject}.",
+					"type": question_type,
+					"difficulty": "medium",
+					"subject": subject,
+					"generated_by": "fallback",
+					"llm_source": "mock",
+					"question_number": i + 1,
+					"error": "LLM generation failed, using fallback"
+				})
 
 		return jsonify({
 			"success": True,
-			"questions": questions
+			"questions": generated_questions,
+			"count": len(generated_questions),
+			"llm_status": {
+				"service": "gemini",
+				"available": True,
+				"generated_by": generated_questions[0].get("generated_by", "unknown") if generated_questions else "unknown"
+			}
 		}), 200
+		
 	except Exception as e:
-		current_app.logger.error(f"Error generating questions: {str(e)}")
+		current_app.logger.error(f"Error in LLM questions endpoint: {str(e)}")
 		return jsonify({
 			"success": False,
-			"message": "Failed to generate questions"
+			"message": "Failed to generate questions",
+			"error": str(e)
 		}), 500
 
 

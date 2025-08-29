@@ -556,7 +556,7 @@ def get_llm_question(user, session_id):
 
         # Generate question using mock LLM with enhanced error handling
         try:
-            llm_response = mock_llm_generate_question(subject, context, question_type)
+            llm_response = LLMService.generate_question(subject, context, question_type)
             
             # Validate LLM response
             if not isinstance(llm_response, dict) or not llm_response.get("question_text"):
@@ -583,7 +583,8 @@ def get_llm_question(user, session_id):
             "type": str(llm_response.get("type", "open_ended"))[:50],
             "hints": llm_response.get("hints", [])[:5] if isinstance(llm_response.get("hints"), list) else [],
             "source": "llm",
-            "created_by": "mock_llm",
+            "created_by": llm_response.get("generated_by", "llm"),
+            "llm_source": llm_response.get("llm_source", "unknown"),
             "created_at": datetime.datetime.utcnow(),
             "status": "pending",  # Host needs to approve
             "subject": subject
