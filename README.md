@@ -17,7 +17,7 @@ A collaborative platform for creating and practicing interview questions. Teams 
 ```bash
 # 1. Clone repository
 git clone https://github.com/GilCaplan/Interviewer.git
-cd Project_Interviewer
+cd Interviewer
 
 # 2. Set up environment
 create a .env file and add the following with a gemini api key:
