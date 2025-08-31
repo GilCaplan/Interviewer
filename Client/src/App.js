@@ -16,9 +16,6 @@ import TemplateDetails from "./components/TemplateDetails";
 import SessionBuilder from './components/SessionBuilder';
 import InterviewSimulation from './components/InterviewSimulation';
 import SessionJoinForm from './components/SessionJoinForm';
-import EvaluationDashboard from './components/EvaluationDashboard';
-import EvaluationSession from './components/EvaluationSession';
-import EvaluationResults from './components/EvaluationResults';
 
 // Protected route component
 const ProtectedRoute = ({ children }) => {
@@ -207,34 +204,6 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <SessionBuilder />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Evaluation Routes */}
-        <Route
-          path="/evaluations"
-          element={
-            <ProtectedRoute>
-              <EvaluationDashboard />
-            </ProtectedRoute>
-          }
-        />
-        
-        <Route
-          path="/evaluations/session/:sessionId"
-          element={
-            <ProtectedRoute>
-              <EvaluationSession />
-            </ProtectedRoute>
-          }
-        />
-        
-        <Route
-          path="/evaluations/results/:evaluationId"
-          element={
-            <ProtectedRoute>
-              <EvaluationResults />
             </ProtectedRoute>
           }
         />

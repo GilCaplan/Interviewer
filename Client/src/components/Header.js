@@ -313,7 +313,6 @@ function Header({ title, subtitle, username, onLogout, isAuthenticated }) {
         <nav className="main-nav">
             <Link to="/" className="nav-link">Home</Link>
             <Link to="/templates" className="nav-link">Templates</Link>
-            <Link to="/evaluations" className="nav-link">📊 Evaluations</Link>
             <SessionControls />
             {/* Add more navigation links as needed */}
         </nav>
