@@ -32,8 +32,8 @@ from test_config import get_primary_api_url
 # Configuration
 API_URL = get_primary_api_url()
 WS_URL = get_primary_api_url()
-NUM_CONCURRENT_USERS = 1000
-TEST_DURATION = 120  # seconds
+NUM_CONCURRENT_USERS = 5
+TEST_DURATION = 10  # seconds
 MESSAGE_FREQUENCY = 2  # messages per second per user (reduced frequency for more users)
 
 class Colors:

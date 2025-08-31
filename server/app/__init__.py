@@ -52,9 +52,21 @@ def create_app(config_class=Config):
     # Session management handled by JWT tokens
     
     # Initialize rate limiter for API protection
+    # Use much higher limits in testing mode
+    testing_mode = (
+        os.getenv('TESTING', '').lower() == 'true' or
+        os.getenv('TEST_MODE', '').lower() == '1' or
+        os.getenv('FLASK_ENV', '') == 'testing'
+    )
+    
+    if testing_mode:
+        default_limits = ["500000 per hour", "50000 per minute"]  # Very high limits for testing
+    else:
+        default_limits = ["1000 per hour", "100 per minute"]
+    
     limiter = Limiter(
         key_func=get_remote_address,
-        default_limits=["1000 per hour", "100 per minute"],
+        default_limits=default_limits,
         storage_uri=limiter_storage
     )
     limiter.init_app(app)
