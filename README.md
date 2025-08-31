@@ -101,7 +101,7 @@ sh run_individual_tests.sh --parallel
 cd server/tests
 sh run_individual_tests.sh           # Standard run
 
-# DO NOT run tests directly with python/python3 - use the script above
+# DO NOT run tests directly with python/python3 - use the script above or download python3 to machine
 # python3 individual_tests/test_*.py  # Wrong - missing dependencies
 # sh run_individual_tests.sh         # Correct - handles environment
 
