@@ -1,6 +1,6 @@
 # Interview Process Assistant
 
-A collaborative platform for creating and practicing interview questions. Teams can build question templates together with AI assistance, then use them for mock interviews with automated evaluation.
+A collaborative platform for creating and practicing interview questions. Teams can build question templates together with AI assistance, then use them for mock interviews.
 
 **What it does:**
 - **Template Building:** Collaboratively create interview question sets with real-time editing
@@ -126,15 +126,15 @@ docker-compose -f docker-compose.test.yml run tests bash run_individual_tests.sh
 
 ## Test Categories
 
-| Test File | Focus | Description |
-|-----------|-------|-------------|
-| **test_basic_functionality.py** | Core API | Authentication, sessions, templates, health checks |
-| **test_template_building.py** | Templates | CRUD operations, question types, validation |
-| **test_llm_integration.py** | AI Features | Gemini API integration, question generation |
-| **test_session_management.py** | Sessions | Session lifecycle, user management |
-| **test_websocket_collaboration.py** | Real-time | WebSocket connections, live collaboration |
-| **test_unit_comprehensive.py** | Units | Component isolation and utilities |
-| **test_utils.py** | Utilities | Helper functions and data processing |
+| Test File                           | Focus       | Description                                        |
+|-------------------------------------|-------------|----------------------------------------------------|
+| **test_basic_functionality.py**     | Core API    | Authentication, sessions, templates, health checks |
+| **test_template_building.py**       | Templates   | CRUD operations, question types, validation        |
+| **test_llm_integration.py**         | AI Features | Gemini API integration, question generation        |
+| **test_session_management.py**      | Sessions    | Session lifecycle, user management                 |
+| **test_websocket_collaboration.py** | Real-time   | WebSocket connections, live collaboration          |
+| **test_unit_comprehensive.py**      | Units       | Component isolation and utilities                  |
+| **test_utils.py**                   | Utilities   | Helper functions and data processing               |
 
 ## Architecture
 
@@ -142,7 +142,7 @@ docker-compose -f docker-compose.test.yml run tests bash run_individual_tests.sh
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │   React     │    │    Flask    │    │   MongoDB   │
 │  Frontend   │◄──►│   Backend   │◄──►│  Database   │
-│ (Port 3000) │    │ (Port 5001) │    │(Port 27017) │
+│ (Port 3000) │    │ (Port 5002) │    │(Port 27017) │
 └─────────────┘    └─────────────┘    └─────────────┘
        │                   │                   │
        └───────────────────┼───────────────────┘

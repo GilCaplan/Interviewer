@@ -101,34 +101,6 @@ Create tailored templates of questions and riddles to prepare for interviews or 
 
 ---
 
-### 4. Simulation Evaluation Service
-
-**Core Idea**: Have LLM or other users check simulations on templates
-
-**Gamification**: Credits system for users who evaluate simulations; LLM evaluation; self-check options
-
-**Optional Enhancement**: Graphs and visualization showing scoring for each template, subject performance, etc.
-
-#### 4.1 Simulation Review System
-- **List of Solved Simulations** with search functionality
-- **Filter Options**:
-  - Subject and sub-subject
-  - Publishing user
-  - Grading status (graded/ungraded)
-
-#### 4.2 Grading Interface
-- Sandbox environment (session-based) for checking and grading simulations
-
-#### 4.3 Results Publishing
-- Publish grading results
-- PDF export functionality
-
-#### 4.4 Analytics and Visualization
-- Automatic graph generation of results
-- Performance tracking visualizations
-
----
-
 ## Security Implementation
 
 ### Rate Limiting
@@ -156,7 +128,6 @@ Create tailored templates of questions and riddles to prepare for interviews or 
 1. **Phase 1**: Authentication system and basic template creation
 2. **Phase 2**: Collaborative session management and LLM integration
 3. **Phase 3**: Simulation system and template discovery
-4. **Phase 4**: Evaluation service and analytics dashboard
-5. **Phase 5**: Security hardening and comprehensive testing
+4. **Phase 4**: Security hardening and comprehensive testing
 
-This proposal outlines a comprehensive interview preparation platform that emphasizes collaboration, AI-assisted content creation, and robust evaluation systems while maintaining strong security standards.
+This proposal outlines a comprehensive interview preparation platform that emphasizes collaboration, AI-assisted content creation while maintaining strong security standards.

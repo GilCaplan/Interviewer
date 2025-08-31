@@ -13,22 +13,26 @@ from datetime import datetime
 # Import test configuration
 import sys
 import os
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from test_config import get_all_api_urls, setup_test_environment
 
+
 class Colors:
-    GREEN = '\033[92m'
-    RED = '\033[91m'
-    YELLOW = '\033[93m'
-    BLUE = '\033[94m'
-    CYAN = '\033[96m'
-    WHITE = '\033[97m'
-    BOLD = '\033[1m'
-    END = '\033[0m'
+	GREEN = '\033[92m'
+	RED = '\033[91m'
+	YELLOW = '\033[93m'
+	BLUE = '\033[94m'
+	CYAN = '\033[96m'
+	WHITE = '\033[97m'
+	BOLD = '\033[1m'
+	END = '\033[0m'
+
 
 def log(message, color=Colors.CYAN):
-    timestamp = datetime.now().strftime("%H:%M:%S")
-    print(f"{color}[{timestamp}] {message}{Colors.END}")
+	timestamp = datetime.now().strftime("%H:%M:%S")
+	print(f"{color}[{timestamp}] {message}{Colors.END}")
+
 
 class BasicFunctionalityTestSuite:
     def __init__(self):
@@ -407,9 +411,10 @@ class BasicFunctionalityTestSuite:
         return (pass_rate, self.passed_tests, total_tests)
 
 def run_all_tests():
-    """Run all tests and return standardized format"""
-    test_suite = BasicFunctionalityTestSuite()
-    return test_suite.run_all_tests()
+	"""Run all tests and return standardized format"""
+	test_suite = BasicFunctionalityTestSuite()
+	return test_suite.run_all_tests()
+
 
 if __name__ == "__main__":
     import sys

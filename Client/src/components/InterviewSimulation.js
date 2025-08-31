@@ -189,9 +189,6 @@ function InterviewSimulation() {
         <InterviewResults session={session} />
         <div className="interview-actions">
           <Link to="/templates" className="back-button">Back to Templates</Link>
-          <Link to={`/evaluations/${sessionId}`} className="evaluate-button">
-            Get Evaluation
-          </Link>
         </div>
       </div>
     );

@@ -552,24 +552,6 @@
   flex-wrap: wrap;
 }
 
-.evaluate-button {
-  background: linear-gradient(135deg, #9C27B0, #7B1FA2);
-  color: white;
-  padding: 12px 24px;
-  border-radius: 25px;
-  text-decoration: none;
-  font-weight: bold;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.3s ease;
-}
-
-.evaluate-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-}
-
 /* Responsive Design */
 @media (max-width: 768px) {
   .mock-interview-container {
