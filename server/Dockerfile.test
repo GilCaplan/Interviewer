@@ -29,4 +29,4 @@ ENV FLASK_ENV=testing
 
 # Default command runs all tests
 WORKDIR /app/tests
-CMD ["python", "run_all_tests.py", "--fast"]
+CMD ["sh", "run_individual_tests.sh"]

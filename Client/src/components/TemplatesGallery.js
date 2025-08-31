@@ -193,8 +193,8 @@ function TemplatesGallery() {
       `${getApiUrl()}/api/templates/${template.template_id}`,
       `${getApiUrl().replace('/api', '')}/templates/${template.template_id}`,
       `${getApiUrl()}/api/templates/${template.template_id}/questions`,
-      `http://localhost:5001/api/templates/${template.template_id}`,
-      `http://localhost:5001/templates/${template.template_id}`
+      `${getApiUrl()}/api/templates/${template.template_id}/backup1`,
+      `${getApiUrl()}/templates/${template.template_id}/backup2`
     ];
     
     for (const endpoint of endpoints) {

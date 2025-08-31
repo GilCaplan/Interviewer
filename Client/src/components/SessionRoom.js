@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import config from '../config';
 
 function SessionRoom() {
   const { sessionId } = useParams();
   const [sessionData, setSessionData] = useState(null);
 
   useEffect(() => {
-    fetch(`http://localhost:5001/sessions/${sessionId}`)
+    fetch(`${config.API_URL}/sessions/${sessionId}`)
       .then(res => res.json())
       .then(data => setSessionData(data))
       .catch(err => console.error("Failed to load session", err));

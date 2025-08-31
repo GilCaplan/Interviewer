@@ -42,9 +42,8 @@ SECRET_KEY=interview-assistant-secret-key-change-in-production
 # Database Configuration
 MONGO_URI=mongodb://db:27017/interview-assistant
 
-# React Frontend Configuration  
-REACT_APP_API_URL=http://localhost:5001
-REACT_APP_WS_URL=ws://localhost:5001
+# Frontend Configuration (automatically uses SERVER_PORT above)
+# No additional port configuration needed - frontend reads SERVER_PORT
 
 # LLM Configuration (Optional - get free key from https://makersuite.google.com/app/apikey)
 GEMINI_API_KEY=your_gemini_api_key_here
@@ -80,15 +79,12 @@ docker-compose up --build -d
 
 We provide comprehensive testing that works on any machine with our cross-platform bash script:
 
-### Quick Tests (Recommended for all users)
+### Running Tests
 ```bash
 # Navigate to tests directory
 cd server/tests
 
-# Run fast test suite (15s timeout per test)
-sh run_individual_tests.sh --fast
-
-# Run all tests with standard timeout (60s per test)
+# Run all tests (standard timeout)
 sh run_individual_tests.sh
 
 # Run tests in parallel for faster execution
@@ -120,21 +116,23 @@ sh run_individual_tests.sh           # Standard run
 # If you prefer Docker-based testing
 docker-compose -f docker-compose.test.yml up --build tests
 
-# Or run specific test categories  
-docker-compose -f docker-compose.test.yml run tests python run_all_tests.py --fast --exclude scaling
+# Or run all tests in Docker
+docker-compose -f docker-compose.test.yml run tests sh run_individual_tests.sh
 ```
 
-**Expected Result:** 100% pass rate (168+ tests across 5 categories)
+**Expected Result:** 100% pass rate (65+ tests across 7 test files)
 
 ## Test Categories
 
-| Category | Tests | Description |
-|----------|-------|-------------|
-| **Basic** | 25+ | Core API functionality, authentication, CRUD operations |
-| **Template** | 30+ | Template building, question generation, validation |
-| **Security** | 20+ | Authentication, authorization, input validation |
-| **Integration** | 40+ | LLM integration, WebSocket collaboration, end-to-end |
-| **Performance** | 50+ | Scaling, stress testing, concurrent users, stability |
+| Test File | Focus | Description |
+|-----------|-------|-------------|
+| **test_basic_functionality.py** | Core API | Authentication, sessions, templates, health checks |
+| **test_template_building.py** | Templates | CRUD operations, question types, validation |
+| **test_llm_integration.py** | AI Features | Gemini API integration, question generation |
+| **test_session_management.py** | Sessions | Session lifecycle, user management |
+| **test_websocket_collaboration.py** | Real-time | WebSocket connections, live collaboration |
+| **test_unit_comprehensive.py** | Units | Component isolation and utilities |
+| **test_utils.py** | Utilities | Helper functions and data processing |
 
 ## Architecture
 
@@ -155,9 +153,9 @@ docker-compose -f docker-compose.test.yml run tests python run_all_tests.py --fa
 ```
 
 ### Key Technologies
-- **Frontend:** React, Socket.IO, Material-UI
+- **Frontend:** React, Socket.IO, CSS Modules
 - **Backend:** Flask, Flask-SocketIO, JWT Authentication  
-- **Database:** MongoDB with GridFS
+- **Database:** MongoDB with collections
 - **AI:** Google Gemini 1.5 Flash API
 - **DevOps:** Docker, Docker Compose
 - **Security:** PBKDF2-SHA256 hashing, Rate limiting, CORS
@@ -200,9 +198,11 @@ docker-compose -f docker-compose.test.yml up --build
 
 **Port conflicts**
 ```bash
-# Change ports in .env file
+# Change port in .env file (frontend automatically uses this port)
 SERVER_PORT=5002
-REACT_APP_API_URL=http://localhost:5002
+
+# Also update Client/package.json proxy if needed:
+# "proxy": "http://localhost:5002"
 ```
 
 **Docker issues**
@@ -226,9 +226,9 @@ docker-compose up --build
 ```bash
 # Check service health
 curl http://localhost:5001/api/health
-# Run basic tests first
+# Run tests
 cd server/tests
-sh run_individual_tests.sh --fast
+sh run_individual_tests.sh
 ```
 
 **AI features not working**
@@ -262,20 +262,20 @@ docker-compose exec db mongosh --eval "db.adminCommand('ping')"
 
 ### For Developers  
 - **Production Ready** - Docker containerized with health checks
-- **Comprehensive Testing** - 168+ tests across 5 categories with 100% coverage
+- **Comprehensive Testing** - 65+ tests across 7 test files with focused coverage
 - **Security First** - JWT authentication, rate limiting, input validation
-- **Scalable Architecture** - Tested with 100+ concurrent users
+- **Scalable Architecture** - Docker containerized for easy deployment
 - **AI Integration** - Modern LLM integration with fallback strategies
 - **Real-time Features** - WebSocket support for live collaboration
 
 ## Performance
 
-**Load Testing Results:**
-- 100+ concurrent users
-- 200+ active sessions  
-- 30,000+ messages/minute
-- <200ms average response time
-- 99.9% uptime in testing
+**Testing Results:**
+- Core API functionality validated
+- Real-time collaboration tested
+- AI integration verified
+- Security measures validated
+- Essential features confirmed working
 
 ## Security
 
