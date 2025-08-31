@@ -99,20 +99,9 @@ sh run_individual_tests.sh --parallel
 ```bash
 # IMPORTANT: Always use the test script (handles virtual environment automatically)
 cd server/tests
-sh run_individual_tests.sh --fast    # Quick run
 sh run_individual_tests.sh           # Standard run
-sh run_individual_tests.sh --help    # Show all options
 
-# ⚠️ DO NOT run tests directly with python/python3 - use the script above
-# ❌ python3 individual_tests/test_*.py  # Wrong - missing dependencies
-# ✅ sh run_individual_tests.sh         # Correct - handles environment
-
-# The script automatically discovers and runs all test files:
-# - test_basic_functionality.py
-# - test_template_building.py  
-# - test_security_authentication_consolidated.py
-# - test_llm_integration.py
-# - And 14 more test files...
+# Make sure machine has python3 if want to run tests with command python3 test_file_path 
 ```
 
 ### Docker-based Testing (Alternative)
