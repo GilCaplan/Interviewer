@@ -15,7 +15,6 @@ from .templates import templates_bp
 from .websocket_handlers import init_simple_websockets  # Only import the function
 from .async_handler import init_async_manager, shutdown_async_manager
 from .interviews import interviews_bp
-from .evaluations import evaluations_bp
 from .crash_prevention import CrashPrevention
 # Production optimization imports removed for Docker-only setup
 
@@ -109,7 +108,6 @@ def create_app(config_class=Config):
     app.register_blueprint(sessions_bp)
     app.register_blueprint(templates_bp)
     app.register_blueprint(interviews_bp)
-    app.register_blueprint(evaluations_bp)
 
     # Enhanced error handlers for graceful error handling and security
     @app.errorhandler(400)
