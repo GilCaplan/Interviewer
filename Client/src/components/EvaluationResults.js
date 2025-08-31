@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { fetchApi } from '../utils/api';
 import './Questions.css';
@@ -11,11 +11,7 @@ function EvaluationResults() {
   const [error, setError] = useState('');
   const [exportLoading, setExportLoading] = useState(false);
 
-  useEffect(() => {
-    fetchEvaluationDetails();
-  }, [evaluationId]);
-
-  const fetchEvaluationDetails = async () => {
+  const fetchEvaluationDetails = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -28,7 +24,11 @@ function EvaluationResults() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [evaluationId]);
+
+  useEffect(() => {
+    fetchEvaluationDetails();
+  }, [fetchEvaluationDetails]);
 
   const handleExportResults = async () => {
     try {

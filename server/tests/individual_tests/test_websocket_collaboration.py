@@ -536,7 +536,19 @@ def test_websocket_collaboration():
         log("\n❌ WebSocket collaboration test FAILED!", Colors.RED + Colors.BOLD)
         return False
 
+def run_all_tests():
+    """Standardized test runner function - requires real server"""
+    if not API_URL:
+        log("❌ No server URL available - WebSocket tests require real server", Colors.RED)
+        return (0.0, 0, 1)
+    
+    success = test_websocket_collaboration()
+    return (100.0 if success else 0.0, 1 if success else 0, 1)
+
 if __name__ == "__main__":
     import sys
-    success = test_websocket_collaboration()
-    sys.exit(0 if success else 1)
+    pass_rate, passed, total = run_all_tests()
+    print(f"\nTest completed with result: ({pass_rate}, {passed}, {total})")
+    
+    # Exit with failure if no server or tests failed
+    sys.exit(0 if pass_rate > 0.0 else 1)

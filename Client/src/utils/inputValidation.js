@@ -53,6 +53,7 @@ export const validatePassword = (password) => {
     }
     
     // Check for suspicious patterns
+    // eslint-disable-next-line no-script-url
     const suspiciousPatterns = ['<script', 'javascript:', 'drop table', '<img'];
     for (const pattern of suspiciousPatterns) {
       if (password.toLowerCase().includes(pattern)) {

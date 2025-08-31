@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { fetchApi } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
@@ -30,7 +30,7 @@ function EvaluationSession() {
 
   useEffect(() => {
     fetchSessionData();
-  }, [sessionId]);
+  }, [fetchSessionData]);
 
   useEffect(() => {
     // Calculate total score when individual scores change
@@ -44,7 +44,7 @@ function EvaluationSession() {
     }
   }, [evaluation.scores]);
 
-  const fetchSessionData = async () => {
+  const fetchSessionData = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -77,7 +77,7 @@ function EvaluationSession() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [sessionId]);
 
   const handleScoreChange = (questionIndex, score) => {
     const numericScore = Math.max(0, Math.min(100, parseInt(score) || 0));

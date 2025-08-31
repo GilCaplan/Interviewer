@@ -18,7 +18,6 @@ function FeaturePage({ features }) {
   }
 
   const feature = features[featureIndex];
-  const isInterviewQuestions = feature.name.toLowerCase().includes('interview question');
 
   const handleStartNewSession = () => {
     const newSessionCode = Math.random().toString(36).substring(2, 8).toUpperCase();

@@ -241,7 +241,7 @@ class BasicFunctionalityTestSuite:
                 }
             }
             
-            create_response = requests.post(f"{self.api_url}/api/sessions",
+            create_response = requests.post(f"{self.api_url}/api/sessions/create",
                                           json=session_data, headers=headers, timeout=15)
             
             create_success = create_response.status_code == 201
@@ -412,6 +412,7 @@ def run_all_tests():
     return test_suite.run_all_tests()
 
 if __name__ == "__main__":
+    import sys
     print(f"\n{Colors.BOLD}{Colors.CYAN}")
     print("╔══════════════════════════════════════════════════════════╗")
     print("║            BASIC FUNCTIONALITY TEST SUITE               ║")
@@ -421,6 +422,8 @@ if __name__ == "__main__":
     print("╚══════════════════════════════════════════════════════════╝")
     print(f"{Colors.END}\n")
     
-    test_suite = BasicFunctionalityTestSuite()
-    result = test_suite.run_all_tests()
-    print(f"\nTest completed with result: {result}")
+    pass_rate, passed, total = run_all_tests()
+    print(f"\nTest completed with result: ({pass_rate}, {passed}, {total})")
+    
+    # Exit with failure if tests failed or no server
+    sys.exit(0 if pass_rate > 0.0 else 1)

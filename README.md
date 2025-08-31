@@ -32,6 +32,8 @@ cp .env.example .env
 ```
 
 **Required configuration** (`.env` file):
+
+> **💡 Tip:** To change the server port, simply edit `SERVER_PORT=5001` to your preferred port (e.g., `SERVER_PORT=8080`). The frontend will automatically use this port.
 ```env
 # Flask Backend Configuration
 FLASK_APP=app
@@ -117,7 +119,7 @@ sh run_individual_tests.sh           # Standard run
 docker-compose -f docker-compose.test.yml up --build tests
 
 # Or run all tests in Docker
-docker-compose -f docker-compose.test.yml run tests sh run_individual_tests.sh
+docker-compose -f docker-compose.test.yml run tests bash run_individual_tests.sh
 ```
 
 **Expected Result:** 100% pass rate (65+ tests across 7 test files)
@@ -198,12 +200,19 @@ docker-compose -f docker-compose.test.yml up --build
 
 **Port conflicts**
 ```bash
-# Change port in .env file (frontend automatically uses this port)
+# 1. Change server port in .env file
 SERVER_PORT=5002
 
-# Also update Client/package.json proxy if needed:
+# 2. Update Client/package.json proxy to match:
+# Edit Client/package.json and change:
 # "proxy": "http://localhost:5002"
+
+# 3. Restart services
+docker-compose down
+docker-compose up --build
 ```
+
+**Note:** The frontend automatically detects the server port from `SERVER_PORT`. You only need to update the proxy in `package.json` if you're running the frontend in development mode outside Docker.
 
 **Docker issues**
 ```bash

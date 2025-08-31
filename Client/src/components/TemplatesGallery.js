@@ -178,8 +178,8 @@ function TemplatesGallery() {
     setCurrentExportTemplate(null);
   };
 
-  // Debug function to inspect template data
-  const debugTemplateData = async (template, event) => {
+  // Debug function to inspect template data (temporarily unused)
+  /* const debugTemplateData = async (template, event) => {
     event.preventDefault();
     event.stopPropagation();
     
@@ -218,7 +218,7 @@ function TemplatesGallery() {
     }
     
     alert('Debug complete! Check the browser console (F12) for detailed information about all API endpoints.');
-  };
+  }; */
 
   // Create and download PDF file with fallback
   const createAndDownloadPDF = async (template, includeAnswers = true) => {
@@ -885,7 +885,7 @@ function TemplatesGallery() {
     };
 
     loadTemplates();
-  }, []);
+  }, [isAuthenticated, user]);
 
   const loadCleanupPreview = async () => {
     setCleanupLoading(true);

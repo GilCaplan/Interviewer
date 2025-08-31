@@ -12,6 +12,7 @@ import unittest
 import time
 from datetime import datetime
 from unittest.mock import Mock, patch, MagicMock
+from flask import Flask
 
 # Set testing environment
 os.environ['TESTING'] = 'true'
@@ -19,7 +20,7 @@ os.environ['TEST_MODE'] = '1'
 os.environ['FLASK_ENV'] = 'testing'
 
 # Add the server directory to the path so we can import our modules
-server_root = os.path.join(os.path.dirname(__file__), '../../../')
+server_root = os.path.join(os.path.dirname(__file__), '../../')
 sys.path.insert(0, server_root)
 
 # Import modules to test - Force real implementations
@@ -28,7 +29,7 @@ try:
     import os
     
     # Ensure we're importing from the actual server directory
-    server_path = os.path.join(os.path.dirname(__file__), '../../../')
+    server_path = os.path.join(os.path.dirname(__file__), '../../')
     if server_path not in sys.path:
         sys.path.insert(0, server_path)
     
@@ -45,10 +46,14 @@ try:
     print("✅ Successfully imported REAL implementations for unit testing")
     
 except Exception as e:
-    # Suppress Redis warnings as it's optional in testing environment
-    if "redis" not in str(e).lower():
-        print(f"Warning: Could not import real modules: {e}")
-    print("Falling back to mock implementations...")
+    # Fail test if we can't import real modules - no fallbacks to mocks
+    print(f"❌ FAILED: Could not import real modules: {e}")
+    print("   Unit tests require actual server modules, not mocks.")
+    print("   Please ensure server is properly configured and modules are accessible.")
+    sys.exit(1)
+    print("❌ FAILED: Cannot fall back to mock implementations.")
+    print("   Tests must use real server code, not mocks.")
+    sys.exit(1)
     
     # Fallback mock implementations
     def sanitize_text_input(text, max_length=1000):
@@ -266,27 +271,31 @@ class TestSessionUtils(unittest.TestCase):
     
     def test_sanitize_text_input_xss_prevention(self):
         """Test XSS prevention in text sanitization"""
-        # Basic script tag prevention (HTML escaped)
-        result = sanitize_text_input("<script>alert('xss')</script>")
-        self.assertNotIn("<script>", result)  # Should be escaped
-        # HTML escape converts < to &lt; and > to &gt;
-        self.assertIn("&lt;", result)  # Should contain escaped <
-        self.assertIn("&gt;", result)  # Should contain escaped >
+        # Create a test Flask app for request context
+        app = Flask(__name__)
         
-        # Image tag with onerror (HTML escaped)
-        result = sanitize_text_input("<img src=x onerror=alert('xss')>")
-        self.assertNotIn("<img", result)  # Should be escaped
-        self.assertIn("&lt;", result)  # Should contain escaped <
-        
-        # JavaScript protocol (HTML escaped)
-        result = sanitize_text_input("javascript:alert('xss')")
-        # Javascript should be escaped or remain safe
-        self.assertTrue("javascript:" not in result or "&" in result)
-        
-        # Event handlers (HTML escaped)
-        result = sanitize_text_input("<div onclick='alert()'>test</div>")
-        self.assertNotIn("<div onclick", result)  # Should be escaped
-        self.assertIn("&lt;", result)  # Should contain escaped <
+        with app.test_request_context('/test'):
+            # Basic script tag prevention (HTML escaped)
+            result = sanitize_text_input("<script>alert('xss')</script>")
+            self.assertNotIn("<script>", result)  # Should be escaped
+            # HTML escape converts < to &lt; and > to &gt;
+            self.assertIn("&lt;", result)  # Should contain escaped <
+            self.assertIn("&gt;", result)  # Should contain escaped >
+            
+            # Image tag with onerror (HTML escaped)
+            result = sanitize_text_input("<img src=x onerror=alert('xss')>")
+            self.assertNotIn("<img", result)  # Should be escaped
+            self.assertIn("&lt;", result)  # Should contain escaped <
+            
+            # JavaScript protocol (HTML escaped)
+            result = sanitize_text_input("javascript:alert('xss')")
+            # Javascript should be escaped or remain safe
+            self.assertTrue("javascript:" not in result or "&" in result)
+            
+            # Event handlers (HTML escaped)
+            result = sanitize_text_input("<div onclick='alert()'>test</div>")
+            self.assertNotIn("<div onclick", result)  # Should be escaped
+            self.assertIn("&lt;", result)  # Should contain escaped <
     
     def test_sanitize_text_input_html_encoding(self):
         """Test HTML entity encoding"""
@@ -300,10 +309,19 @@ class TestSessionUtils(unittest.TestCase):
     
     def test_sanitize_text_input_length_limits(self):
         """Test length limitation"""
-        # Very long text should be truncated
-        long_text = "A" * 20000
-        result = sanitize_text_input(long_text)
-        self.assertLessEqual(len(result), 10000)
+        # Create a test Flask app for request context
+        app = Flask(__name__)
+        
+        with app.test_request_context('/test'):
+            # Very long text should be truncated or raise error
+            long_text = "A" * 20000
+            try:
+                result = sanitize_text_input(long_text)
+                # If it doesn't raise an error, it should be truncated
+                self.assertLessEqual(len(result), 1000, "Long text should be truncated or raise error")
+            except ValueError as e:
+                # If it raises an error, that's also acceptable behavior
+                self.assertIn("maximum length", str(e).lower())
     
     def test_validate_session_code_format(self):
         """Test session code validation"""

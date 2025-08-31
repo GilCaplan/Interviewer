@@ -14,7 +14,7 @@ const TemplateEditor = ({
   viewingMode = 'suggestions_only'  // 'view_only', 'suggestions_only'
 }) => {
   const [selectedQuestionType, setSelectedQuestionType] = useState('open_ended');
-  const [newQuestionNumber, setNewQuestionNumber] = useState(1);
+  const [newQuestionNumber, setNewQuestionNumber] = useState(1); // Re-enabled for frontend compilation
   const [expandedQuestion, setExpandedQuestion] = useState(null);
   const [isCreatingQuestion, setIsCreatingQuestion] = useState(false);
   const [localQuestions, setLocalQuestions] = useState({});
@@ -440,7 +440,7 @@ const TemplateEditor = ({
 
       if (response.ok) {
         const result = await response.json();
-        const templateId = result.template?.template_id;
+        // const templateId = result.template?.template_id; // Available for future use
 
         console.log('Template conversion successful:', result);
 

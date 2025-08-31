@@ -6,7 +6,6 @@ import './SessionJoinForm.css';
 
 const SessionJoinForm = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   
   const [joinMode, setJoinMode] = useState('join'); // 'join' or 'create'
   const [sessionCode, setSessionCode] = useState('');

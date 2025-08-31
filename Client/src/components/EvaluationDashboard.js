@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { fetchApi } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
@@ -6,7 +6,6 @@ import './TemplatesGallery.css'; // Reuse existing styles
 import './Evaluation.css';
 
 function EvaluationDashboard() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -18,11 +17,7 @@ function EvaluationDashboard() {
   });
   const [availableSubjects] = useState(['algorithms', 'data_structures', 'system_design', 'python', 'javascript', 'java', 'react', 'databases', 'networking', 'general']);
   
-  useEffect(() => {
-    fetchSessions();
-  }, [filters]);
-
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -41,7 +36,11 @@ function EvaluationDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
+
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({

@@ -778,23 +778,13 @@ class LLMIntegrationTestSuite:
         else:
             log("🎭 Only Mock LLM testing was performed", Colors.BLUE)
 
-def test_llm_integration_offline():
-    """Mock test for when server is not available"""
-    log('Running offline mock LLM integration test...', Colors.CYAN)
-    
-    log("✅ Mock LLM endpoint stability", Colors.GREEN)
-    log("✅ Mock rate limiting and cost protection", Colors.GREEN) 
-    log("✅ Mock vs real LLM integration", Colors.GREEN)
-    log("✅ Mock error handling", Colors.GREEN)
-    log("✅ Mock cost protection measures", Colors.GREEN)
-    log("✅ Mock cleanup completed", Colors.GREEN)
-    
-    return (100.0, 6, 6)  # 6 tests passed
 
 def run_all_tests():
-    """Standardized test runner function"""
+    """Standardized test runner function - requires real server"""
     if not API_URL:
-        return test_llm_integration_offline()
+        log("❌ No server available. Tests require real server connection.", Colors.RED)
+        log("   Please start the server first.", Colors.RED)
+        return (0.0, 0, 1)
     
     try:
         test_suite = LLMIntegrationTestSuite()
@@ -811,6 +801,7 @@ def run_all_tests():
         return (0.0, 0, 1)
 
 if __name__ == "__main__":
+    import sys
     print(f"\n{Colors.BOLD}{Colors.CYAN}")
     print("╔══════════════════════════════════════════════════════════╗")
     print("║         COMPREHENSIVE LLM INTEGRATION TEST SUITE        ║")
@@ -825,4 +816,7 @@ if __name__ == "__main__":
     if API_URL:
         log(f"🌐 Server URL: {API_URL}", Colors.CYAN)
     else:
-        log("🔄 Ran in offline mode", Colors.YELLOW)
+        log("❌ No server available - test failed", Colors.RED)
+    
+    # Exit with failure if no server or tests failed
+    sys.exit(0 if pass_rate > 0.0 else 1)
