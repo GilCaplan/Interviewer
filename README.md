@@ -10,7 +10,7 @@ A collaborative platform for creating and practicing interview questions. Teams 
 
 **Tech Stack:** Flask backend, React frontend, MongoDB database, Docker containerized.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Required)
@@ -74,9 +74,9 @@ docker-compose up --build -d
 - **Backend API:** http://localhost:5001 (Flask API)
 - **Database:** localhost:27017 (MongoDB)
 
-**🎉 That's it!** The application should be running with all services connected.
+**That's it!** The application should be running with all services connected.
 
-## 🧪 Testing
+## Testing
 
 We provide comprehensive testing that works on any machine with our cross-platform bash script:
 
@@ -101,7 +101,18 @@ sh run_individual_tests.sh --parallel
 cd server/tests
 sh run_individual_tests.sh           # Standard run
 
-# Make sure machine has python3 if want to run tests with command python3 test_file_path 
+# DO NOT run tests directly with python/python3 - use the script above
+# python3 individual_tests/test_*.py  # Wrong - missing dependencies
+# sh run_individual_tests.sh         # Correct - handles environment
+
+# The script automatically discovers and runs all test files:
+# - test_basic_functionality.py
+# - test_template_building.py  
+# - test_llm_integration.py
+# - test_session_management.py
+# - test_websocket_collaboration.py
+# - test_unit_comprehensive.py
+# - test_utils.py 
 ```
 
 ### Docker-based Testing (Alternative)
@@ -115,7 +126,7 @@ docker-compose -f docker-compose.test.yml run tests python run_all_tests.py --fa
 
 **Expected Result:** 100% pass rate (168+ tests across 5 categories)
 
-## 📊 Test Categories
+## Test Categories
 
 | Category | Tests | Description |
 |----------|-------|-------------|
@@ -125,7 +136,7 @@ docker-compose -f docker-compose.test.yml run tests python run_all_tests.py --fa
 | **Integration** | 40+ | LLM integration, WebSocket collaboration, end-to-end |
 | **Performance** | 50+ | Scaling, stress testing, concurrent users, stability |
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
@@ -151,7 +162,7 @@ docker-compose -f docker-compose.test.yml run tests python run_all_tests.py --fa
 - **DevOps:** Docker, Docker Compose
 - **Security:** PBKDF2-SHA256 hashing, Rate limiting, CORS
 
-## 🔧 Development
+## Development
 
 ### File Structure
 ```
@@ -183,18 +194,18 @@ FLASK_ENV=testing
 docker-compose -f docker-compose.test.yml up --build
 ```
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
-**❌ Port conflicts**
+**Port conflicts**
 ```bash
 # Change ports in .env file
 SERVER_PORT=5002
 REACT_APP_API_URL=http://localhost:5002
 ```
 
-**❌ Docker issues**
+**Docker issues**
 ```bash
 # Clean rebuild
 docker-compose down
@@ -202,7 +213,7 @@ docker system prune -f
 docker-compose up --build
 ```
 
-**❌ Database connection failed**
+**Database connection failed**
 ```bash
 # Check MongoDB is running
 docker-compose logs db
@@ -211,7 +222,7 @@ docker-compose down -v
 docker-compose up --build
 ```
 
-**❌ Tests failing**
+**Tests failing**
 ```bash
 # Check service health
 curl http://localhost:5001/api/health
@@ -220,7 +231,7 @@ cd server/tests
 sh run_individual_tests.sh --fast
 ```
 
-**❌ AI features not working**
+**AI features not working**
 ```bash
 # Add your Gemini API key to .env
 GEMINI_API_KEY=your_key_here
@@ -240,7 +251,7 @@ curl http://localhost:3000
 docker-compose exec db mongosh --eval "db.adminCommand('ping')"
 ```
 
-## 🌟 Key Features
+## Key Features
 
 ### For Users
 - **Collaborative Template Builder** - Real-time multi-user question creation
@@ -257,16 +268,16 @@ docker-compose exec db mongosh --eval "db.adminCommand('ping')"
 - **AI Integration** - Modern LLM integration with fallback strategies
 - **Real-time Features** - WebSocket support for live collaboration
 
-## 📈 Performance
+## Performance
 
 **Load Testing Results:**
-- ✅ 100+ concurrent users
-- ✅ 200+ active sessions  
-- ✅ 30,000+ messages/minute
-- ✅ <200ms average response time
-- ✅ 99.9% uptime in testing
+- 100+ concurrent users
+- 200+ active sessions  
+- 30,000+ messages/minute
+- <200ms average response time
+- 99.9% uptime in testing
 
-## 🔐 Security
+## Security
 
 - **Authentication:** JWT tokens with secure session management
 - **Password Security:** PBKDF2-SHA256 hashing with salt
@@ -275,7 +286,7 @@ docker-compose exec db mongosh --eval "db.adminCommand('ping')"
 - **CORS Protection:** Configured cross-origin resource sharing
 - **Security Testing:** Dedicated test suite for security vulnerabilities
 
-## 🤝 Contributing
+## Contributing
 
 This is a fully featured application ready for production use, development, and learning. The codebase demonstrates best practices for:
 
@@ -286,7 +297,7 @@ This is a fully featured application ready for production use, development, and 
 - Real-time collaboration features
 - Production-ready security measures
 
-## 📋 System Requirements
+## System Requirements
 
 **Minimum Requirements:**
 - **RAM:** 4GB
@@ -303,4 +314,4 @@ This is a fully featured application ready for production use, development, and 
 
 **Production-ready full-stack application demonstrating Docker containerization, real-time collaboration, AI integration, and comprehensive testing strategies.**
 
-*Built with ❤️ for learning, development, and production use.*
+*Built for learning, development, and production use.*
