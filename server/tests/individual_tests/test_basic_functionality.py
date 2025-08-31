@@ -254,7 +254,8 @@ class BasicFunctionalityTestSuite:
             
             if create_success:
                 session_info = create_response.json()
-                session_code = session_info.get("session_code")
+                session_data = session_info.get("session", {})
+                session_code = session_data.get("session_code")
                 self.assert_test(bool(session_code), "Session Code Generated",
                                 f"Code: {session_code}")
             
