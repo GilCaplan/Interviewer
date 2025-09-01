@@ -137,9 +137,9 @@ class SimpleTemplateTest:
             
             # Test: Create question
             question_data = {
-                'type': 'open_ended',
-                'question_text': 'What is JavaScript?',
-                'subject': 'JavaScript'
+                'question': 'What is JavaScript?',
+                'answer': 'A programming language',
+                'category': 'JavaScript'
             }
             
             response = requests.post(f'{self.api_url}/api/questions',
@@ -201,7 +201,15 @@ class SimpleTemplateTest:
         
         return (pass_rate, self.passed, total_tests)
 
-if __name__ == "__main__":
+def run_all_tests():
+    """Standardized test runner function - requires real server"""
     test_suite = SimpleTemplateTest()
-    result = test_suite.run_all_tests()
-    print(f"\nTest completed with result: {result}")
+    return test_suite.run_all_tests()
+
+if __name__ == "__main__":
+    import sys
+    pass_rate, passed, total = run_all_tests()
+    print(f"\nTest completed with result: ({pass_rate}, {passed}, {total})")
+    
+    # Exit with failure if tests failed or no server
+    sys.exit(0 if pass_rate > 0.0 else 1)

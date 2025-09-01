@@ -42,7 +42,7 @@ const SessionBuilder = () => {
     difficulty: 'medium'
   });
   const [onlineUsers, setOnlineUsers] = useState(new Set()); // Track online status
-  const [chatMessages, setChatMessages] = useState([]);
+  const [chatMessages, setChatMessages] = useState([]); // Re-enabled for frontend compilation
 
   // Use ref to track if component is mounted
   const isMountedRef = useRef(true);
@@ -249,7 +249,7 @@ const SessionBuilder = () => {
         setSocket(null);
       }
     };
-  }, [sessionCode, navigate]);
+  }, [sessionCode, navigate]); // eslint-disable-line react-hooks/exhaustive-deps
   
   // Additional cleanup on unmount
   useEffect(() => {

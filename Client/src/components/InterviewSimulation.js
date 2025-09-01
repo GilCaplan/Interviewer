@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { fetchApi } from '../utils/api';
 import InterviewResults from './InterviewResults';
@@ -73,19 +73,6 @@ function InterviewSimulation() {
     initializeInterview();
   }, [sessionId, location.search, navigate]);
 
-  // Timer effect
-  useEffect(() => {
-    if (timeRemaining > 0 && !isCompleted) {
-      const timer = setTimeout(() => {
-        setTimeRemaining(timeRemaining - 1);
-      }, 1000);
-      return () => clearTimeout(timer);
-    } else if (timeRemaining === 0) {
-      // Auto-submit when time runs out
-      handleSubmitAnswer();
-    }
-  }, [timeRemaining, isCompleted]);
-
   const decodeHTMLEntities = (text) => {
     if (typeof text !== 'string' || !text) return '';
     const textArea = document.createElement('textarea');
@@ -93,7 +80,7 @@ function InterviewSimulation() {
     return textArea.value;
   };
 
-  const handleSubmitAnswer = async () => {
+  const handleSubmitAnswer = useCallback(async () => {
     if (submitting) return;
 
     setSubmitting(true);
@@ -126,7 +113,20 @@ function InterviewSimulation() {
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [submitting, currentAnswer, currentQuestionIndex, sessionId]);
+
+  // Timer effect
+  useEffect(() => {
+    if (timeRemaining > 0 && !isCompleted) {
+      const timer = setTimeout(() => {
+        setTimeRemaining(timeRemaining - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (timeRemaining === 0) {
+      // Auto-submit when time runs out
+      handleSubmitAnswer();
+    }
+  }, [timeRemaining, isCompleted, handleSubmitAnswer]);
 
   const finishInterview = async () => {
     try {
