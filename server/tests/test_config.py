@@ -25,8 +25,8 @@ except ImportError:
                     key, value = line.split('=', 1)
                     os.environ.setdefault(key.strip(), value.strip())
 
-# Server Configuration - Use SERVER_PORT from .env (should be 5001)
-TEST_SERVER_PORT = os.getenv('TEST_SERVER_PORT') or os.getenv('SERVER_PORT', '5001')
+# Server Configuration - Use SERVER_PORT from .env (should be 5002)
+TEST_SERVER_PORT = os.getenv('TEST_SERVER_PORT') or os.getenv('SERVER_PORT', '5002')
 TEST_SERVER_HOST = os.getenv('TEST_SERVER_HOST', 'localhost')
 TEST_API_BASE_URL = f"http://{TEST_SERVER_HOST}:{TEST_SERVER_PORT}"
 

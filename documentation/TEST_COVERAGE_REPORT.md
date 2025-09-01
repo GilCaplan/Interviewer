@@ -280,7 +280,7 @@ OVERALL RESULTS                             96.1%   173/180       ❌ FAIL
 
 ### Prerequisites
 1. Start Docker services: `docker-compose up --build -d`
-2. Services should be accessible: Backend (port 5001), Frontend (port 3000), Database (port 27017)
+2. Services should be accessible: Backend (port 5002), Frontend (port 3000), Database (port 27017)
 
 ### Recommended Test Execution (As per README)
 ```bash

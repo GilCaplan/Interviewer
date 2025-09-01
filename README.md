@@ -36,7 +36,7 @@ cp .env.example .env
 # Flask Backend Configuration
 FLASK_APP=app
 FLASK_ENV=development
-SERVER_PORT=5001
+SERVER_PORT=5002
 SECRET_KEY=interview-assistant-secret-key-change-in-production
 
 # Database Configuration
@@ -70,7 +70,7 @@ docker-compose up --build -d
 
 ### 4. Access Application
 - **Frontend:** http://localhost:3000 (React UI)
-- **Backend API:** http://localhost:5001 (Flask API)
+- **Backend API:** http://localhost:5002 (Flask API)
 - **Database:** localhost:27017 (MongoDB)
 
 **That's it!** The application should be running with all services connected.
@@ -225,7 +225,7 @@ docker-compose up --build
 **Tests failing**
 ```bash
 # Check service health
-curl http://localhost:5001/api/health
+curl http://localhost:5002/api/health
 # Run tests
 cd server/tests
 sh run_individual_tests.sh
@@ -242,7 +242,7 @@ docker-compose restart server
 ### Health Checks
 ```bash
 # Backend API health
-curl http://localhost:5001/api/health
+curl http://localhost:5002/api/health
 
 # Frontend accessibility  
 curl http://localhost:3000

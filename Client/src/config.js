@@ -11,12 +11,12 @@ const config = {
     
     // For Docker environments, use the service name 'server'
     if (process.env.NODE_ENV === 'development' && window.location.hostname !== 'localhost') {
-      const port = process.env.REACT_APP_SERVER_PORT || process.env.SERVER_PORT || '5001';
+      const port = process.env.REACT_APP_SERVER_PORT || process.env.SERVER_PORT || '5002';
       return `http://server:${port}`;
     }
     
     // Fallback to localhost with configurable port
-    const port = process.env.REACT_APP_SERVER_PORT || process.env.SERVER_PORT || '5001';
+    const port = process.env.REACT_APP_SERVER_PORT || process.env.SERVER_PORT || '5002';
     return `http://localhost:${port}`;
   },
   
@@ -29,12 +29,12 @@ const config = {
     
     // For Docker environments, use the service name 'server'
     if (process.env.NODE_ENV === 'development' && window.location.hostname !== 'localhost') {
-      const port = process.env.REACT_APP_SERVER_PORT || process.env.SERVER_PORT || '5001';
+      const port = process.env.REACT_APP_SERVER_PORT || process.env.SERVER_PORT || '5002';
       return `ws://server:${port}`;
     }
     
     // Fallback to localhost with configurable port
-    const port = process.env.REACT_APP_SERVER_PORT || process.env.SERVER_PORT || '5001';
+    const port = process.env.REACT_APP_SERVER_PORT || process.env.SERVER_PORT || '5002';
     return `ws://localhost:${port}`;
   }
 };

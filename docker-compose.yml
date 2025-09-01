@@ -2,14 +2,14 @@ services:
   server:
     build: ./server
     ports:
-      - "5001:5001"
+      - "5002:5002"
     volumes:
       - ./server:/app
     environment:
       - FLASK_APP=${FLASK_APP}
       - FLASK_ENV=${FLASK_ENV:-production}
       - MONGO_URI=${MONGO_URI}
-      - SERVER_PORT=${SERVER_PORT:-5001}
+      - SERVER_PORT=${SERVER_PORT:-5002}
       - SECRET_KEY=${SECRET_KEY}
       - LLM_MODEL=${LLM_MODEL}
       
@@ -28,7 +28,7 @@ services:
       - app-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5002/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3

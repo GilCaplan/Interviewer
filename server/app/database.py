@@ -81,10 +81,6 @@ class DatabaseManager:
     def interview_sessions(self):
         return self.get_collection('interview_sessions')
     
-    @property
-    def evaluations(self):
-        return self.get_collection('evaluations')
-    
     def close(self):
         """Close all connections"""
         if hasattr(self, 'client'):
@@ -102,4 +98,3 @@ questions_collection = db_manager.questions
 interviews_collection = db_manager.interviews
 coding_challenges_collection = db_manager.coding_challenges
 interview_sessions_collection = db_manager.interview_sessions
-evaluations_collection = db_manager.evaluations
