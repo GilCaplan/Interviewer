@@ -55,34 +55,19 @@ const SessionBuilder = () => {
       try {
         const apiUrl = getApiUrl()
         
-        // Get token from localStorage with better error handling
-        let token = localStorage.getItem('token');
+        // Get authentication token
+        const token = getAuthToken();
         
-        // If no direct token, try to get from user object
-        if (!token) {
-          const storedUser = localStorage.getItem('user');
-          if (storedUser) {
-            try {
-              const userData = JSON.parse(storedUser);
-              token = userData.sessionToken;
-            } catch (e) {
-              console.error('Failed to parse stored user data:', e);
-            }
-          }
-        }
-        
-        console.log('Token check:', {
-          directToken: !!localStorage.getItem('token'),
-          userObject: !!localStorage.getItem('user'),
-          userFromContext: !!user,
-          finalToken: !!token
+        console.log('Initializing session:', {
+          sessionCode: sessionCode,
+          hasToken: !!token,
+          user: user?.username
         });
         
+        // If no token, this shouldn't happen due to ProtectedRoute, but handle gracefully
         if (!token) {
-          setError('Please login to access sessions');
-          setLoading(false);
-          navigate('/login');
-          return;
+          console.error('No authentication token found');
+          throw new Error('Authentication required. Please refresh the page and login again.');
         }
 
         // First try to join existing session
@@ -219,7 +204,8 @@ const SessionBuilder = () => {
         }
 
       } catch (err) {
-        setError(err.message);
+        console.error('Session initialization error:', err);
+        setError(err.message || 'Failed to initialize session');
       } finally {
         setLoading(false);
       }

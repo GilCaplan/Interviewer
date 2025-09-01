@@ -2,25 +2,22 @@ services:
   server:
     build: ./server
     ports:
-      - "5002:5002"
+      - "${SERVER_PORT}:${SERVER_PORT}"
     volumes:
       - ./server:/app
     environment:
       - FLASK_APP=${FLASK_APP}
-      - FLASK_ENV=${FLASK_ENV:-production}
+      - FLASK_ENV=${FLASK_ENV}
       - MONGO_URI=${MONGO_URI}
-      - SERVER_PORT=${SERVER_PORT:-5002}
+      - SERVER_PORT=${SERVER_PORT}
       - SECRET_KEY=${SECRET_KEY}
       - LLM_MODEL=${LLM_MODEL}
-      
-      # LLM Configuration
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - LLM_REQUESTS_PER_MINUTE=${LLM_REQUESTS_PER_MINUTE:-15}
-      - LLM_REQUESTS_PER_DAY=${LLM_REQUESTS_PER_DAY:-1500}
-      
-      - MAX_SESSION_PARTICIPANTS=${MAX_SESSION_PARTICIPANTS:-10}
-      - MAX_QUESTIONS_PER_TEMPLATE=${MAX_QUESTIONS_PER_TEMPLATE:-20}
-      - SESSION_TIMEOUT_HOURS=${SESSION_TIMEOUT_HOURS:-24}
+      - LLM_REQUESTS_PER_MINUTE=${LLM_REQUESTS_PER_MINUTE}
+      - LLM_REQUESTS_PER_DAY=${LLM_REQUESTS_PER_DAY}
+      - MAX_SESSION_PARTICIPANTS=${MAX_SESSION_PARTICIPANTS}
+      - MAX_QUESTIONS_PER_TEMPLATE=${MAX_QUESTIONS_PER_TEMPLATE}
+      - SESSION_TIMEOUT_HOURS=${SESSION_TIMEOUT_HOURS}
     depends_on:
       db:
         condition: service_healthy
@@ -28,30 +25,43 @@ services:
       - app-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5002/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:${SERVER_PORT}/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
 
   client:
-    build: ./Client
+    build: 
+      context: ./Client
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
     volumes:
       - ./Client:/app
-      - /app/node_modules
+      - client_node_modules:/app/node_modules
+      - /app/build
     environment:
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
       - WDS_SOCKET_PORT=0
       - REACT_APP_SERVER_PORT=${SERVER_PORT}
+      - FAST_REFRESH=false
+      - GENERATE_SOURCEMAP=false
+      - TSC_COMPILE_ON_ERROR=true
+      - ESLINT_NO_DEV_ERRORS=true
+      - HOST=0.0.0.0
     depends_on:
-      server:
-        condition: service_healthy
+      - server
     networks:
       - app-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
 
   db:
     image: mongo:latest
@@ -77,3 +87,4 @@ networks:
 
 volumes:
   mongodb_data:
+  client_node_modules:
