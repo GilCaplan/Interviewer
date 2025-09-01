@@ -94,7 +94,7 @@ TESTING=true
 TEST_MODE=1
 FLASK_ENV=testing
 MONGO_URI=mongodb://localhost:27017/interview-assistant-test
-SERVER_PORT=5001
+SERVER_PORT=5002
 ```
 
 ### Database Isolation
@@ -141,15 +141,15 @@ docker-compose -f docker-compose.test.yml run tests bash run_individual_tests.sh
 - **Test Runner**: Cross-platform bash script with virtual environment support
 
 ### Per-File Results
-| Test File | Focus | Tests | Pass Rate | Status |
-|-----------|-------|-------|-----------|--------|
-| test_basic_functionality.py | Core API | 13 | 92.3% | ✅ PASS |
-| test_llm_integration.py | AI Features | 8 | 100% | ✅ PASS |
-| test_session_management.py | Sessions | 8 | 100% | ✅ PASS |
-| test_template_building.py | Templates | 4 | 75% | ✅ PASS |
-| test_unit_comprehensive.py | Units | 31 | 100% | ✅ PASS |
-| test_utils.py | Utilities | Various | 100% | ✅ PASS |
-| test_websocket_collaboration.py | Real-time | 1 | 100% | ✅ PASS |
+| Test File                       | Focus       | Tests   | Pass Rate | Status |
+|---------------------------------|-------------|---------|-----------|--------|
+| test_basic_functionality.py     | Core API    | 13      | 92.3%     | ✅ PASS |
+| test_llm_integration.py         | AI Features | 8       | 100%      | ✅ PASS |
+| test_session_management.py      | Sessions    | 8       | 100%      | ✅ PASS |
+| test_template_building.py       | Templates   | 4       | 75%       | ✅ PASS |
+| test_unit_comprehensive.py      | Units       | 31      | 100%      | ✅ PASS |
+| test_utils.py                   | Utilities   | Various | 100%      | ✅ PASS |
+| test_websocket_collaboration.py | Real-time   | 1       | 100%      | ✅ PASS |
 
 ## Course Requirements Compliance
 
@@ -180,7 +180,7 @@ docker-compose -f docker-compose.test.yml run tests bash run_individual_tests.sh
 ## Health Check Validation
 
 All tests verify these service endpoints work correctly:
-- **Backend API**: `http://localhost:5001/api/health`
+- **Backend API**: `http://localhost:5002/api/health`
 - **Frontend**: `http://localhost:3000`
 - **Database**: MongoDB ping test via Docker
 
