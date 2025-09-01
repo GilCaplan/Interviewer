@@ -2368,7 +2368,7 @@ def cleanup_user_sessions(user):
         user_sessions = list(sessions_collection.find({
             "$or": [
                 {"host_username": user["username"]},
-                {"participants": user["username"]}
+                # {"participants": user["username"]}
             ]
         }))
         
@@ -2378,7 +2378,7 @@ def cleanup_user_sessions(user):
         sessions_collection.delete_many({
             "$or": [
                 {"host_username": user["username"]},
-                {"participants": user["username"]}
+                # {"participants": user["username"]}
             ]
         })
         

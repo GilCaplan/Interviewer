@@ -75,7 +75,6 @@ function InterviewResults({ session }) {
                 </div>
 
                 <div className="metric-card">
-                    <h3>📊 Progress</h3>
                     <div className="progress-visualization">
                         <div className="progress-circle">
                             <div 
