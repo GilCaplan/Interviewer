@@ -44,19 +44,22 @@ SECRET_KEY=interview-assistant-secret-key-change-in-production
 # Database Configuration
 MONGO_URI=mongodb://db:27017/interview-assistant
 
-# Frontend Configuration (automatically uses SERVER_PORT above)
-# No additional port configuration needed - frontend reads SERVER_PORT
+# React Frontend Configuration  
+REACT_APP_SERVER_PORT=5002
 
-# LLM Configuration (Optional - get free key from https://makersuite.google.com/app/apikey)
-GEMINI_API_KEY=your_gemini_api_key_here
+# LLM Configuration
+GEMINI_API_KEY=
 LLM_MODEL=gemini-1.5-flash
+
+# HuggingFace Configuration (Optional)
+HUGGINGFACE_TOKEN=
 
 # Application Limits
 MAX_SESSION_PARTICIPANTS=10
 MAX_QUESTIONS_PER_TEMPLATE=20
 SESSION_TIMEOUT_HOURS=24
 
-# Rate Limiting
+# Rate Limiting (requests per minute/day)
 LLM_REQUESTS_PER_MINUTE=15
 LLM_REQUESTS_PER_DAY=1500
 ```
