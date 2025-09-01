@@ -195,3 +195,209 @@ def finish_interview(current_user, session_id):
         return jsonify({"error": "Interview session not found or unauthorized"}), 404
 
     return jsonify({"message": "Interview finished successfully"}), 200
+
+
+@interviews_bp.route('/api/interview/questions/save', methods=['POST'])
+@token_required
+def save_interview_question(current_user):
+    """
+    Saves a custom question created during interview preparation.
+    Expects: {
+        "question_text": "...",
+        "question_type": "open_ended|multiple_choice|true_false|coding",
+        "options": [...], // for multiple choice
+        "correct_answer": "...", // optional
+        "hints": "...", // optional
+        "category": "...", // optional
+        "difficulty": "easy|medium|hard", // optional
+        "metadata": {...} // optional additional data
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data or not data.get('question_text'):
+            return jsonify({"error": "Question text is required"}), 400
+
+        # Clean and validate the question data
+        question_data = {
+            "user_id": current_user["user_id"],
+            "question_text": data.get('question_text', '').strip(),
+            "question_type": data.get('question_type', 'open_ended'),
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+            "source": "interview_creation",
+            "is_ai_generated": data.get('is_ai_generated', False)
+        }
+
+        # Add optional fields if provided
+        if data.get('options') and data.get('question_type') == 'multiple_choice':
+            question_data['options'] = data['options']
+        
+        if data.get('correct_answer'):
+            question_data['correct_answer'] = data['correct_answer']
+        
+        if data.get('hints'):
+            question_data['hints'] = data['hints']
+        
+        if data.get('category'):
+            question_data['category'] = data['category']
+        
+        if data.get('difficulty'):
+            question_data['difficulty'] = data['difficulty']
+        
+        if data.get('metadata'):
+            question_data['metadata'] = data['metadata']
+
+        # Insert into questions collection
+        result = db.questions.insert_one(question_data)
+        question_data['_id'] = str(result.inserted_id)
+
+        current_app.logger.info(f"Question saved by user {current_user['user_id']}: {question_data['question_text'][:50]}...")
+
+        return jsonify({
+            "message": "Question saved successfully",
+            "question_id": str(result.inserted_id),
+            "question": question_data
+        }), 201
+
+    except Exception as e:
+        current_app.logger.error(f"Error saving interview question: {str(e)}")
+        return jsonify({"error": "Failed to save question"}), 500
+
+
+@interviews_bp.route('/api/interview/questions/my', methods=['GET'])
+@token_required
+def get_my_interview_questions(current_user):
+    """
+    Retrieves all questions saved by the current user during interview preparation.
+    Supports filtering by category, difficulty, and question type.
+    """
+    try:
+        # Get query parameters for filtering
+        category = request.args.get('category')
+        difficulty = request.args.get('difficulty') 
+        question_type = request.args.get('question_type')
+        limit = min(int(request.args.get('limit', 50)), 100)  # Max 100 questions
+        skip = int(request.args.get('skip', 0))
+
+        # Build filter query
+        filter_query = {"user_id": current_user["user_id"]}
+        
+        if category:
+            filter_query["category"] = category
+        if difficulty:
+            filter_query["difficulty"] = difficulty
+        if question_type:
+            filter_query["question_type"] = question_type
+
+        # Get questions with pagination
+        cursor = db.questions.find(filter_query).sort("created_at", -1).skip(skip).limit(limit)
+        questions = []
+        
+        for question in cursor:
+            question['_id'] = str(question['_id'])
+            questions.append(question)
+
+        # Get total count for pagination
+        total_count = db.questions.count_documents(filter_query)
+
+        return jsonify({
+            "questions": questions,
+            "total_count": total_count,
+            "page_info": {
+                "limit": limit,
+                "skip": skip,
+                "has_more": skip + len(questions) < total_count
+            }
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error retrieving user questions: {str(e)}")
+        return jsonify({"error": "Failed to retrieve questions"}), 500
+
+
+@interviews_bp.route('/api/interview/questions/<question_id>', methods=['PUT'])
+@token_required  
+def update_interview_question(current_user, question_id):
+    """
+    Updates a saved interview question.
+    Only the question owner can update their questions.
+    """
+    try:
+        question_oid = ObjectId(question_id)
+    except Exception:
+        return jsonify({"error": "Invalid question ID format"}), 400
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No update data provided"}), 400
+
+        # Verify question ownership
+        existing_question = db.questions.find_one({"_id": question_oid, "user_id": current_user["user_id"]})
+        if not existing_question:
+            return jsonify({"error": "Question not found or unauthorized"}), 404
+
+        # Prepare update data
+        update_data = {"updated_at": datetime.utcnow()}
+        
+        # Only update fields that are provided
+        allowed_fields = ['question_text', 'question_type', 'options', 'correct_answer', 'hints', 'category', 'difficulty', 'metadata']
+        for field in allowed_fields:
+            if field in data:
+                update_data[field] = data[field]
+
+        if not update_data:
+            return jsonify({"error": "No valid fields to update"}), 400
+
+        # Update the question
+        result = db.questions.update_one(
+            {"_id": question_oid},
+            {"$set": update_data}
+        )
+
+        if result.matched_count == 0:
+            return jsonify({"error": "Question not found"}), 404
+
+        # Return updated question
+        updated_question = db.questions.find_one({"_id": question_oid})
+        updated_question['_id'] = str(updated_question['_id'])
+
+        current_app.logger.info(f"Question updated by user {current_user['user_id']}: {question_id}")
+
+        return jsonify({
+            "message": "Question updated successfully",
+            "question": updated_question
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error updating interview question: {str(e)}")
+        return jsonify({"error": "Failed to update question"}), 500
+
+
+@interviews_bp.route('/api/interview/questions/<question_id>', methods=['DELETE'])
+@token_required
+def delete_interview_question(current_user, question_id):
+    """
+    Deletes a saved interview question.
+    Only the question owner can delete their questions.
+    """
+    try:
+        question_oid = ObjectId(question_id)
+    except Exception:
+        return jsonify({"error": "Invalid question ID format"}), 400
+
+    try:
+        # Delete the question (only if owned by current user)
+        result = db.questions.delete_one({"_id": question_oid, "user_id": current_user["user_id"]})
+
+        if result.deleted_count == 0:
+            return jsonify({"error": "Question not found or unauthorized"}), 404
+
+        current_app.logger.info(f"Question deleted by user {current_user['user_id']}: {question_id}")
+
+        return jsonify({"message": "Question deleted successfully"}), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error deleting interview question: {str(e)}")
+        return jsonify({"error": "Failed to delete question"}), 500

@@ -16,6 +16,7 @@ import TemplateDetails from "./components/TemplateDetails";
 import SessionBuilder from './components/SessionBuilder';
 import InterviewSimulation from './components/InterviewSimulation';
 import SessionJoinForm from './components/SessionJoinForm';
+import SavedInterviewQuestions from './components/SavedInterviewQuestions';
 
 // Protected route component
 const ProtectedRoute = ({ children }) => {
@@ -204,6 +205,16 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <SessionBuilder />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Interview Question Management Routes */}
+        <Route
+          path="/my-interview-questions"
+          element={
+            <ProtectedRoute>
+              <SavedInterviewQuestions />
             </ProtectedRoute>
           }
         />
