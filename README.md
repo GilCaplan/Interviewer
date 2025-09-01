@@ -33,7 +33,7 @@ cp .env.example .env
 
 **Required configuration** (`.env` file):
 
-> **💡 Tip:** To change the server port, simply edit `SERVER_PORT=5001` to your preferred port (e.g., `SERVER_PORT=8080`). The frontend will automatically use this port.
+> **💡 Tip:** To change the server port, simply edit `SERVER_PORT=5002` to your preferred port (e.g., `SERVER_PORT=8080`). The frontend will automatically use this port.
 ```env
 # Flask Backend Configuration
 FLASK_APP=app
@@ -65,6 +65,23 @@ LLM_REQUESTS_PER_DAY=1500
 ```
 
 ### 3. Start Application
+
+**Option A: Using npm scripts (Recommended)**
+```bash
+# Start all services (frontend, backend, database)
+npm run dev
+
+# Or run in background
+npm run dev:detached
+
+# Stop services
+npm run down
+
+# Clean rebuild (removes volumes and cached data)
+npm run clean
+```
+
+**Option B: Direct Docker commands**
 ```bash
 # Start all services (frontend, backend, database)
 docker-compose up --build
@@ -85,6 +102,20 @@ docker-compose up --build -d
 We provide comprehensive testing that works on any machine with our cross-platform bash script:
 
 ### Running Tests
+
+**Option A: Using npm scripts (Recommended)**
+```bash
+# Run all tests (standard timeout)
+npm run test
+
+# Run tests in parallel for faster execution  
+npm run test:parallel
+
+# Run tests in Docker environment
+npm run test:docker
+```
+
+**Option B: Manual execution**
 ```bash
 # Navigate to tests directory
 cd server/tests
@@ -252,6 +283,22 @@ docker-compose restart server
 ```
 
 ### Health Checks
+
+**Option A: Using npm scripts**
+```bash
+# Backend API health
+npm run health
+
+# View logs for all services
+npm run logs
+
+# View logs for specific services
+npm run logs:server
+npm run logs:client
+npm run logs:db
+```
+
+**Option B: Manual checks**
 ```bash
 # Backend API health
 curl http://localhost:5002/api/health

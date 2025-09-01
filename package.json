@@ -1,4 +1,54 @@
 {
+  "name": "interview-process-assistant",
+  "version": "1.0.0",
+  "description": "A collaborative platform for creating and practicing interview questions with AI assistance",
+  "private": true,
+  "workspaces": [
+    "Client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "docker-compose up --build",
+    "dev:detached": "docker-compose up --build -d",
+    "down": "docker-compose down",
+    "clean": "docker-compose down -v && docker system prune -f",
+    "test": "cd server/tests && sh run_individual_tests.sh",
+    "test:parallel": "cd server/tests && sh run_individual_tests.sh --parallel",
+    "test:docker": "docker-compose -f docker-compose.test.yml up --build tests",
+    "install:client": "cd Client && npm install",
+    "install:server": "cd server && pip install -r requirements.txt",
+    "build:client": "cd Client && npm run build",
+    "logs": "docker-compose logs -f",
+    "logs:server": "docker-compose logs -f server",
+    "logs:client": "docker-compose logs -f client",
+    "logs:db": "docker-compose logs -f db",
+    "health": "curl http://localhost:5002/api/health"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GilCaplan/Interviewer.git"
+  },
+  "keywords": [
+    "interview",
+    "assessment",
+    "collaboration",
+    "ai",
+    "flask",
+    "react",
+    "mongodb",
+    "docker",
+    "websockets",
+    "real-time"
+  ],
+  "author": "Gil Caplan",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
   "dependencies": {
     "monaco-editor": "^0.52.2",
     "react-monaco-editor": "^0.58.0",
