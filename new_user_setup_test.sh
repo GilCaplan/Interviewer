@@ -35,7 +35,7 @@ if [[ -f .env.example ]]; then
     log_success ".env.example exists"
     
     # Check if it contains required variables
-    required_vars=("FLASK_APP" "SERVER_PORT" "MONGO_URI" "REACT_APP_API_URL" "GEMINI_API_KEY")
+    required_vars=("FLASK_APP" "SERVER_PORT" "MONGO_URI" "GEMINI_API_KEY")
     missing_vars=()
     
     for var in "${required_vars[@]}"; do
@@ -82,6 +82,19 @@ else
     exit 1
 fi
 
+# Load environment variables from .env file
+if [[ -f .env ]]; then
+    log_info "Loading environment variables from .env file..."
+    export $(grep -v '^#' .env | grep -v '^\s*$' | xargs)
+    SERVER_PORT=${SERVER_PORT:-5002}
+    FRONTEND_PORT=3000
+    log_info "Using SERVER_PORT=$SERVER_PORT, FRONTEND_PORT=$FRONTEND_PORT"
+else
+    log_warning "No .env file found, using default ports"
+    SERVER_PORT=5002
+    FRONTEND_PORT=3000
+fi
+
 # Test 4: Start services and verify
 echo ""
 echo "4. Starting services (this may take a few minutes)..."
@@ -112,10 +125,10 @@ else
 fi
 
 # Check backend API
-backend_response=$(curl -s -w "%{http_code}" -o /tmp/health_check http://localhost:5002/api/health 2>/dev/null || echo "000")
+backend_response=$(curl -s -w "%{http_code}" -o /tmp/health_check http://localhost:$SERVER_PORT/api/health 2>/dev/null || echo "000")
 if [[ "$backend_response" == "200" ]]; then
-    log_success "Backend API is responding (http://localhost:5002)"
-    health_message=$(cat /tmp/health_check | jq -r '.message' 2>/dev/null || echo "Unknown")
+    log_success "Backend API is responding (http://localhost:$SERVER_PORT)"
+    health_message=$(jq -r '.message' /tmp/health_check 2>/dev/null || echo "Unknown")
     log_info "API message: $health_message"
 else
     log_error "Backend API not responding (got HTTP $backend_response)"
@@ -124,9 +137,9 @@ else
 fi
 
 # Check frontend
-frontend_response=$(curl -s -w "%{http_code}" -o /dev/null http://localhost:3000 2>/dev/null || echo "000")
+frontend_response=$(curl -s -w "%{http_code}" -o /dev/null http://localhost:$FRONTEND_PORT 2>/dev/null || echo "000")
 if [[ "$frontend_response" == "200" ]]; then
-    log_success "Frontend is accessible (http://localhost:3000)"
+    log_success "Frontend is accessible (http://localhost:$FRONTEND_PORT)"
 else
     log_error "Frontend not accessible (got HTTP $frontend_response)"
     echo "Frontend logs:"
@@ -140,7 +153,7 @@ echo "7. Testing basic API functionality..."
 if [[ "$backend_response" == "200" ]]; then
     # Test user creation
     log_info "Testing user authentication..."
-    auth_response=$(curl -s -X POST http://localhost:5002/api/auth/login \
+    auth_response=$(curl -s -X POST http://localhost:$SERVER_PORT/api/auth/login \
         -H "Content-Type: application/json" \
         -d '{"username": "setup_test_user"}' || echo "")
     
@@ -150,10 +163,8 @@ if [[ "$backend_response" == "200" ]]; then
         
         # Test authenticated endpoint
         if [[ -n "$token" && "$token" != "null" ]]; then
-            templates_response=$(curl -s -H "Authorization: Bearer $token" \
-                http://localhost:5002/api/templates || echo "")
-            
-            if [[ $? -eq 0 ]]; then
+            if curl -s -H "Authorization: Bearer $token" \
+                http://localhost:$SERVER_PORT/api/templates >/dev/null; then
                 log_success "Authenticated API endpoints accessible"
             else
                 log_warning "Authenticated endpoints may have issues"
@@ -207,8 +218,8 @@ if [[ "$backend_response" == "200" && "$frontend_response" == "200" ]]; then
     echo ""
     log_success "🎉 SETUP SUCCESSFUL! Your Interview Assistant is ready to use:"
     echo ""
-    echo "   📱 Frontend (React):  http://localhost:3000"
-    echo "   🔧 Backend API:       http://localhost:5002"
+    echo "   📱 Frontend (React):  http://localhost:$FRONTEND_PORT"
+    echo "   🔧 Backend API:       http://localhost:$SERVER_PORT"
     echo "   📊 Database:          mongodb://localhost:27017"
     echo ""
     echo "   To stop: docker-compose down"
